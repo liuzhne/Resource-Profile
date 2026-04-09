@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  # MySQL
+  mysql:
+    image: mysql:8.0
+    container_name: edu-portrait-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: edu_portrait
+      MYSQL_USER: edu
+      MYSQL_PASSWORD: edu123456
+      TZ: Asia/Shanghai
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ../sql/init:/docker-entrypoint-initdb.d
+    command: --default-authentication-plugin=mysql_native_password
+    networks:
+      - edu-network
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: edu-portrait-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - edu-network
+
+  # Nacos
+  nacos:
+    image: nacos/nacos-server:v2.3.0
+    container_name: edu-portrait-nacos
+    environment:
+      MODE: standalone
+      SPRING_DATASOURCE_PLATFORM: mysql
+      MYSQL_SERVICE_HOST: mysql
+      MYSQL_SERVICE_DB_NAME: nacos
+      MYSQL_SERVICE_PORT: 3306
+      MYSQL_SERVICE_USER: root
+      MYSQL_SERVICE_PASSWORD: root
+      NACOS_AUTH_ENABLE: "true"
+      NACOS_AUTH_TOKEN: SecretKey012345678901234567890123456789012345678901234567890123456789
+      NACOS_AUTH_IDENTITY_KEY: serverIdentity
+      NACOS_AUTH_IDENTITY_VALUE: security
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+    depends_on:
+      - mysql
+    networks:
+      - edu-network
+
+  # Gateway
+  gateway:
+    build:
+      context: ../backend/gateway
+      dockerfile: ../../docker/Dockerfile.gateway
+    container_name: edu-portrait-gateway
+    environment:
+      NACOS_SERVER: nacos:8848
+      NACOS_NAMESPACE:
+    ports:
+      - "8080:8080"
+    depends_on:
+      - nacos
+    networks:
+      - edu-network
+
+volumes:
+  mysql_data:
+  redis_data:
+
+networks:
+  edu-network:
+    driver: bridge
