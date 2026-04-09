@@ -1,0 +1,60 @@
+// Element Plus 主题定制
+
+// 覆盖 Element Plus 变量
+@forward 'element-plus/theme-chalk/src/common/var.scss' with (
+  $colors: (
+    'primary': (
+      'base': #1890ff,
+    ),
+    'success': (
+      'base': #52c41a,
+    ),
+    'warning': (
+      'base': #faad14,
+    ),
+    'danger': (
+      'base': #f5222d,
+    ),
+    'info': (
+      'base': #1890ff,
+    ),
+  ),
+  $border-radius: (
+    'base': 4px,
+    'small': 2px,
+    'round': 20px,
+    'circle': 100%,
+  )
+);
+
+// 侧边栏菜单样式
+.el-menu {
+  border-right: none !important;
+  background: #001529 !important;
+
+  .el-menu-item,
+  .el-sub-menu__title {
+    color: rgba(255, 255, 255, 0.65) !important;
+
+    &:hover {
+      color: #fff !important;
+      background: transparent !important;
+    }
+
+    &.is-active {
+      color: #fff !important;
+      background: var(--primary-color) !important;
+    }
+  }
+}
+
+// 表格样式
+.el-table {
+  .el-table__header-wrapper {
+    th {
+      background: #fafafa;
+      color: rgba(0, 0, 0, 0.85);
+      font-weight: 600;
+    }
+  }
+}

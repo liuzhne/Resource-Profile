@@ -1,0 +1,35 @@
+// 主题变量 - Ant Design Pro 风格
+:root {
+  // 主色调
+  --primary-color: #1890ff;
+  --primary-color-hover: #40a9ff;
+  --primary-color-active: #096dd9;
+
+  // 功能色
+  --success-color: #52c41a;
+  --warning-color: #faad14;
+  --error-color: #f5222d;
+  --info-color: #1890ff;
+
+  // 文字色
+  --text-color: rgba(0, 0, 0, 0.85);
+  --text-color-secondary: rgba(0, 0, 0, 0.45);
+  --text-color-disabled: rgba(0, 0, 0, 0.25);
+
+  // 背景色
+  --bg-color: #f0f2f5;
+  --bg-color-container: #fff;
+
+  // 边框色
+  --border-color: #f0f0f0;
+
+  // 布局
+  --sidebar-width: 208px;
+  --sidebar-collapsed-width: 80px;
+  --header-height: 64px;
+  --footer-height: 70px;
+
+  // 阴影
+  --shadow-1: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
