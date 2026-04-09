@@ -12,6 +12,7 @@ import com.edu.common.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
@@ -28,6 +29,8 @@ public class AuthServiceImpl implements AuthService {
     private final UserMapper userMapper;
     private final RoleMapper roleMapper;
     private final StringRedisTemplate redisTemplate;
+    private final PasswordEncoder passwordEncoder;
+    private final JwtUtil jwtUtil;
 
     @Override
     public LoginResponse login(LoginRequest request) {
@@ -37,8 +40,8 @@ public class AuthServiceImpl implements AuthService {
             throw new RuntimeException("用户名或密码错误");
         }
 
-        // 校验密码 (简化处理，实际应该使用 BCrypt)
-        if (!request.getPassword().equals("123456")) {
+        // 校验密码
+        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             throw new RuntimeException("用户名或密码错误");
         }
 
@@ -53,8 +56,8 @@ public class AuthServiceImpl implements AuthService {
         claims.put("username", user.getUsername());
         claims.put("userType", user.getUserType());
 
-        String accessToken = JwtUtil.generateAccessToken(user.getId().toString(), claims);
-        String refreshToken = JwtUtil.generateRefreshToken(user.getId().toString());
+        String accessToken = jwtUtil.generateAccessToken(user.getId().toString(), claims);
+        String refreshToken = jwtUtil.generateRefreshToken(user.getId().toString());
 
         // 存入 Redis
         redisTemplate.opsForValue().set(
@@ -106,7 +109,7 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public LoginResponse refreshToken(String refreshToken) {
         // 解析 refresh token
-        String userId = JwtUtil.getSubject(refreshToken);
+        String userId = jwtUtil.getSubject(refreshToken);
 
         // 生成新的 access token
         User user = userMapper.selectById(Long.valueOf(userId));
@@ -115,8 +118,8 @@ public class AuthServiceImpl implements AuthService {
         claims.put("username", user.getUsername());
         claims.put("userType", user.getUserType());
 
-        String newAccessToken = JwtUtil.generateAccessToken(userId, claims);
-        String newRefreshToken = JwtUtil.generateRefreshToken(userId);
+        String newAccessToken = jwtUtil.generateAccessToken(userId, claims);
+        String newRefreshToken = jwtUtil.generateRefreshToken(userId);
 
         // 更新 Redis
         redisTemplate.opsForValue().set(
