@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthService authService;
+    private final JwtUtil jwtUtil;
 
     @PostMapping("/login")
     public Result<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
@@ -28,7 +29,7 @@ public class AuthController {
     public Result<UserInfoResponse> getUserInfo(@RequestHeader("Authorization") String token) {
         // 解析 token 获取用户ID
         String jwt = token.replace("Bearer ", "");
-        Claims claims = JwtUtil.parseToken(jwt);
+        Claims claims = jwtUtil.parseToken(jwt);
         Long userId = Long.valueOf(claims.get("userId").toString());
 
         UserInfoResponse response = authService.getUserInfo(userId);
@@ -38,7 +39,7 @@ public class AuthController {
     @PostMapping("/logout")
     public Result<Void> logout(@RequestHeader("Authorization") String token) {
         String jwt = token.replace("Bearer ", "");
-        Claims claims = JwtUtil.parseToken(jwt);
+        Claims claims = jwtUtil.parseToken(jwt);
         Long userId = Long.valueOf(claims.get("userId").toString());
 
         authService.logout(userId);
