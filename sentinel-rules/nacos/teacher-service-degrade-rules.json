@@ -1,0 +1,19 @@
+[
+  {
+    "resource": "teacher_list",
+    "grade": 0,
+    "count": 3000,
+    "timeWindow": 30,
+    "slowRatioThreshold": 0.5,
+    "minRequestAmount": 5,
+    "statIntervalMs": 1000
+  },
+  {
+    "resource": "teacher_list",
+    "grade": 1,
+    "count": 0.3,
+    "timeWindow": 30,
+    "minRequestAmount": 5,
+    "statIntervalMs": 1000
+  }
+]

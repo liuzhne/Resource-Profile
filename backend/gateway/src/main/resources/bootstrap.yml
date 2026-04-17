@@ -20,6 +20,34 @@ spring:
             group: DEFAULT_GROUP
             refresh: true
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+spring:
+  cloud:
+    sentinel:
+      transport:
+        dashboard: ${SENTINEL_DASHBOARD:localhost:8858}
+      datasource:
+        gw-flow:
+          nacos:
+            server-addr: ${NACOS_SERVER:localhost:8848}
+            dataId: ${spring.application.name}-gw-flow-rules
+            groupId: SENTINEL_GROUP
+            rule-type: gw-flow
+        gw-api-group:
+          nacos:
+            server-addr: ${NACOS_SERVER:localhost:8848}
+            dataId: ${spring.application.name}-gw-api-group-rules
+            groupId: SENTINEL_GROUP
+            rule-type: gw-api-group
+
 logging:
   level:
     org.springframework.cloud.gateway: debug

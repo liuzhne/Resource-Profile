@@ -1,6 +1,8 @@
 package com.edu.data.controller;
 
+import com.alibaba.csp.sentinel.annotation.SentinelResource;
 import com.edu.common.result.Result;
+import com.edu.data.fallback.DashboardFallbackHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -16,10 +18,16 @@ import java.util.Map;
 public class DashboardController {
 
     @GetMapping("/statistics")
+    @SentinelResource(
+            value = "data_dashboard_statistics",
+            blockHandlerClass = DashboardFallbackHandler.class,
+            blockHandler = "statisticsBlockHandler",
+            fallbackClass = DashboardFallbackHandler.class,
+            fallback = "statisticsFallback"
+    )
     public Result<Map<String, Object>> statistics() {
         Map<String, Object> result = new HashMap<>();
 
-        // 基础统计数据
         result.put("teacherCount", 128);
         result.put("studentCount", 2456);
         result.put("questionnaireCount", 89);
@@ -29,10 +37,16 @@ public class DashboardController {
     }
 
     @GetMapping("/trend")
+    @SentinelResource(
+            value = "data_dashboard_trend",
+            blockHandlerClass = DashboardFallbackHandler.class,
+            blockHandler = "trendBlockHandler",
+            fallbackClass = DashboardFallbackHandler.class,
+            fallback = "trendFallback"
+    )
     public Result<Map<String, Object>> trend() {
         Map<String, Object> result = new HashMap<>();
 
-        // 师生增长趋势
         result.put("days", List.of("周一", "周二", "周三", "周四", "周五", "周六", "周日"));
         result.put("teacherData", List.of(120, 132, 101, 134, 90, 230, 210));
         result.put("studentData", List.of(220, 182, 191, 234, 290, 330, 310));
@@ -41,10 +55,16 @@ public class DashboardController {
     }
 
     @GetMapping("/distribution")
+    @SentinelResource(
+            value = "data_dashboard_distribution",
+            blockHandlerClass = DashboardFallbackHandler.class,
+            blockHandler = "distributionBlockHandler",
+            fallbackClass = DashboardFallbackHandler.class,
+            fallback = "distributionFallback"
+    )
     public Result<Map<String, Object>> distribution() {
         Map<String, Object> result = new HashMap<>();
 
-        // 师生分布
         result.put("data", List.of(
                 Map.of("name", "教师", "value", 128),
                 Map.of("name", "学生", "value", 2456),
@@ -55,6 +75,13 @@ public class DashboardController {
     }
 
     @GetMapping("/recentLogins")
+    @SentinelResource(
+            value = "data_dashboard_recentLogins",
+            blockHandlerClass = DashboardFallbackHandler.class,
+            blockHandler = "recentLoginsBlockHandler",
+            fallbackClass = DashboardFallbackHandler.class,
+            fallback = "recentLoginsFallback"
+    )
     public Result<List<Map<String, Object>>> recentLogins() {
         return Result.success(List.of(
                 Map.of("username", "张老师", "role", "教师", "time", "2026-04-05 14:30", "ip", "192.168.1.100"),

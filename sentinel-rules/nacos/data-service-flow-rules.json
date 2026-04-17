@@ -1,0 +1,48 @@
+[
+  {
+    "resource": "/actuator/health",
+    "limitApp": "default",
+    "grade": 1,
+    "count": 100,
+    "strategy": 0,
+    "controlBehavior": 0,
+    "clusterMode": false
+  },
+  {
+    "resource": "data_dashboard_statistics",
+    "limitApp": "default",
+    "grade": 1,
+    "count": 20,
+    "strategy": 1,
+    "refResource": "user_list",
+    "controlBehavior": 0,
+    "clusterMode": false
+  },
+  {
+    "resource": "data_dashboard_trend",
+    "limitApp": "default",
+    "grade": 1,
+    "count": 50,
+    "strategy": 0,
+    "controlBehavior": 0,
+    "clusterMode": false
+  },
+  {
+    "resource": "data_dashboard_distribution",
+    "limitApp": "default",
+    "grade": 1,
+    "count": 50,
+    "strategy": 0,
+    "controlBehavior": 0,
+    "clusterMode": false
+  },
+  {
+    "resource": "data_dashboard_recentLogins",
+    "limitApp": "default",
+    "grade": 1,
+    "count": 50,
+    "strategy": 0,
+    "controlBehavior": 0,
+    "clusterMode": false
+  }
+]

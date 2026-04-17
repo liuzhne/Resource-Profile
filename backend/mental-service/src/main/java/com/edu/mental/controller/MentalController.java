@@ -1,9 +1,11 @@
 package com.edu.mental.controller;
 
+import com.alibaba.csp.sentinel.annotation.SentinelResource;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.edu.common.result.Result;
 import com.edu.mental.entity.MentalAssessment;
 import com.edu.mental.entity.Questionnaire;
+import com.edu.mental.fallback.MentalFallbackHandler;
 import com.edu.mental.mapper.MentalAssessmentMapper;
 import com.edu.mental.service.QuestionnaireService;
 import lombok.RequiredArgsConstructor;
@@ -22,14 +24,19 @@ public class MentalController {
     private final MentalAssessmentMapper mentalAssessmentMapper;
 
     @GetMapping("/overview")
+    @SentinelResource(
+            value = "mental_overview",
+            blockHandlerClass = MentalFallbackHandler.class,
+            blockHandler = "overviewBlockHandler",
+            fallbackClass = MentalFallbackHandler.class,
+            fallback = "overviewFallback"
+    )
     public Result<Map<String, Object>> overview() {
         Map<String, Object> result = new HashMap<>();
 
-        // 统计近30天的心理健康数据
         List<Map<String, Object>> stats = mentalAssessmentMapper.selectRecentStats();
         result.put("recentStats", stats);
 
-        // 总体统计
         result.put("goodRate", 85);
         result.put("attentionRate", 12);
         result.put("interventionRate", 3);
@@ -39,6 +46,13 @@ public class MentalController {
     }
 
     @GetMapping("/questionnaires")
+    @SentinelResource(
+            value = "mental_questionnaires",
+            blockHandlerClass = MentalFallbackHandler.class,
+            blockHandler = "listQuestionnairesBlockHandler",
+            fallbackClass = MentalFallbackHandler.class,
+            fallback = "listQuestionnairesFallback"
+    )
     public Result<Page<Questionnaire>> listQuestionnaires(
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "10") Integer size) {
@@ -72,17 +86,22 @@ public class MentalController {
     }
 
     @GetMapping("/analysis")
+    @SentinelResource(
+            value = "mental_analysis",
+            blockHandlerClass = MentalFallbackHandler.class,
+            blockHandler = "analysisBlockHandler",
+            fallbackClass = MentalFallbackHandler.class,
+            fallback = "analysisFallback"
+    )
     public Result<Map<String, Object>> analysis() {
         Map<String, Object> result = new HashMap<>();
 
-        // 各学院分布
         result.put("deptDistribution", List.of(
                 Map.of("dept", "计算机学院", "good", 120, "attention", 15, "intervention", 3),
                 Map.of("dept", "数学学院", "good", 80, "attention", 10, "intervention", 2),
                 Map.of("dept", "物理学院", "good", 90, "attention", 12, "intervention", 4)
         ));
 
-        // 年级对比
         result.put("gradeComparison", List.of(
                 Map.of("grade", "大一", "rate", 85),
                 Map.of("grade", "大二", "rate", 82),
@@ -90,7 +109,6 @@ public class MentalController {
                 Map.of("grade", "大四", "rate", 75)
         ));
 
-        // 重点人群
         result.put("focusGroups", List.of(
                 Map.of("group", "学业困难学生", "count", 156, "risk", "中"),
                 Map.of("group", "家庭经济困难学生", "count", 89, "risk", "中"),

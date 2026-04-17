@@ -1,8 +1,10 @@
 package com.edu.user.controller;
 
+import com.alibaba.csp.sentinel.annotation.SentinelResource;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.edu.common.result.Result;
 import com.edu.user.entity.User;
+import com.edu.user.fallback.UserFallbackHandler;
 import com.edu.user.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -15,6 +17,13 @@ public class UserController {
     private final UserService userService;
 
     @GetMapping("/list")
+    @SentinelResource(
+            value = "user_list",
+            blockHandlerClass = UserFallbackHandler.class,
+            blockHandler = "listBlockHandler",
+            fallbackClass = UserFallbackHandler.class,
+            fallback = "listFallback"
+    )
     public Result<Page<User>> list(
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "10") Integer size,
@@ -26,6 +35,13 @@ public class UserController {
     }
 
     @GetMapping("/{id}")
+    @SentinelResource(
+            value = "user_getById",
+            blockHandlerClass = UserFallbackHandler.class,
+            blockHandler = "getByIdBlockHandler",
+            fallbackClass = UserFallbackHandler.class,
+            fallback = "getByIdFallback"
+    )
     public Result<User> getById(@PathVariable Long id) {
         User user = userService.getById(id);
         return Result.success(user);

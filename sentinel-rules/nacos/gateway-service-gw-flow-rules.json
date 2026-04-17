@@ -1,0 +1,50 @@
+[
+  {
+    "resource": "teacher-service",
+    "resourceMode": 0,
+    "count": 100,
+    "intervalSec": 1,
+    "controlBehavior": 0,
+    "burst": 0,
+    "maxQueueingTimeoutMs": 500,
+    "paramItem": {
+      "parseStrategy": 0
+    }
+  },
+  {
+    "resource": "student-service",
+    "resourceMode": 0,
+    "count": 200,
+    "intervalSec": 1,
+    "controlBehavior": 0,
+    "burst": 0,
+    "maxQueueingTimeoutMs": 500,
+    "paramItem": {
+      "parseStrategy": 0
+    }
+  },
+  {
+    "resource": "auth-service",
+    "resourceMode": 0,
+    "count": 100,
+    "intervalSec": 1,
+    "controlBehavior": 0,
+    "burst": 0,
+    "maxQueueingTimeoutMs": 500,
+    "paramItem": {
+      "parseStrategy": 0
+    }
+  },
+  {
+    "resource": "user-service",
+    "resourceMode": 0,
+    "count": 100,
+    "intervalSec": 1,
+    "controlBehavior": 0,
+    "burst": 0,
+    "maxQueueingTimeoutMs": 500,
+    "paramItem": {
+      "parseStrategy": 0
+    }
+  }
+]
