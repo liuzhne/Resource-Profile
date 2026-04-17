@@ -1,5 +1,12 @@
 spring:
   cloud:
+    sentinel:
+      scg:
+        fallback:
+          mode: response
+          response-body: '{"code":429,"message":"系统繁忙，请稍后重试","data":null}'
+          response-status: 429
+          content-type: application/json
     gateway:
       discovery:
         locator:

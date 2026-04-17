@@ -44,9 +44,34 @@ mybatis-plus:
 
 # JWT 配置
 jwt:
-  # JWT 密钥，必须从环境变量读取，生产环境应使用强随机字符串（至少 256 位）
   secret: ${JWT_SECRET}
-  # 访问令牌过期时间：24 小时
   access-token-expire: 86400000
-  # 刷新令牌过期时间：7 天
   refresh-token-expire: 604800000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+spring:
+  cloud:
+    sentinel:
+      transport:
+        dashboard: ${SENTINEL_DASHBOARD:localhost:8858}
+      datasource:
+        flow:
+          nacos:
+            server-addr: ${NACOS_SERVER:localhost:8848}
+            dataId: ${spring.application.name}-flow-rules
+            groupId: SENTINEL_GROUP
+            rule-type: flow
+        degrade:
+          nacos:
+            server-addr: ${NACOS_SERVER:localhost:8848}
+            dataId: ${spring.application.name}-degrade-rules
+            groupId: SENTINEL_GROUP
+            rule-type: degrade

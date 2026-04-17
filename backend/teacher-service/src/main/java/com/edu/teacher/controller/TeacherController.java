@@ -1,8 +1,10 @@
 package com.edu.teacher.controller;
 
+import com.alibaba.csp.sentinel.annotation.SentinelResource;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.edu.common.result.Result;
 import com.edu.teacher.entity.Teacher;
+import com.edu.teacher.fallback.TeacherFallbackHandler;
 import com.edu.teacher.service.TeacherService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -15,6 +17,13 @@ public class TeacherController {
     private final TeacherService teacherService;
 
     @GetMapping("/list")
+    @SentinelResource(
+            value = "teacher_list",
+            blockHandlerClass = TeacherFallbackHandler.class,
+            blockHandler = "listBlockHandler",
+            fallbackClass = TeacherFallbackHandler.class,
+            fallback = "listFallback"
+    )
     public Result<Page<Teacher>> list(
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "10") Integer size,
@@ -26,6 +35,13 @@ public class TeacherController {
     }
 
     @GetMapping("/{id}")
+    @SentinelResource(
+            value = "teacher_getById",
+            blockHandlerClass = TeacherFallbackHandler.class,
+            blockHandler = "getByIdBlockHandler",
+            fallbackClass = TeacherFallbackHandler.class,
+            fallback = "getByIdFallback"
+    )
     public Result<Teacher> getById(@PathVariable Long id) {
         Teacher teacher = teacherService.getById(id);
         return Result.success(teacher);

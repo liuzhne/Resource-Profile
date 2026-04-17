@@ -42,6 +42,15 @@
         <mysql.version>8.0.33</mysql.version>
     </properties>
 
+    <dependencies>
+        <!-- Lombok: shared by all modules -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+    </dependencies>
+
     <dependencyManagement>
         <dependencies>
             <!-- Spring Boot -->
