@@ -90,3 +90,7 @@ docker/volumes/
 *~
 .tmp/
 temp/
+
+# md
+CLAUDE.md
+SENTINEL_INTEGRATION.md
