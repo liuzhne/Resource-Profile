@@ -19,6 +19,8 @@ spring:
           - data-id: common.yml
             group: DEFAULT_GROUP
             refresh: true
+        import-check:
+          enabled: false
 
 logging:
   level:
