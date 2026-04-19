@@ -6,6 +6,9 @@ spring:
     name: gateway-service
   profiles:
     active: dev
+  config:
+    import:
+      - optional:nacos:
   cloud:
     nacos:
       discovery:
@@ -19,8 +22,6 @@ spring:
           - data-id: common.yml
             group: DEFAULT_GROUP
             refresh: true
-        import-check:
-          enabled: false
 
 logging:
   level:
