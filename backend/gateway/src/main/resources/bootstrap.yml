@@ -16,11 +16,15 @@ spring:
         namespace: ${NACOS_NAMESPACE:}
         username: ${NACOS_USERNAME:nacos}
         password: ${NACOS_PASSWORD:nacos}
+        identity-key: ${NACOS_AUTH_IDENTITY_KEY:serverIdentity}
+        identity-value: ${NACOS_AUTH_IDENTITY_VALUE:security}
       config:
         server-addr: ${NACOS_SERVER:localhost:8848}
         namespace: ${NACOS_NAMESPACE:}
         username: ${NACOS_USERNAME:nacos}
         password: ${NACOS_PASSWORD:nacos}
+        identity-key: ${NACOS_AUTH_IDENTITY_KEY:serverIdentity}
+        identity-value: ${NACOS_AUTH_IDENTITY_VALUE:security}
         file-extension: yml
         shared-configs:
           - data-id: common.yml
