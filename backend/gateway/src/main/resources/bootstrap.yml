@@ -13,6 +13,7 @@ spring:
     nacos:
       discovery:
         enabled: true
+        register-enabled: true
         server-addr: ${NACOS_SERVER:localhost:8848}
         namespace: ${NACOS_NAMESPACE:}
         username: ${NACOS_USERNAME:nacos}
@@ -20,6 +21,9 @@ spring:
         identity-key: ${NACOS_AUTH_IDENTITY_KEY:serverIdentity}
         identity-value: ${NACOS_AUTH_IDENTITY_VALUE:security}
         service: ${spring.application.name}
+    service-registry:
+      auto-registration:
+        enabled: true
       config:
         server-addr: ${NACOS_SERVER:localhost:8848}
         namespace: ${NACOS_NAMESPACE:}
