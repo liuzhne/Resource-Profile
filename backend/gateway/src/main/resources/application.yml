@@ -3,9 +3,19 @@ spring:
     web-application-type: reactive
   cloud:
     nacos:
+      discovery:
+        enabled: true
+        server-addr: ${NACOS_SERVER:localhost:8848}
+        namespace: ${NACOS_NAMESPACE:}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
       config:
         import-check:
           enabled: false
+        server-addr: ${NACOS_SERVER:localhost:8848}
+        namespace: ${NACOS_NAMESPACE:}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
     gateway:
       discovery:
         locator:
