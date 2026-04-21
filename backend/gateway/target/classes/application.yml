@@ -1,10 +1,55 @@
+server:
+  port: 8080
+
 spring:
+  application:
+    name: gateway-service
+
+  main:
+    web-application-type: reactive
+
+  profiles:
+    active: dev
+
+  # Nacos 配置导入
+  config:
+    import:
+      - optional:nacos:gateway-service.yml?group=DEFAULT_GROUP
+      - optional:nacos:common.yml?group=DEFAULT_GROUP
+
   cloud:
+    nacos:
+      # 注册中心
+      discovery:
+        enabled: true
+        register-enabled: true
+        server-addr: ${NACOS_SERVER:localhost:8848}
+        namespace: ${NACOS_NAMESPACE:}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
+        identity-key: ${NACOS_AUTH_IDENTITY_KEY:serverIdentity}
+        identity-value: ${NACOS_AUTH_IDENTITY_VALUE:security}
+        service: ${spring.application.name}
+
+      # 配置中心
+      config:
+        import-check:
+          enabled: false
+        server-addr: ${NACOS_SERVER:localhost:8848}
+        namespace: ${NACOS_NAMESPACE:}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
+        identity-key: ${NACOS_AUTH_IDENTITY_KEY:serverIdentity}
+        identity-value: ${NACOS_AUTH_IDENTITY_VALUE:security}
+        file-extension: yml
+
+    # Gateway 路由配置
     gateway:
       discovery:
         locator:
           enabled: true
           lower-case-service-id: true
+
       routes:
         # 认证服务
         - id: auth-service
@@ -61,3 +106,7 @@ spring:
             allowedMethods: "*"
             allowedHeaders: "*"
             allowCredentials: false
+
+logging:
+  level:
+    org.springframework.cloud.gateway: debug
