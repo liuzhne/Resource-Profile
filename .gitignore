@@ -35,6 +35,8 @@ buildNumber.properties
 *.iml
 *.ipr
 
+.claude/
+
 # Eclipse
 .apt_generated
 .classpath
