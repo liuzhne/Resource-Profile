@@ -9,16 +9,40 @@ spring:
   cloud:
     nacos:
       discovery:
-        server-addr: ${NACOS_SERVER:localhost:8848}
+        server-addr: ${NACOS_SERVER:localhost:9848}
         namespace: ${NACOS_NAMESPACE:}
+        username: nacos
+        password: nacos
       config:
-        server-addr: ${NACOS_SERVER:localhost:8848}
+        server-addr: ${NACOS_SERVER:localhost:9848}
         namespace: ${NACOS_NAMESPACE:}
         file-extension: yml
+        username: nacos
+        password: nacos
         shared-configs:
           - data-id: common.yml
             group: DEFAULT_GROUP
             refresh: true
+    sentinel:
+      transport:
+        dashboard: ${SENTINEL_DASHBOARD:localhost:8858}
+      datasource:
+        gw-flow:
+          nacos:
+            server-addr: ${NACOS_SERVER:localhost:9848}
+            dataId: ${spring.application.name}-gw-flow-rules
+            groupId: SENTINEL_GROUP
+            rule-type: gw-flow
+            username: nacos
+            password: nacos
+        gw-api-group:
+          nacos:
+            server-addr: ${NACOS_SERVER:localhost:9848}
+            dataId: ${spring.application.name}-gw-api-group-rules
+            groupId: SENTINEL_GROUP
+            rule-type: gw-api-group
+            username: nacos
+            password: nacos
 
 management:
   endpoints:
@@ -28,25 +52,6 @@ management:
   metrics:
     tags:
       application: ${spring.application.name}
-
-spring:
-  cloud:
-    sentinel:
-      transport:
-        dashboard: ${SENTINEL_DASHBOARD:localhost:8858}
-      datasource:
-        gw-flow:
-          nacos:
-            server-addr: ${NACOS_SERVER:localhost:8848}
-            dataId: ${spring.application.name}-gw-flow-rules
-            groupId: SENTINEL_GROUP
-            rule-type: gw-flow
-        gw-api-group:
-          nacos:
-            server-addr: ${NACOS_SERVER:localhost:8848}
-            dataId: ${spring.application.name}-gw-api-group-rules
-            groupId: SENTINEL_GROUP
-            rule-type: gw-api-group
 
 logging:
   level:
