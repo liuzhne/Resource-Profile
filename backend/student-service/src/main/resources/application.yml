@@ -6,15 +6,34 @@ spring:
     name: student-service
   profiles:
     active: dev
+
+  # 配置导入（替代 bootstrap 机制）
+  config:
+    import:
+      - optional:nacos:student-service.yml?group=DEFAULT_GROUP
+      - optional:nacos:common.yml?group=DEFAULT_GROUP
+
   cloud:
     nacos:
       discovery:
         server-addr: ${NACOS_SERVER:localhost:8848}
         namespace: ${NACOS_NAMESPACE:}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
+        identity-key: ${NACOS_AUTH_IDENTITY_KEY:serverIdentity}
+        identity-value: ${NACOS_AUTH_IDENTITY_VALUE:security}
+
       config:
+        import-check:
+          enabled: false
         server-addr: ${NACOS_SERVER:localhost:8848}
         namespace: ${NACOS_NAMESPACE:}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
+        identity-key: ${NACOS_AUTH_IDENTITY_KEY:serverIdentity}
+        identity-value: ${NACOS_AUTH_IDENTITY_VALUE:security}
         file-extension: yml
+
   datasource:
     url: jdbc:mysql://${MYSQL_HOST:localhost}:3306/edu_portrait?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
     username: ${MYSQL_USER:root}
@@ -24,8 +43,11 @@ spring:
 mybatis-plus:
   configuration:
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    map-underscore-to-camel-case: true
   global-config:
     db-config:
       logic-delete-field: deleted
       logic-delete-value: 1
       logic-not-delete-value: 0
+      id-type: auto
+  mapper-locations: classpath*:/mapper/**/*.xml

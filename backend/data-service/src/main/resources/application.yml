@@ -1,17 +1,18 @@
 server:
-  port: 8081
+  port: 8086
 
 spring:
   application:
-    name: auth-service
+    name: data-service
   profiles:
     active: dev
 
   # 配置导入（替代 bootstrap 机制）
   config:
     import:
-      - optional:nacos:auth-service.yml?group=DEFAULT_GROUP
+      - optional:nacos:data-service.yml?group=DEFAULT_GROUP
       - optional:nacos:common.yml?group=DEFAULT_GROUP
+
 
   cloud:
     nacos:
