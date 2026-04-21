@@ -90,3 +90,6 @@ docker/volumes/
 *~
 .tmp/
 temp/
+
+CLAUDE.md
+GATEWAY_ISSUE_SUMMARY.md

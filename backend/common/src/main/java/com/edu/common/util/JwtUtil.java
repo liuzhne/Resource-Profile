@@ -1,8 +1,12 @@
 package com.edu.common.util;
 
+import com.edu.common.config.JwtProperties;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
@@ -10,36 +14,41 @@ import java.util.Date;
 import java.util.Map;
 
 @Slf4j
+@Component
+@RequiredArgsConstructor
 public class JwtUtil {
 
-    // JWT密钥，实际项目中应从配置文件读取
-    private static final String SECRET = "edu-portrait-jwt-secret-key-12345678901234567890";
-    private static final SecretKey KEY = Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8));
+    private final JwtProperties jwtProperties;
+    private SecretKey key;
 
-    // 访问令牌过期时间：24小时
-    private static final long ACCESS_TOKEN_EXPIRE = 24 * 60 * 60 * 1000;
-
-    // 刷新令牌过期时间：7天
-    private static final long REFRESH_TOKEN_EXPIRE = 7 * 24 * 60 * 60 * 1000;
+    @PostConstruct
+    public void init() {
+        // 从配置中读取密钥
+        String secret = jwtProperties.getSecret();
+        if (secret == null || secret.isEmpty()) {
+            throw new IllegalStateException("JWT secret must be configured. Please set jwt.secret in configuration.");
+        }
+        this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+    }
 
     /**
      * 生成访问令牌
      */
-    public static String generateAccessToken(String subject, Map<String, Object> claims) {
-        return generateToken(subject, claims, ACCESS_TOKEN_EXPIRE);
+    public String generateAccessToken(String subject, Map<String, Object> claims) {
+        return generateToken(subject, claims, jwtProperties.getAccessTokenExpire());
     }
 
     /**
      * 生成刷新令牌
      */
-    public static String generateRefreshToken(String subject) {
-        return generateToken(subject, null, REFRESH_TOKEN_EXPIRE);
+    public String generateRefreshToken(String subject) {
+        return generateToken(subject, null, jwtProperties.getRefreshTokenExpire());
     }
 
     /**
      * 生成令牌
      */
-    private static String generateToken(String subject, Map<String, Object> claims, long expire) {
+    private String generateToken(String subject, Map<String, Object> claims, long expire) {
         Date now = new Date();
         Date expiration = new Date(now.getTime() + expire);
 
@@ -47,7 +56,7 @@ public class JwtUtil {
                 .subject(subject)
                 .issuedAt(now)
                 .expiration(expiration)
-                .signWith(KEY);
+                .signWith(key);
 
         if (claims != null) {
             claims.forEach(builder::claim);
@@ -59,10 +68,10 @@ public class JwtUtil {
     /**
      * 解析令牌
      */
-    public static Claims parseToken(String token) {
+    public Claims parseToken(String token) {
         try {
             return Jwts.parser()
-                    .verifyWith(KEY)
+                    .verifyWith(key)
                     .build()
                     .parseSignedClaims(token)
                     .getPayload();
@@ -84,7 +93,7 @@ public class JwtUtil {
     /**
      * 验证令牌是否有效
      */
-    public static boolean validateToken(String token) {
+    public boolean validateToken(String token) {
         try {
             parseToken(token);
             return true;
@@ -96,7 +105,7 @@ public class JwtUtil {
     /**
      * 从令牌中获取用户ID
      */
-    public static String getSubject(String token) {
+    public String getSubject(String token) {
         Claims claims = parseToken(token);
         return claims.getSubject();
     }
@@ -105,7 +114,7 @@ public class JwtUtil {
      * 从令牌中获取声明
      */
     @SuppressWarnings("unchecked")
-    public static <T> T getClaim(String token, String claim) {
+    public <T> T getClaim(String token, String claim) {
         Claims claims = parseToken(token);
         return (T) claims.get(claim);
     }
@@ -113,7 +122,7 @@ public class JwtUtil {
     /**
      * 获取令牌过期时间
      */
-    public static Date getExpiration(String token) {
+    public Date getExpiration(String token) {
         Claims claims = parseToken(token);
         return claims.getExpiration();
     }
@@ -121,7 +130,7 @@ public class JwtUtil {
     /**
      * 判断令牌是否即将过期（小于30分钟）
      */
-    public static boolean isTokenExpired(String token) {
+    public boolean isTokenExpired(String token) {
         Date expiration = getExpiration(token);
         return expiration.before(new Date(System.currentTimeMillis() + 30 * 60 * 1000));
     }
