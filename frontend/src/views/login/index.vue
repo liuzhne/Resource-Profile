@@ -2,7 +2,6 @@
   <div class="login-container">
     <div class="login-box">
       <div class="login-header">
-        <img src="/vite.svg" alt="logo" class="logo" />
         <h1 class="title">师生资源画像系统</h1>
         <p class="subtitle">Education Portrait System</p>
       </div>
@@ -125,12 +124,6 @@ const handleLogin = async () => {
 .login-header {
   text-align: center;
   margin-bottom: 32px;
-
-  .logo {
-    width: 64px;
-    height: 64px;
-    margin-bottom: 16px;
-  }
 
   .title {
     font-size: 24px;

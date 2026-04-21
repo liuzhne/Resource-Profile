@@ -2,7 +2,6 @@
   <div class="sidebar" :class="{ collapsed: sidebarCollapsed }">
     <!-- Logo -->
     <div class="logo">
-      <img src="/vite.svg" alt="logo" />
       <span v-show="!sidebarCollapsed" class="title">师生画像系统</span>
     </div>
 
