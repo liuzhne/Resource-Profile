@@ -15,7 +15,7 @@ public class JwtProperties {
     /**
      * JWT 密钥，应从环境变量或配置中心读取
      */
-    private String secret;
+    private String secret = "-";
 
     /**
      * 访问令牌过期时间（毫秒），默认 24 小时

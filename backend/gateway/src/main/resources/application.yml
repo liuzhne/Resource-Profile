@@ -1,18 +1,37 @@
+server:
+  port: 8080
+
 spring:
-  main:
-    web-application-type: reactive
   application:
     name: gateway-service
+
+  main:
+    web-application-type: reactive
+
+  profiles:
+    active: dev
+
+  # Nacos 配置导入
+  config:
+    import:
+      - optional:nacos:gateway-service.yml?group=DEFAULT_GROUP
+      - optional:nacos:common.yml?group=DEFAULT_GROUP
+
   cloud:
     nacos:
+      # 注册中心
       discovery:
         enabled: true
+        register-enabled: true
         server-addr: ${NACOS_SERVER:localhost:8848}
         namespace: ${NACOS_NAMESPACE:}
         username: ${NACOS_USERNAME:nacos}
         password: ${NACOS_PASSWORD:nacos}
         identity-key: ${NACOS_AUTH_IDENTITY_KEY:serverIdentity}
         identity-value: ${NACOS_AUTH_IDENTITY_VALUE:security}
+        service: ${spring.application.name}
+
+      # 配置中心
       config:
         import-check:
           enabled: false
@@ -22,13 +41,16 @@ spring:
         password: ${NACOS_PASSWORD:nacos}
         identity-key: ${NACOS_AUTH_IDENTITY_KEY:serverIdentity}
         identity-value: ${NACOS_AUTH_IDENTITY_VALUE:security}
+        file-extension: yml
+
+    # Gateway 路由配置
     gateway:
       discovery:
         locator:
           enabled: true
           lower-case-service-id: true
+
       routes:
-        # 认证服务
         - id: auth-service
           uri: lb://auth-service
           predicates:
@@ -36,7 +58,6 @@ spring:
           filters:
             - StripPrefix=0
 
-        # 用户服务
         - id: user-service
           uri: lb://user-service
           predicates:
@@ -44,7 +65,6 @@ spring:
           filters:
             - StripPrefix=0
 
-        # 教师服务
         - id: teacher-service
           uri: lb://teacher-service
           predicates:
@@ -52,7 +72,6 @@ spring:
           filters:
             - StripPrefix=0
 
-        # 学生服务
         - id: student-service
           uri: lb://student-service
           predicates:
@@ -60,7 +79,6 @@ spring:
           filters:
             - StripPrefix=0
 
-        # 心理健康服务
         - id: mental-service
           uri: lb://mental-service
           predicates:
@@ -68,7 +86,6 @@ spring:
           filters:
             - StripPrefix=0
 
-        # 数据分析服务
         - id: data-service
           uri: lb://data-service
           predicates:
@@ -83,3 +100,7 @@ spring:
             allowedMethods: "*"
             allowedHeaders: "*"
             allowCredentials: false
+
+logging:
+  level:
+    org.springframework.cloud.gateway: debug
