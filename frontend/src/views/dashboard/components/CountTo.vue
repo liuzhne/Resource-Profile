@@ -3,7 +3,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 
 interface Props {
   start?: number
@@ -21,9 +21,13 @@ const props = withDefaults(defineProps<Props>(), {
 const displayValue = ref(props.start)
 let rafId: number | null = null
 
-onMounted(() => {
+const startAnimate = (from: number, to: number) => {
+  if (rafId !== null) {
+    cancelAnimationFrame(rafId)
+  }
+
   const startTime = performance.now()
-  const diff = props.end - props.start
+  const diff = to - from
 
   const animate = (currentTime: number) => {
     const elapsed = currentTime - startTime
@@ -31,7 +35,7 @@ onMounted(() => {
 
     // 使用 easeOutQuart 缓动函数
     const easeProgress = 1 - Math.pow(1 - progress, 4)
-    const currentValue = props.start + diff * easeProgress
+    const currentValue = from + diff * easeProgress
 
     displayValue.value = Number(currentValue.toFixed(props.decimals))
 
@@ -41,6 +45,14 @@ onMounted(() => {
   }
 
   rafId = requestAnimationFrame(animate)
+}
+
+onMounted(() => {
+  startAnimate(props.start, props.end)
+})
+
+watch(() => props.end, (newEnd) => {
+  startAnimate(displayValue.value, newEnd)
 })
 
 onUnmounted(() => {

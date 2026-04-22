@@ -17,7 +17,7 @@
         active-text-color="#fff"
       >
         <SidebarItem
-          v-for="route in routes"
+          v-for="route in menuRoutes"
           :key="route.path"
           :item="route"
           :base-path="route.path"
@@ -40,9 +40,10 @@ const appStore = useAppStore()
 const sidebarCollapsed = computed(() => appStore.sidebarCollapsed)
 const activeMenu = computed(() => route.path)
 
-// 过滤掉不需要显示的路由
+// 提取 Layout 路由下的 children 作为菜单数据源
 const menuRoutes = computed(() => {
-  return routes.filter(r => !r.meta?.hidden && r.path !== '/login' && r.path !== '/:pathMatch(.*)*')
+  const layoutRoute = routes.find(r => r.path === '/')
+  return layoutRoute?.children?.filter(r => !r.meta?.hidden) || []
 })
 </script>
 

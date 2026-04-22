@@ -5,9 +5,8 @@
       <el-col :xs="24" :sm="12" :lg="6">
         <el-card>
           <div class="stat-item">
-            <div class="stat-icon" style="background: #f6ffed; color: #52c41a"
-003e
-              <el-icon :size="32"><Smile</el-icon>
+            <div class="stat-icon" style="background: #f6ffed; color: #52c41a">
+              <el-icon :size="32"><Smile /></el-icon>
             </div>
             <div class="stat-info">
               <div class="stat-value" style="color: #52c41a">85%</div>
@@ -20,7 +19,7 @@
         <el-card>
           <div class="stat-item">
             <div class="stat-icon" style="background: #fff7e6; color: #faad14">
-              <el-icon :size="32"><Warning</el-icon>
+              <el-icon :size="32"><Warning /></el-icon>
             </div>
             <div class="stat-info">
               <div class="stat-value" style="color: #faad14">12%</div>
@@ -33,7 +32,7 @@
         <el-card>
           <div class="stat-item">
             <div class="stat-icon" style="background: #fff1f0; color: #f5222d">
-              <el-icon :size="32"><BellFilled</el-icon>
+              <el-icon :size="32"><BellFilled /></el-icon>
             </div>
             <div class="stat-info">
               <div class="stat-value" style="color: #f5222d">3%</div>
@@ -46,7 +45,7 @@
         <el-card>
           <div class="stat-item">
             <div class="stat-icon" style="background: #e6f7ff; color: #1890ff">
-              <el-icon :size="32"><DocumentChecked</el-icon>
+              <el-icon :size="32"><DocumentChecked /></el-icon>
             </div>
             <div class="stat-info">
               <div class="stat-value" style="color: #1890ff">89</div>

@@ -106,16 +106,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import * as echarts from 'echarts'
 import StatisticCard from './components/StatisticCard.vue'
+import { getStatistics, getTrendData, getDistributionData, getRecentLogins } from '@/api/dashboard'
 
 // 统计数据
 const stats = ref({
-  teacherCount: 128,
-  studentCount: 2456,
-  questionnaireCount: 89,
-  warningCount: 5
+  teacherCount: 0,
+  studentCount: 0,
+  questionnaireCount: 0,
+  warningCount: 0
 })
 
 // 图表相关
@@ -125,13 +126,18 @@ let trendChart: echarts.ECharts | null = null
 let pieChart: echarts.ECharts | null = null
 const trendPeriod = ref('month')
 
-// 模拟数据
-const recentLogins = ref([
-  { username: '张老师', role: '教师', time: '2026-04-05 14:30', ip: '192.168.1.100' },
-  { username: '李同学', role: '学生', time: '2026-04-05 13:45', ip: '192.168.1.101' },
-  { username: '王管理员', role: '管理员', time: '2026-04-05 12:00', ip: '192.168.1.102' }
-])
+const trendData = ref({
+  days: [] as string[],
+  teacherData: [] as number[],
+  studentData: [] as number[]
+})
 
+const distributionData = ref([] as { name: string; value: number }[])
+
+// 最近登录
+const recentLogins = ref([] as { username: string; role: string; time: string; ip: string }[])
+
+// 待处理事项（暂用静态数据，后端无对应接口）
 const activities = ref([
   { content: '新增5份心理健康预警', type: 'warning', time: '10分钟前' },
   { content: '张三老师提交了科研项目', type: 'success', time: '30分钟前' },
@@ -139,11 +145,71 @@ const activities = ref([
   { content: '李四同学完成了心理问卷', type: 'info', time: '2小时前' }
 ])
 
-// 初始化趋势图
-const initTrendChart = () => {
-  if (!trendChartRef.value) return
+// 加载统计数据
+const loadStatistics = async () => {
+  try {
+    const res = await getStatistics()
+    if (res.data) {
+      stats.value = {
+        teacherCount: res.data.teacherCount || 0,
+        studentCount: res.data.studentCount || 0,
+        questionnaireCount: res.data.questionnaireCount || 0,
+        warningCount: res.data.warningCount || 0
+      }
+    }
+  } catch (error) {
+    console.error('加载统计数据失败', error)
+  }
+}
 
-  trendChart = echarts.init(trendChartRef.value)
+// 加载趋势数据
+const loadTrendData = async () => {
+  try {
+    const res = await getTrendData()
+    if (res.data) {
+      trendData.value = {
+        days: res.data.days || [],
+        teacherData: res.data.teacherData || [],
+        studentData: res.data.studentData || []
+      }
+      updateTrendChart()
+    }
+  } catch (error) {
+    console.error('加载趋势数据失败', error)
+  }
+}
+
+// 加载分布数据
+const loadDistributionData = async () => {
+  try {
+    const res = await getDistributionData()
+    if (res.data?.data) {
+      distributionData.value = res.data.data
+      updatePieChart()
+    }
+  } catch (error) {
+    console.error('加载分布数据失败', error)
+  }
+}
+
+// 加载最近登录
+const loadRecentLogins = async () => {
+  try {
+    const res = await getRecentLogins()
+    if (res.data) {
+      recentLogins.value = res.data
+    }
+  } catch (error) {
+    console.error('加载最近登录失败', error)
+  }
+}
+
+// 初始化/更新趋势图
+const updateTrendChart = () => {
+  if (!trendChartRef.value) return
+  if (!trendChart) {
+    trendChart = echarts.init(trendChartRef.value)
+  }
   const option = {
     tooltip: {
       trigger: 'axis'
@@ -160,7 +226,7 @@ const initTrendChart = () => {
     xAxis: {
       type: 'category',
       boundaryGap: false,
-      data: ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+      data: trendData.value.days
     },
     yAxis: {
       type: 'value'
@@ -170,7 +236,7 @@ const initTrendChart = () => {
         name: '教师',
         type: 'line',
         smooth: true,
-        data: [120, 132, 101, 134, 90, 230, 210],
+        data: trendData.value.teacherData,
         itemStyle: { color: '#1890ff' },
         areaStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
@@ -183,7 +249,7 @@ const initTrendChart = () => {
         name: '学生',
         type: 'line',
         smooth: true,
-        data: [220, 182, 191, 234, 290, 330, 310],
+        data: trendData.value.studentData,
         itemStyle: { color: '#52c41a' },
         areaStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
@@ -197,11 +263,12 @@ const initTrendChart = () => {
   trendChart.setOption(option)
 }
 
-// 初始化饼图
-const initPieChart = () => {
+// 初始化/更新饼图
+const updatePieChart = () => {
   if (!pieChartRef.value) return
-
-  pieChart = echarts.init(pieChartRef.value)
+  if (!pieChart) {
+    pieChart = echarts.init(pieChartRef.value)
+  }
   const option = {
     tooltip: {
       trigger: 'item',
@@ -233,11 +300,13 @@ const initPieChart = () => {
             fontWeight: 'bold'
           }
         },
-        data: [
-          { value: 128, name: '教师', itemStyle: { color: '#1890ff' } },
-          { value: 2456, name: '学生', itemStyle: { color: '#52c41a' } },
-          { value: 45, name: '行政人员', itemStyle: { color: '#faad14' } }
-        ]
+        data: distributionData.value.map((item: any, index: number) => {
+          const colors = ['#1890ff', '#52c41a', '#faad14', '#f5222d', '#722ed1']
+          return {
+            ...item,
+            itemStyle: { color: colors[index % colors.length] }
+          }
+        })
       }
     ]
   }
@@ -251,8 +320,12 @@ const handleResize = () => {
 }
 
 onMounted(() => {
-  initTrendChart()
-  initPieChart()
+  nextTick(() => {
+    loadStatistics()
+    loadTrendData()
+    loadDistributionData()
+    loadRecentLogins()
+  })
   window.addEventListener('resize', handleResize)
 })
 
@@ -263,8 +336,8 @@ onUnmounted(() => {
 })
 
 watch(trendPeriod, () => {
-  // 根据选择的周期更新数据
-  initTrendChart()
+  // 根据选择的周期更新数据，后端当前仅提供一套数据，可后续扩展
+  loadTrendData()
 })
 </script>
 

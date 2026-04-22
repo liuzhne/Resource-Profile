@@ -52,7 +52,7 @@ const hasOneShowingChild = (children = [], parent) => {
 
   // 没有子菜单，显示父菜单
   if (showingChildren.length === 0) {
-    onlyOneChild.value = { ...parent, path: '' }
+    onlyOneChild.value = { ...parent }
     return true
   }
 
