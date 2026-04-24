@@ -4,7 +4,7 @@
 
     <el-row :gutter="20" class="detail-content">
       <el-col :xs="24" :lg="8">
-        <el-card>
+        <el-card v-loading="loading">
           <div class="profile-header">
             <el-avatar :size="100" :src="teacherInfo.avatar" />
             <h3>{{ teacherInfo.name }}</h3>
@@ -38,7 +38,7 @@
       </el-col>
 
       <el-col :xs="24" :lg="16">
-        <el-card>
+        <el-card v-loading="loading">
           <el-tabs v-model="activeTab">
             <el-tab-pane label="基本信息" name="basic">
               <el-descriptions :column="2" border>
@@ -112,70 +112,90 @@
   </div>
 </template>
 
-<script setup lang="ts">
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+<script setup>
+import { ref, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { getTeacherDetail } from '@/api/teacher'
+import { ElMessage } from 'element-plus'
 
 const router = useRouter()
+const route = useRoute()
 const activeTab = ref('basic')
+const loading = ref(false)
 
 const teacherInfo = ref({
-  id: 1,
-  name: '张教授',
+  name: '',
   avatar: '',
-  dept: '计算机学院',
-  title: '教授',
-  status: '在职',
-  employeeId: 'T2024001',
-  joinDate: '2015-09-01',
-  phone: '13800138001',
-  email: 'zhang@edu.edu.cn',
-  gender: '男',
-  birthDate: '1980-03-15',
-  political: '中共党员',
-  education: '博士',
-  school: '清华大学',
-  major: '计算机科学与技术',
-  researchArea: '人工智能、机器学习',
-  evaluationScore: 4.8,
-  evaluationCount: 256,
-  satisfaction: 95
+  dept: '',
+  title: '',
+  status: '',
+  employeeId: '',
+  joinDate: '',
+  phone: '',
+  email: '',
+  gender: '',
+  birthDate: '',
+  political: '',
+  education: '',
+  school: '',
+  major: '',
+  researchArea: '',
+  evaluationScore: '-',
+  evaluationCount: '-',
+  satisfaction: '-'
 })
 
-const teachingAchievements = ref([
-  {
-    year: '2025',
-    title: '《数据结构》精品课程建设',
-    description: '主持校级精品课程建设，获优秀评价'
-  },
-  {
-    year: '2024',
-    title: '教学成果奖二等奖',
-    description: '《基于项目的计算机专业实践教学改革》'
-  },
-  {
-    year: '2023',
-    title: '优秀教学奖',
-    description: '年度教学质量评估优秀'
-  }
-])
+const teachingAchievements = ref([])
+const researchProjects = ref([])
 
-const researchProjects = ref([
-  {
-    name: '基于深度学习的图像识别研究',
-    level: '国家自然科学基金',
-    role: '主持',
-    amount: 50,
-    period: '2024-2027'
-  },
-  {
-    name: '智能教育系统关键技术研究',
-    level: '省部级项目',
-    role: '主持',
-    amount: 20,
-    period: '2023-2025'
+const formatGender = (val) => {
+  if (val === 0) return '女'
+  if (val === 1) return '男'
+  return '-'
+}
+
+const formatStatus = (val) => {
+  if (val === 0) return '离职'
+  if (val === 1) return '在职'
+  return '-'
+}
+
+const fetchDetail = async () => {
+  const id = route.params.id
+  if (!id) {
+    ElMessage.error('教师ID不存在')
+    return
   }
-])
+  loading.value = true
+  try {
+    const res = await getTeacherDetail(id)
+    const data = res.data
+    if (!data) {
+      ElMessage.warning('未找到该教师信息')
+      return
+    }
+    teacherInfo.value = {
+      ...data,
+      dept: data.deptName || '-',
+      gender: formatGender(data.gender),
+      status: formatStatus(data.status),
+      political: '-',
+      phone: '-',
+      email: '-',
+      evaluationScore: '-',
+      evaluationCount: '-',
+      satisfaction: '-'
+    }
+  } catch (error) {
+    ElMessage.error('获取教师详情失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => {
+  fetchDetail()
+})
 
 const goBack = () => {
   router.back()

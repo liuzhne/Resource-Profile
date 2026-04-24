@@ -16,7 +16,7 @@ Resource-Profile is a **Teacher-Student Resource Portrait System** (师生资源
 
 ## Backend - Spring Boot Microservices
 
-**Build Tool:** Maven 3+
+**Build Tool:** Maven 3+ (no wrapper)
 **Java Version:** 17
 **Spring Boot:** 3.2.5
 **Spring Cloud:** 2023.0.1
@@ -24,10 +24,10 @@ Resource-Profile is a **Teacher-Student Resource Portrait System** (师生资源
 
 **Microservices Modules:**
 
-1. **`common`** - Shared common library
+1. **`common`** - Shared common library (auto-configured via `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`)
    - JWT utilities (`JwtUtil`)
    - Result wrapper (`Result<T>`)
-   - JWT configuration properties
+   - JWT configuration properties (`JwtProperties`)
 
 2. **`gateway`** (Port: 8080) - Spring Cloud Gateway
    - API Gateway routing to all services
@@ -55,15 +55,45 @@ Resource-Profile is a **Teacher-Student Resource Portrait System** (师生资源
 - MySQL 8.0.33
 - Spring Cloud Alibaba Nacos (Service Discovery + Configuration)
 
+### Backend Architectural Patterns
+
+**Controller-Service-Mapper-Entity pattern:**
+All services follow this structure. Controllers use `@RestController` + `@RequestMapping` with `@RequiredArgsConstructor` for dependency injection. There are no XML mappers — all MyBatis Plus mappers extend `BaseMapper<Entity>` and use annotation-based or programmatic queries.
+
+**Uniform API Response (`Result<T>`):**
+All controllers return `Result<T>` from the `common` module. The wrapper uses `code` (200 for success), `message`, `data`, and `timestamp`. Frontend request interceptors expect this shape.
+
+**MyBatis Plus Conventions:**
+- Logic delete field: `deleted` (1 = deleted, 0 = active)
+- ID type: `auto`
+- Underscore-to-camel-case mapping enabled
+- SQL logging to stdout enabled in dev
+
+**JWT Authentication Flow:**
+- Tokens are JWT signed with `JWT_SECRET` (configured via `jwt.secret`)
+- Access tokens expire in 24 hours; refresh tokens expire in 7 days
+- Auth service stores active tokens in Redis (`token:{userId}`) with 24h TTL
+- Controllers parse the `Authorization: Bearer <token>` header to extract `userId` claim
+- Auth endpoints: `POST /auth/login`, `GET /auth/userInfo`, `POST /auth/logout`, `POST /auth/refresh`
+
+**Gateway Routing Convention:**
+Routes use `StripPrefix: 0`, meaning the path prefix is **not** stripped. A request to `/auth/login` reaches `auth-service` as `/auth/login`. Controllers must include the full prefix in their `@RequestMapping` (e.g., `@RequestMapping("/auth")`).
+
+**Nacos Config Externalization:**
+Each service loads config from Nacos in addition to local `application.yml`:
+- `optional:nacos:{service-name}.yml?group=DEFAULT_GROUP`
+- `optional:nacos:common.yml?group=DEFAULT_GROUP`
+Database and Redis credentials may be defined in Nacos rather than local files.
+
 ## Frontend - Vue 3
 
 **Build Tool:** Vite 5.2.8
-**Framework:** Vue 3.4.21
+**Framework:** Vue 3.4.21 (Composition API)
 **Package Manager:** npm
 
 **Key Dependencies:**
 - `vue-router` 4.3.0 - Client-side routing
-- `pinia` 2.1.7 - State management
+- `pinia` 2.1.7 - State management (Composition API stores)
 - `element-plus` 2.6.3 - UI Component Library
 - `@element-plus/icons-vue` 2.3.1 - Icons
 - `axios` 1.6.8 - HTTP client
@@ -74,12 +104,15 @@ Resource-Profile is a **Teacher-Student Resource Portrait System** (师生资源
 **Frontend Structure:**
 ```
 frontend/src/
-├── api/           - API service calls
+├── api/           - API service calls (one file per domain)
 ├── components/    - Reusable Vue components
+│   └── Layout/    - Layout shell (Sidebar, Navbar, Breadcrumb, TagsView)
 ├── router/        - Vue Router configuration
 ├── store/         - Pinia state management
+│   └── modules/   - Domain stores (user.js, app.js)
 ├── styles/        - Global SCSS styles
 ├── utils/         - Utility functions
+│   └── request.js - Axios instance with interceptors
 ├── views/         - Page components
 ├── App.vue        - Root component
 └── main.js        - Entry point
@@ -88,7 +121,29 @@ frontend/src/
 **Vite Config:**
 - Dev Server: `http://localhost:5173`
 - API Proxy: `/api` → `http://localhost:8080`
-- Auto-import for Element Plus components
+- Auto-import for Element Plus components and Vue/Pinia/Router APIs via `unplugin-auto-import`
+
+### Frontend Architectural Patterns
+
+**Axios Request Handling (`utils/request.js`):**
+- Base URL defaults to `/api` (proxied to gateway in dev)
+- Request interceptor injects `Authorization: Bearer <token>` from Pinia `userStore`
+- Response interceptor unwraps `Result<T>`:
+  - `code === 200`: returns `res` (the full Result object)
+  - `code !== 200`: shows `ElMessage.error(res.message)` and rejects
+  - `code === 401`: triggers logout and redirects to `/login`
+- Network errors show `ElMessage.error` with the response message
+
+**Pinia Stores (Composition API):**
+Stores use `defineStore` with setup function syntax (`ref`, `computed`).
+- `userStore`: manages `token` (persisted to `localStorage`), `userInfo`, login/logout, role extraction
+- `appStore`: layout state (sidebar collapse, etc.)
+
+**Router Guards:**
+- `router.beforeEach` checks `userStore.token`
+- If token exists but `userInfo` is missing, fetches user info; on failure, logs out
+- Public routes marked with `meta: { public: true }` (only `/login`)
+- Route `meta.roles` exists for role-based hiding but is not enforced in the navigation guard
 
 ## Docker & Infrastructure
 
@@ -116,9 +171,15 @@ cd backend
 mvn clean install
 
 # Build without tests
+cd backend
 mvn clean install -DskipTests
 
+# Build a single module and its dependencies
+cd backend
+mvn clean install -pl auth-service -am -DskipTests
+
 # Run individual service (from service directory)
+cd backend/auth-service
 mvn spring-boot:run
 ```
 
@@ -189,3 +250,6 @@ docker-compose down -v
 | Frontend Config | `/frontend/vite.config.js` |
 | Docker Compose | `/docker/docker-compose.yml` |
 | Database Init | `/sql/init/01_init.sql` |
+| Axios Instance | `/frontend/src/utils/request.js` |
+| Router | `/frontend/src/router/index.js` |
+| User Store | `/frontend/src/store/modules/user.js` |

@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.edu.data.mapper.DashboardMapper">
+
+    <select id="countActiveTeachers" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM teacher_info WHERE status = 1 AND deleted = 0
+    </select>
+
+    <select id="countActiveStudents" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM student_info WHERE status = 1 AND deleted = 0
+    </select>
+
+    <select id="countActiveQuestionnaires" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM mental_questionnaire WHERE status = 1 AND deleted = 0
+    </select>
+
+    <select id="countWarningStudents" resultType="java.lang.Long">
+        SELECT COUNT(DISTINCT student_id) FROM mental_assessment WHERE level IN ('高危', '重度')
+    </select>
+
+    <select id="selectTeacherTrend" resultType="java.util.HashMap">
+        SELECT
+            DATE(create_time) as day,
+            COUNT(*) as count
+        FROM teacher_info
+        WHERE deleted = 0 AND DATE(create_time) &gt;= #{startDate}
+        GROUP BY DATE(create_time)
+        ORDER BY day
+    </select>
+
+    <select id="selectStudentTrend" resultType="java.util.HashMap">
+        SELECT
+            DATE(create_time) as day,
+            COUNT(*) as count
+        FROM student_info
+        WHERE deleted = 0 AND DATE(create_time) &gt;= #{startDate}
+        GROUP BY DATE(create_time)
+        ORDER BY day
+    </select>
+
+    <select id="selectUserDistribution" resultType="java.util.HashMap">
+        SELECT
+            CASE user_type
+                WHEN 0 THEN '行政人员'
+                WHEN 1 THEN '教师'
+                WHEN 2 THEN '学生'
+                ELSE '其他'
+            END as name,
+            COUNT(*) as value
+        FROM sys_user
+        WHERE deleted = 0 AND status = 1
+        GROUP BY user_type
+    </select>
+
+    <select id="selectRecentLogins" resultType="java.util.HashMap">
+        SELECT
+            username,
+            role,
+            ip,
+            DATE_FORMAT(login_time, '%Y-%m-%d %H:%i') as time
+        FROM sys_login_log
+        WHERE status = 1
+        ORDER BY login_time DESC
+        LIMIT 10
+    </select>
+
+</mapper>

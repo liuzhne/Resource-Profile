@@ -1,12 +1,12 @@
 package com.edu.data.controller;
 
 import com.edu.common.result.Result;
+import com.edu.data.service.DashboardService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -15,51 +15,25 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class DashboardController {
 
+    private final DashboardService dashboardService;
+
     @GetMapping("/statistics")
     public Result<Map<String, Object>> statistics() {
-        Map<String, Object> result = new HashMap<>();
-
-        // 基础统计数据
-        result.put("teacherCount", 128);
-        result.put("studentCount", 2456);
-        result.put("questionnaireCount", 89);
-        result.put("warningCount", 5);
-
-        return Result.success(result);
+        return Result.success(dashboardService.getStatistics());
     }
 
     @GetMapping("/trend")
     public Result<Map<String, Object>> trend() {
-        Map<String, Object> result = new HashMap<>();
-
-        // 师生增长趋势
-        result.put("days", List.of("周一", "周二", "周三", "周四", "周五", "周六", "周日"));
-        result.put("teacherData", List.of(120, 132, 101, 134, 90, 230, 210));
-        result.put("studentData", List.of(220, 182, 191, 234, 290, 330, 310));
-
-        return Result.success(result);
+        return Result.success(dashboardService.getTrend());
     }
 
     @GetMapping("/distribution")
     public Result<Map<String, Object>> distribution() {
-        Map<String, Object> result = new HashMap<>();
-
-        // 师生分布
-        result.put("data", List.of(
-                Map.of("name", "教师", "value", 128),
-                Map.of("name", "学生", "value", 2456),
-                Map.of("name", "行政人员", "value", 45)
-        ));
-
-        return Result.success(result);
+        return Result.success(dashboardService.getDistribution());
     }
 
     @GetMapping("/recentLogins")
     public Result<List<Map<String, Object>>> recentLogins() {
-        return Result.success(List.of(
-                Map.of("username", "张老师", "role", "教师", "time", "2026-04-05 14:30", "ip", "192.168.1.100"),
-                Map.of("username", "李同学", "role", "学生", "time", "2026-04-05 13:45", "ip", "192.168.1.101"),
-                Map.of("username", "王管理员", "role", "管理员", "time", "2026-04-05 12:00", "ip", "192.168.1.102")
-        ));
+        return Result.success(dashboardService.getRecentLogins());
     }
 }

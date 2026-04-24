@@ -135,6 +135,78 @@ INSERT INTO sys_user_role (user_id, role_id) VALUES
 (2, 2),
 (3, 3);
 
+-- 问卷表
+CREATE TABLE IF NOT EXISTS mental_questionnaire (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+    title VARCHAR(200) NOT NULL COMMENT '问卷标题',
+    type VARCHAR(50) DEFAULT NULL COMMENT '问卷类型',
+    description VARCHAR(500) DEFAULT NULL COMMENT '描述',
+    questions INT DEFAULT 0 COMMENT '题目数量',
+    start_time DATE DEFAULT NULL COMMENT '开始时间',
+    end_time DATE DEFAULT NULL COMMENT '结束时间',
+    status TINYINT DEFAULT 1 COMMENT '状态：0-禁用，1-启用',
+    deleted TINYINT DEFAULT 0 COMMENT '删除标记',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='心理健康问卷表';
+
+-- 心理评估表
+CREATE TABLE IF NOT EXISTS mental_assessment (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+    student_id BIGINT NOT NULL COMMENT '学生ID',
+    questionnaire_id BIGINT NOT NULL COMMENT '问卷ID',
+    score INT DEFAULT 0 COMMENT '得分',
+    level VARCHAR(50) DEFAULT NULL COMMENT '等级：正常、轻度、中度、重度、高危',
+    result VARCHAR(500) DEFAULT NULL COMMENT '评估结果',
+    suggestion VARCHAR(500) DEFAULT NULL COMMENT '建议',
+    status TINYINT DEFAULT 1 COMMENT '状态',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='心理评估记录表';
+
+-- 登录日志表
+CREATE TABLE IF NOT EXISTS sys_login_log (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+    user_id BIGINT NOT NULL COMMENT '用户ID',
+    username VARCHAR(50) NOT NULL COMMENT '用户名',
+    role VARCHAR(50) DEFAULT NULL COMMENT '角色',
+    ip VARCHAR(50) DEFAULT NULL COMMENT 'IP地址',
+    login_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '登录时间',
+    status TINYINT DEFAULT 1 COMMENT '状态：0-失败，1-成功'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='登录日志表';
+
+-- 插入默认教师数据
+INSERT INTO teacher_info (user_id, employee_id, name, gender, dept_name, title, education, status) VALUES
+(2, 'T2024001', '张老师', 1, '计算机学院', '副教授', '博士', 1),
+(2, 'T2024002', '李老师', 0, '计算机学院', '教授', '博士', 1),
+(2, 'T2024003', '王老师', 1, '软件学院', '讲师', '硕士', 1);
+
+-- 插入默认学生数据
+INSERT INTO student_info (user_id, student_id, name, gender, dept_name, major_name, grade, class_name, status) VALUES
+(3, 'S2024001', '赵同学', 1, '计算机学院', '计算机科学与技术', '2024', '1班', 1),
+(3, 'S2024002', '钱同学', 0, '计算机学院', '软件工程', '2024', '2班', 1),
+(3, 'S2024003', '孙同学', 1, '软件学院', '人工智能', '2023', '1班', 1),
+(3, 'S2024004', '周同学', 0, '软件学院', '数据科学', '2023', '2班', 1);
+
+-- 插入默认问卷数据
+INSERT INTO mental_questionnaire (title, type, description, questions, start_time, end_time, status) VALUES
+('大学生心理健康普查', '普查', '学期初心理健康状况全面普查', 20, '2026-04-01', '2026-04-30', 1),
+('焦虑自评量表 SAS', '焦虑', '焦虑症状自我评估问卷', 15, '2026-04-10', '2026-05-10', 1),
+('抑郁自评量表 SDS', '抑郁', '抑郁症状自我评估问卷', 15, '2026-04-15', '2026-05-15', 1);
+
+-- 插入默认心理评估数据
+INSERT INTO mental_assessment (student_id, questionnaire_id, score, level, result, suggestion, status) VALUES
+(1, 1, 85, '正常', '心理健康状况良好', '继续保持，适度运动', 1),
+(2, 1, 72, '轻度', '存在轻微心理压力', '建议多参加集体活动', 1),
+(3, 1, 45, '中度', '心理压力较大，需关注', '建议预约心理咨询', 1),
+(4, 1, 35, '高危', '严重心理问题预警', '建议立即寻求专业帮助', 1);
+
+-- 插入登录日志数据
+INSERT INTO sys_login_log (user_id, username, role, ip, login_time, status) VALUES
+(1, 'admin', '管理员', '192.168.1.102', DATE_SUB(NOW(), INTERVAL 10 MINUTE), 1),
+(2, 'teacher', '教师', '192.168.1.100', DATE_SUB(NOW(), INTERVAL 30 MINUTE), 1),
+(3, 'student', '学生', '192.168.1.101', DATE_SUB(NOW(), INTERVAL 45 MINUTE), 1),
+(1, 'admin', '管理员', '192.168.1.103', DATE_SUB(NOW(), INTERVAL 2 HOUR), 1);
+
 INSERT INTO sys_permission (name, code, type, parent_id, sort_order, icon, path) VALUES
 ('数据面板', 'dashboard', 1, 0, 1, 'DataLine', '/dashboard'),
 ('教师画像', 'teacher', 1, 0, 2, 'UserFilled', '/teacher'),
