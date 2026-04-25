@@ -51,6 +51,14 @@ spring:
           lower-case-service-id: true
 
       routes:
+        # 引擎服务
+        - id: agent-service
+          uri: lb://agent-service
+          predicates:
+            - Path=/agent/**
+          filters:
+            - StripPrefix=0
+
         # 认证服务
         - id: auth-service
           uri: lb://auth-service

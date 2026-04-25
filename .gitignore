@@ -1,3 +1,7 @@
+#python
+.venv/
+.idea/
+
 # Compiled class files
 *.class
 
@@ -85,6 +89,8 @@ bootstrap-local.properties
 # Docker volumes
 docker/data/
 docker/volumes/
+docker/milvus/
+docker/minio/
 
 # Temp files
 *.swp

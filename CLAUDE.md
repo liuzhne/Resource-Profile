@@ -16,7 +16,7 @@ Resource-Profile is a **Teacher-Student Resource Portrait System** (师生资源
 
 ## Backend - Spring Boot Microservices
 
-**Build Tool:** Maven 3+ (no wrapper)
+**Build Tool:** Maven 3+
 **Java Version:** 17
 **Spring Boot:** 3.2.5
 **Spring Cloud:** 2023.0.1
@@ -24,76 +24,83 @@ Resource-Profile is a **Teacher-Student Resource Portrait System** (师生资源
 
 **Microservices Modules:**
 
-1. **`common`** - Shared common library (auto-configured via `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`)
-   - JWT utilities (`JwtUtil`)
-   - Result wrapper (`Result<T>`)
-   - JWT configuration properties (`JwtProperties`)
-
-2. **`gateway`** (Port: 8080) - Spring Cloud Gateway
-   - API Gateway routing to all services
-   - Load balancing with Spring Cloud LoadBalancer
-   - CORS configuration
-   - Routes: `/auth`, `/user`, `/teacher`, `/student`, `/mental`, `/data`
-
-3. **`auth-service`** (Port: 8081) - Authentication & Authorization
-   - User login/logout
-   - JWT token generation and validation
-   - User/Role management
-   - MySQL + Redis
-
-4. **`user-service`** - User management
-5. **`teacher-service`** - Teacher profile management
-6. **`student-service`** - Student profile management
-7. **`mental-service`** - Mental health assessment
-   - Questionnaires
-   - Mental health assessments
-8. **`data-service`** - Data analysis and dashboard
+| Module | Port | Purpose |
+|--------|------|---------|
+| `gateway` | 8080 | Spring Cloud Gateway, routes to all services |
+| `auth-service` | 8081 | Authentication & Authorization |
+| `user-service` | 8082 | User management |
+| `teacher-service` | 8083 | Teacher profile management |
+| `student-service` | 8084 | Student profile management |
+| `mental-service` | 8085 | Mental health assessment |
+| `data-service` | 8086 | Data analysis and dashboard |
+| `common` | - | Shared library (JWT, Result wrapper) |
 
 **Key Dependencies:**
 - MyBatis Plus 3.5.11 (ORM)
 - JWT 0.12.5 (jjwt-api, jjwt-impl, jjwt-jackson)
 - MySQL 8.0.33
 - Spring Cloud Alibaba Nacos (Service Discovery + Configuration)
+- Lombok 1.18.30
 
-### Backend Architectural Patterns
+**Backend Code Patterns:**
 
-**Controller-Service-Mapper-Entity pattern:**
-All services follow this structure. Controllers use `@RestController` + `@RequestMapping` with `@RequiredArgsConstructor` for dependency injection. There are no XML mappers — all MyBatis Plus mappers extend `BaseMapper<Entity>` and use annotation-based or programmatic queries.
+All services follow a consistent layered architecture:
+- `entity/` - MyBatis Plus entities using Lombok `@Data`
+- `mapper/` - Mappers extending `BaseMapper<Entity>` (no XML mappers; all SQL via annotations or MyBatis Plus wrappers)
+- `service/` + `service/impl/` - Service interfaces and `@Service` implementations
+- `controller/` - `@RestController` with `@RequestMapping` and `@RequiredArgsConstructor` for dependency injection
+- `dto/` - Request/response DTOs using Lombok
+- `config/` - Spring `@Configuration` classes
+- `exception/GlobalExceptionHandler.java` - `@RestControllerAdvice` handling validation and runtime exceptions
 
-**Uniform API Response (`Result<T>`):**
-All controllers return `Result<T>` from the `common` module. The wrapper uses `code` (200 for success), `message`, `data`, and `timestamp`. Frontend request interceptors expect this shape.
+**MyBatis Plus Global Config** (in each `application.yml`):
+- Logic delete: field `deleted`, value `1` = deleted, `0` = not deleted
+- ID type: `auto` (database auto-increment)
+- `map-underscore-to-camel-case: true`
 
-**MyBatis Plus Conventions:**
-- Logic delete field: `deleted` (1 = deleted, 0 = active)
-- ID type: `auto`
-- Underscore-to-camel-case mapping enabled
-- SQL logging to stdout enabled in dev
+**API Response Pattern:**
+All controllers return `Result<T>` from the `common` module:
+- `Result.success(data)` → code 200
+- `Result.error(message)` → code 500
+- `Result.error(code, message)` → custom code
+
+**Nacos Config Pattern:**
+Every service imports two Nacos config files:
+```yaml
+config:
+  import:
+    - optional:nacos:{service-name}.yml?group=DEFAULT_GROUP
+    - optional:nacos:common.yml?group=DEFAULT_GROUP
+```
+
+**Gateway Routing:**
+Routes use load-balanced URIs (`lb://{service-name}`) with `StripPrefix=0`:
+- `/auth/**` → auth-service
+- `/user/**` → user-service
+- `/teacher/**` → teacher-service
+- `/student/**` → student-service
+- `/mental/**` → mental-service
+- `/data/**` → data-service
+
+Global CORS is configured on the gateway (`allowedOrigins: "*"`).
 
 **JWT Authentication Flow:**
-- Tokens are JWT signed with `JWT_SECRET` (configured via `jwt.secret`)
-- Access tokens expire in 24 hours; refresh tokens expire in 7 days
-- Auth service stores active tokens in Redis (`token:{userId}`) with 24h TTL
-- Controllers parse the `Authorization: Bearer <token>` header to extract `userId` claim
-- Auth endpoints: `POST /auth/login`, `GET /auth/userInfo`, `POST /auth/logout`, `POST /auth/refresh`
-
-**Gateway Routing Convention:**
-Routes use `StripPrefix: 0`, meaning the path prefix is **not** stripped. A request to `/auth/login` reaches `auth-service` as `/auth/login`. Controllers must include the full prefix in their `@RequestMapping` (e.g., `@RequestMapping("/auth")`).
-
-**Nacos Config Externalization:**
-Each service loads config from Nacos in addition to local `application.yml`:
-- `optional:nacos:{service-name}.yml?group=DEFAULT_GROUP`
-- `optional:nacos:common.yml?group=DEFAULT_GROUP`
-Database and Redis credentials may be defined in Nacos rather than local files.
+- `JwtUtil` (common module) generates and parses tokens using HS256
+- Access token expires in 24 hours, refresh token in 7 days
+- Secret configured via `jwt.secret` (reads `JWT_SECRET` env var if mapped)
+- On login: tokens generated, access token stored in Redis as `token:{userId}` with 24h TTL
+- Frontend sends `Authorization: Bearer {token}` header
+- Auth endpoints (`/auth/**`) are public; all other requests require authentication (enforced by Spring Security in auth-service)
 
 ## Frontend - Vue 3
 
 **Build Tool:** Vite 5.2.8
-**Framework:** Vue 3.4.21 (Composition API)
+**Framework:** Vue 3.4.21
 **Package Manager:** npm
 
 **Key Dependencies:**
 - `vue-router` 4.3.0 - Client-side routing
-- `pinia` 2.1.7 - State management (Composition API stores)
+- `pinia` 2.1.7 - State management
 - `element-plus` 2.6.3 - UI Component Library
 - `@element-plus/icons-vue` 2.3.1 - Icons
 - `axios` 1.6.8 - HTTP client
@@ -101,49 +108,25 @@ Database and Redis credentials may be defined in Nacos rather than local files.
 - `js-cookie` 3.0.5 - Cookie management
 - `nprogress` 0.2.0 - Progress bar
 
-**Frontend Structure:**
-```
-frontend/src/
-├── api/           - API service calls (one file per domain)
-├── components/    - Reusable Vue components
-│   └── Layout/    - Layout shell (Sidebar, Navbar, Breadcrumb, TagsView)
-├── router/        - Vue Router configuration
-├── store/         - Pinia state management
-│   └── modules/   - Domain stores (user.js, app.js)
-├── styles/        - Global SCSS styles
-├── utils/         - Utility functions
-│   └── request.js - Axios instance with interceptors
-├── views/         - Page components
-├── App.vue        - Root component
-└── main.js        - Entry point
-```
-
 **Vite Config:**
 - Dev Server: `http://localhost:5173`
 - API Proxy: `/api` → `http://localhost:8080`
-- Auto-import for Element Plus components and Vue/Pinia/Router APIs via `unplugin-auto-import`
+- Auto-import: `unplugin-auto-import` for Vue/Vue Router/Pinia APIs and Element Plus components
+- Alias: `@` → `src`
 
-### Frontend Architectural Patterns
+**Frontend Patterns:**
 
-**Axios Request Handling (`utils/request.js`):**
-- Base URL defaults to `/api` (proxied to gateway in dev)
-- Request interceptor injects `Authorization: Bearer <token>` from Pinia `userStore`
-- Response interceptor unwraps `Result<T>`:
-  - `code === 200`: returns `res` (the full Result object)
-  - `code !== 200`: shows `ElMessage.error(res.message)` and rejects
-  - `code === 401`: triggers logout and redirects to `/login`
-- Network errors show `ElMessage.error` with the response message
+- **API Layer:** Each backend service has a corresponding module in `src/api/`. All use the same `axios` instance from `@/utils/request` which:
+  - Attaches `Authorization: Bearer {token}` from Pinia store automatically
+  - Intercepts responses: shows `ElMessage.error()` on non-200 codes
+  - Handles 401 by calling `userStore.logout()` and redirecting to login
+  - Base URL defaults to `/api` (proxied to gateway in dev)
 
-**Pinia Stores (Composition API):**
-Stores use `defineStore` with setup function syntax (`ref`, `computed`).
-- `userStore`: manages `token` (persisted to `localStorage`), `userInfo`, login/logout, role extraction
-- `appStore`: layout state (sidebar collapse, etc.)
+- **State Management:** Pinia stores use the Composition API pattern (`defineStore` with `ref`/`computed`). Token is persisted to `localStorage`. Key stores: `user` (auth state), `app` (UI state like sidebar collapse).
 
-**Router Guards:**
-- `router.beforeEach` checks `userStore.token`
-- If token exists but `userInfo` is missing, fetches user info; on failure, logs out
-- Public routes marked with `meta: { public: true }` (only `/login`)
-- Route `meta.roles` exists for role-based hiding but is not enforced in the navigation guard
+- **Router Guards:** Before each route: starts NProgress, checks token, fetches user info if missing, redirects unauthenticated users to `/login` unless route has `meta.public: true`. Admin-only routes use `meta.roles: ['admin']`.
+
+- **Layout:** Main layout at `src/components/Layout/index.vue` with sidebar, navbar, breadcrumb, and tags-view.
 
 ## Docker & Infrastructure
 
@@ -161,6 +144,7 @@ Stores use `defineStore` with setup function syntax (`ref`, `computed`).
 - User: `edu` / `edu123456`
 - Root password: `root`
 - Initialization: `/sql/init/01_init.sql`
+- Default accounts (all use bcrypt hash, password equals username): `admin`, `teacher`, `student`
 
 ## Common Commands
 
@@ -171,15 +155,9 @@ cd backend
 mvn clean install
 
 # Build without tests
-cd backend
 mvn clean install -DskipTests
 
-# Build a single module and its dependencies
-cd backend
-mvn clean install -pl auth-service -am -DskipTests
-
 # Run individual service (from service directory)
-cd backend/auth-service
 mvn spring-boot:run
 ```
 
@@ -250,6 +228,8 @@ docker-compose down -v
 | Frontend Config | `/frontend/vite.config.js` |
 | Docker Compose | `/docker/docker-compose.yml` |
 | Database Init | `/sql/init/01_init.sql` |
-| Axios Instance | `/frontend/src/utils/request.js` |
+| JWT Utility | `/backend/common/src/main/java/com/edu/common/util/JwtUtil.java` |
+| Result Wrapper | `/backend/common/src/main/java/com/edu/common/result/Result.java` |
+| API Request | `/frontend/src/utils/request.js` |
 | Router | `/frontend/src/router/index.js` |
 | User Store | `/frontend/src/store/modules/user.js` |
