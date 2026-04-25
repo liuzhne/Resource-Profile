@@ -1,0 +1,73 @@
+server:
+  port: 8087
+
+spring:
+  application:
+    name: agent-service
+    # 替代 bootstrap.yml：直接通过 import 加载 Nacos 配置
+  config:
+    import:
+      - optional:nacos:agent-service.yml?group=DEFAULT_GROUP
+      - optional:nacos:common.yml?group=DEFAULT_GROUP
+  cloud:
+    nacos:
+      # 注册中心
+      discovery:
+        enabled: true
+        register-enabled: true
+        server-addr: ${NACOS_SERVER:localhost:8848}
+        namespace: ${NACOS_NAMESPACE:}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
+        identity-key: ${NACOS_AUTH_IDENTITY_KEY:serverIdentity}
+        identity-value: ${NACOS_AUTH_IDENTITY_VALUE:security}
+        service: ${spring.application.name}
+
+      # 配置中心
+      config:
+        import-check:
+          enabled: false
+        server-addr: ${NACOS_SERVER:localhost:8848}
+        namespace: ${NACOS_NAMESPACE:}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
+        identity-key: ${NACOS_AUTH_IDENTITY_KEY:serverIdentity}
+        identity-value: ${NACOS_AUTH_IDENTITY_VALUE:security}
+        file-extension: yml
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:3306/edu_portrait?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
+    username: ${MYSQL_USER:edu}
+    password: ${MYSQL_PASSWORD:edu123456}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
+    database: 0
+
+  ai:
+    openai:
+      api-key: dummy
+      base-url: http://host.docker.internal:8091
+      chat:
+        options:
+          model: qwen2.5-32b-instruct-q4_k_m
+          temperature: 0.3
+          max-tokens: 2048
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+      id-type: auto
+
+# 日志
+logging:
+  level:
+    com.edu.agent.mapper: debug

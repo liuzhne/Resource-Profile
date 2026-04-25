@@ -24,36 +24,73 @@ Resource-Profile is a **Teacher-Student Resource Portrait System** (师生资源
 
 **Microservices Modules:**
 
-1. **`common`** - Shared common library
-   - JWT utilities (`JwtUtil`)
-   - Result wrapper (`Result<T>`)
-   - JWT configuration properties
-
-2. **`gateway`** (Port: 8080) - Spring Cloud Gateway
-   - API Gateway routing to all services
-   - Load balancing with Spring Cloud LoadBalancer
-   - CORS configuration
-   - Routes: `/auth`, `/user`, `/teacher`, `/student`, `/mental`, `/data`
-
-3. **`auth-service`** (Port: 8081) - Authentication & Authorization
-   - User login/logout
-   - JWT token generation and validation
-   - User/Role management
-   - MySQL + Redis
-
-4. **`user-service`** - User management
-5. **`teacher-service`** - Teacher profile management
-6. **`student-service`** - Student profile management
-7. **`mental-service`** - Mental health assessment
-   - Questionnaires
-   - Mental health assessments
-8. **`data-service`** - Data analysis and dashboard
+| Module | Port | Purpose |
+|--------|------|---------|
+| `gateway` | 8080 | Spring Cloud Gateway, routes to all services |
+| `auth-service` | 8081 | Authentication & Authorization |
+| `user-service` | 8082 | User management |
+| `teacher-service` | 8083 | Teacher profile management |
+| `student-service` | 8084 | Student profile management |
+| `mental-service` | 8085 | Mental health assessment |
+| `data-service` | 8086 | Data analysis and dashboard |
+| `common` | - | Shared library (JWT, Result wrapper) |
 
 **Key Dependencies:**
 - MyBatis Plus 3.5.11 (ORM)
 - JWT 0.12.5 (jjwt-api, jjwt-impl, jjwt-jackson)
 - MySQL 8.0.33
 - Spring Cloud Alibaba Nacos (Service Discovery + Configuration)
+- Lombok 1.18.30
+
+**Backend Code Patterns:**
+
+All services follow a consistent layered architecture:
+- `entity/` - MyBatis Plus entities using Lombok `@Data`
+- `mapper/` - Mappers extending `BaseMapper<Entity>` (no XML mappers; all SQL via annotations or MyBatis Plus wrappers)
+- `service/` + `service/impl/` - Service interfaces and `@Service` implementations
+- `controller/` - `@RestController` with `@RequestMapping` and `@RequiredArgsConstructor` for dependency injection
+- `dto/` - Request/response DTOs using Lombok
+- `config/` - Spring `@Configuration` classes
+- `exception/GlobalExceptionHandler.java` - `@RestControllerAdvice` handling validation and runtime exceptions
+
+**MyBatis Plus Global Config** (in each `application.yml`):
+- Logic delete: field `deleted`, value `1` = deleted, `0` = not deleted
+- ID type: `auto` (database auto-increment)
+- `map-underscore-to-camel-case: true`
+
+**API Response Pattern:**
+All controllers return `Result<T>` from the `common` module:
+- `Result.success(data)` → code 200
+- `Result.error(message)` → code 500
+- `Result.error(code, message)` → custom code
+
+**Nacos Config Pattern:**
+Every service imports two Nacos config files:
+```yaml
+config:
+  import:
+    - optional:nacos:{service-name}.yml?group=DEFAULT_GROUP
+    - optional:nacos:common.yml?group=DEFAULT_GROUP
+```
+
+**Gateway Routing:**
+Routes use load-balanced URIs (`lb://{service-name}`) with `StripPrefix=0`:
+- `/auth/**` → auth-service
+- `/user/**` → user-service
+- `/teacher/**` → teacher-service
+- `/student/**` → student-service
+- `/mental/**` → mental-service
+- `/data/**` → data-service
+
+Global CORS is configured on the gateway (`allowedOrigins: "*"`).
+
+**JWT Authentication Flow:**
+- `JwtUtil` (common module) generates and parses tokens using HS256
+- Access token expires in 24 hours, refresh token in 7 days
+- Secret configured via `jwt.secret` (reads `JWT_SECRET` env var if mapped)
+- On login: tokens generated, access token stored in Redis as `token:{userId}` with 24h TTL
+- Frontend sends `Authorization: Bearer {token}` header
+- Auth endpoints (`/auth/**`) are public; all other requests require authentication (enforced by Spring Security in auth-service)
 
 ## Frontend - Vue 3
 
@@ -71,24 +108,25 @@ Resource-Profile is a **Teacher-Student Resource Portrait System** (师生资源
 - `js-cookie` 3.0.5 - Cookie management
 - `nprogress` 0.2.0 - Progress bar
 
-**Frontend Structure:**
-```
-frontend/src/
-├── api/           - API service calls
-├── components/    - Reusable Vue components
-├── router/        - Vue Router configuration
-├── store/         - Pinia state management
-├── styles/        - Global SCSS styles
-├── utils/         - Utility functions
-├── views/         - Page components
-├── App.vue        - Root component
-└── main.js        - Entry point
-```
-
 **Vite Config:**
 - Dev Server: `http://localhost:5173`
 - API Proxy: `/api` → `http://localhost:8080`
-- Auto-import for Element Plus components
+- Auto-import: `unplugin-auto-import` for Vue/Vue Router/Pinia APIs and Element Plus components
+- Alias: `@` → `src`
+
+**Frontend Patterns:**
+
+- **API Layer:** Each backend service has a corresponding module in `src/api/`. All use the same `axios` instance from `@/utils/request` which:
+  - Attaches `Authorization: Bearer {token}` from Pinia store automatically
+  - Intercepts responses: shows `ElMessage.error()` on non-200 codes
+  - Handles 401 by calling `userStore.logout()` and redirecting to login
+  - Base URL defaults to `/api` (proxied to gateway in dev)
+
+- **State Management:** Pinia stores use the Composition API pattern (`defineStore` with `ref`/`computed`). Token is persisted to `localStorage`. Key stores: `user` (auth state), `app` (UI state like sidebar collapse).
+
+- **Router Guards:** Before each route: starts NProgress, checks token, fetches user info if missing, redirects unauthenticated users to `/login` unless route has `meta.public: true`. Admin-only routes use `meta.roles: ['admin']`.
+
+- **Layout:** Main layout at `src/components/Layout/index.vue` with sidebar, navbar, breadcrumb, and tags-view.
 
 ## Docker & Infrastructure
 
@@ -106,13 +144,15 @@ frontend/src/
 - User: `edu` / `edu123456`
 - Root password: `root`
 - Initialization: `/sql/init/01_init.sql`
+- Default accounts (all use bcrypt hash, password equals username): `admin`, `teacher`, `student`
 
 ## Common Commands
 
 **Backend (Maven):**
 ```bash
-# Build all modules
 cd backend
+
+# Build all modules
 mvn clean install
 
 # Build without tests
@@ -189,3 +229,8 @@ docker-compose down -v
 | Frontend Config | `/frontend/vite.config.js` |
 | Docker Compose | `/docker/docker-compose.yml` |
 | Database Init | `/sql/init/01_init.sql` |
+| JWT Utility | `/backend/common/src/main/java/com/edu/common/util/JwtUtil.java` |
+| Result Wrapper | `/backend/common/src/main/java/com/edu/common/result/Result.java` |
+| API Request | `/frontend/src/utils/request.js` |
+| Router | `/frontend/src/router/index.js` |
+| User Store | `/frontend/src/store/modules/user.js` |

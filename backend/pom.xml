@@ -5,6 +5,13 @@
          http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.2.5</version>
+        <relativePath/>
+    </parent>
+
     <groupId>com.edu</groupId>
     <artifactId>edu-portrait-parent</artifactId>
     <version>1.0.0-SNAPSHOT</version>
@@ -22,6 +29,7 @@
         <module>student-service</module>
         <module>mental-service</module>
         <module>data-service</module>
+        <module>agent-service</module>
     </modules>
 
     <properties>
@@ -36,11 +44,26 @@
         <spring-cloud.version>2023.0.1</spring-cloud.version>
         <spring-cloud-alibaba.version>2023.0.1.0</spring-cloud-alibaba.version>
 
+        <!-- Spring AI -->
+        <spring-ai.version>1.0.0-M6</spring-ai.version>
+
         <!-- 其他依赖 -->
         <mybatis-plus.version>3.5.11</mybatis-plus.version>
         <jwt.version>0.12.5</jwt.version>
         <mysql.version>8.0.33</mysql.version>
     </properties>
+
+    <!-- 关键：Spring AI 里程碑仓库 -->
+    <repositories>
+        <repository>
+            <id>spring-milestones</id>
+            <name>Spring Milestones</name>
+            <url>https://repo.spring.io/milestone</url>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
 
     <dependencyManagement>
         <dependencies>
@@ -108,6 +131,22 @@
                 <artifactId>mysql-connector-java</artifactId>
                 <version>${mysql.version}</version>
             </dependency>
+
+            <!-- Spring AI OpenAI（对接 llama.cpp 的 OpenAI 兼容 API） -->
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-bom</artifactId>
+                <version>${spring-ai.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-core</artifactId>
+                <version>${spring-ai.version}</version>
+            </dependency>
+
 
             <!-- Lombok -->
             <dependency>
