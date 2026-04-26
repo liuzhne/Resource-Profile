@@ -16,7 +16,7 @@ public class AgentTaskController {
      * 手动触发单学生分析
      */
     @PostMapping("/trigger/{studentId}")
-    public Result<Long> trigger(@PathVariable String studentId) {
+    public Result<Long> trigger(@PathVariable Long studentId) {
         Long taskId = agentTaskService.createTask(studentId);
         agentTaskService.asyncExecute(taskId);
         return Result.success(taskId);

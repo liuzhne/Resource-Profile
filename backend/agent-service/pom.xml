@@ -44,6 +44,12 @@
             <artifactId>spring-ai-core</artifactId>
         </dependency>
 
+        <!-- 在 dependencies 中追加 -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-loadbalancer</artifactId>
+        </dependency>
+
         <!-- MyBatis Plus -->
         <dependency>
             <groupId>com.baomidou</groupId>

@@ -14,7 +14,7 @@ public class AgentTask {
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    private String studentId;
+    private Long studentId;
 
     @TableField("status")
     private TaskStatus status;
