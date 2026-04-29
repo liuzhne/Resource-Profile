@@ -2,6 +2,7 @@ package com.edu.mental.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.edu.mental.entity.Questionnaire;
+import org.springframework.web.multipart.MultipartFile;
 
 public interface QuestionnaireService {
 
@@ -15,5 +16,5 @@ public interface QuestionnaireService {
 
     void delete(Long id);
 
-    Questionnaire saveFromTemplate(String templateJson);
+    void importQuestionsFromExcel(Long questionnaireId, MultipartFile file);
 }

@@ -24,9 +24,15 @@ export const deleteQuestionnaire = (id) => {
   return request.delete(`/mental/questionnaires/${id}`)
 }
 
-export const uploadQuestionnaireTemplate = (formData) => {
-  return request.post('/mental/questionnaires/upload', formData, {
+export const uploadQuestionnaireQuestions = (id, formData) => {
+  return request.post(`/mental/questionnaires/${id}/upload`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
+  })
+}
+
+export const downloadQuestionnaireTemplate = () => {
+  return request.get('/mental/questionnaires/template', {
+    responseType: 'blob'
   })
 }
 
