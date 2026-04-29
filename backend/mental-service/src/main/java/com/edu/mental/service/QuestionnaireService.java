@@ -14,4 +14,6 @@ public interface QuestionnaireService {
     void update(Questionnaire questionnaire);
 
     void delete(Long id);
+
+    Questionnaire saveFromTemplate(String templateJson);
 }

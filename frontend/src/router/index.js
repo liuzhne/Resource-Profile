@@ -86,6 +86,18 @@ const routes = [
             name: 'MentalAnalysis',
             component: () => import('@/views/mental/analysis.vue'),
             meta: { title: '分析报告' }
+          },
+          {
+            path: '/mental/student',
+            name: 'MentalStudent',
+            component: () => import('@/views/mental/student-list.vue'),
+            meta: { title: '填写问卷' }
+          },
+          {
+            path: '/mental/fill/:id',
+            name: 'MentalFill',
+            component: () => import('@/views/mental/fill.vue'),
+            meta: { title: '问卷填写', hidden: true }
           }
         ]
       },
