@@ -2,16 +2,14 @@ package com.edu.mental.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.edu.common.result.Result;
-import com.edu.mental.entity.MentalAssessment;
 import com.edu.mental.entity.Questionnaire;
 import com.edu.mental.mapper.MentalAssessmentMapper;
 import com.edu.mental.service.QuestionnaireService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/mental")
@@ -29,11 +27,35 @@ public class MentalController {
         List<Map<String, Object>> stats = mentalAssessmentMapper.selectRecentStats();
         result.put("recentStats", stats);
 
-        // 总体统计
-        result.put("goodRate", 85);
-        result.put("attentionRate", 12);
-        result.put("interventionRate", 3);
-        result.put("todayCompleted", 89);
+        // 从数据库结果计算总体统计
+        int goodCount = 0, attentionCount = 0, interventionCount = 0, totalCount = 0;
+        for (Map<String, Object> stat : stats) {
+            String level = (String) stat.get("level");
+            int count = ((Number) stat.get("count")).intValue();
+            totalCount += count;
+            if ("正常".equals(level) || "轻度".equals(level)) {
+                goodCount += count;
+            } else if ("中度".equals(level)) {
+                attentionCount += count;
+            } else if ("重度".equals(level) || "高危".equals(level)) {
+                interventionCount += count;
+            }
+        }
+
+        int goodRate = totalCount > 0 ? (goodCount * 100 / totalCount) : 0;
+        int attentionRate = totalCount > 0 ? (attentionCount * 100 / totalCount) : 0;
+        int interventionRate = totalCount > 0 ? (interventionCount * 100 / totalCount) : 0;
+
+        result.put("goodRate", goodRate);
+        result.put("attentionRate", attentionRate);
+        result.put("interventionRate", interventionRate);
+        result.put("todayCompleted", totalCount);
+
+        // 预警列表
+        result.put("warningList", mentalAssessmentMapper.selectWarningList());
+
+        // 趋势数据
+        result.put("trendData", mentalAssessmentMapper.selectTrendData());
 
         return Result.success(result);
     }
@@ -75,27 +97,17 @@ public class MentalController {
     public Result<Map<String, Object>> analysis() {
         Map<String, Object> result = new HashMap<>();
 
-        // 各学院分布
-        result.put("deptDistribution", List.of(
-                Map.of("dept", "计算机学院", "good", 120, "attention", 15, "intervention", 3),
-                Map.of("dept", "数学学院", "good", 80, "attention", 10, "intervention", 2),
-                Map.of("dept", "物理学院", "good", 90, "attention", 12, "intervention", 4)
-        ));
+        // 各学院分布 — 从数据库查询
+        result.put("deptDistribution", mentalAssessmentMapper.selectDeptDistribution());
 
-        // 年级对比
-        result.put("gradeComparison", List.of(
-                Map.of("grade", "大一", "rate", 85),
-                Map.of("grade", "大二", "rate", 82),
-                Map.of("grade", "大三", "rate", 78),
-                Map.of("grade", "大四", "rate", 75)
-        ));
+        // 年级对比 — 从数据库查询
+        result.put("gradeComparison", mentalAssessmentMapper.selectGradeComparison());
 
-        // 重点人群
-        result.put("focusGroups", List.of(
-                Map.of("group", "学业困难学生", "count", 156, "risk", "中"),
-                Map.of("group", "家庭经济困难学生", "count", 89, "risk", "中"),
-                Map.of("group", "人际关系困扰学生", "count", 45, "risk", "高")
-        ));
+        // 重点人群 — 从数据库查询
+        result.put("focusGroups", mentalAssessmentMapper.selectFocusGroups());
+
+        // 性别差异 — 从数据库查询
+        result.put("genderAnalysis", mentalAssessmentMapper.selectGenderAnalysis());
 
         return Result.success(result);
     }

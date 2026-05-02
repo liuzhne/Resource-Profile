@@ -9,7 +9,7 @@
               <el-icon :size="32"><Smile /></el-icon>
             </div>
             <div class="stat-info">
-              <div class="stat-value" style="color: #52c41a">85%</div>
+              <div class="stat-value" style="color: #52c41a">{{ overviewData.goodRate }}%</div>
               <div class="stat-label">心理状态良好</div>
             </div>
           </div>
@@ -22,7 +22,7 @@
               <el-icon :size="32"><Warning /></el-icon>
             </div>
             <div class="stat-info">
-              <div class="stat-value" style="color: #faad14">12%</div>
+              <div class="stat-value" style="color: #faad14">{{ overviewData.attentionRate }}%</div>
               <div class="stat-label">需要关注</div>
             </div>
           </div>
@@ -35,7 +35,7 @@
               <el-icon :size="32"><BellFilled /></el-icon>
             </div>
             <div class="stat-info">
-              <div class="stat-value" style="color: #f5222d">3%</div>
+              <div class="stat-value" style="color: #f5222d">{{ overviewData.interventionRate }}%</div>
               <div class="stat-label">需要干预</div>
             </div>
           </div>
@@ -48,7 +48,7 @@
               <el-icon :size="32"><DocumentChecked /></el-icon>
             </div>
             <div class="stat-info">
-              <div class="stat-value" style="color: #1890ff">89</div>
+              <div class="stat-value" style="color: #1890ff">{{ overviewData.todayCompleted }}</div>
               <div class="stat-label">今日完成问卷</div>
             </div>
           </div>
@@ -71,7 +71,7 @@
             <el-table-column prop="dept" label="学院" />
             <el-table-column prop="level" label="预警级别" width="100">
               <template #default="{ row }">
-                <el-tag :type="row.level === '高' ? 'danger' : 'warning'">{{ row.level }}</el-tag>
+                <el-tag :type="row.level === '高危' ? 'danger' : 'warning'">{{ row.level }}</el-tag>
               </template>
             </el-table-column>
             <el-table-column prop="time" label="时间" width="120" />
@@ -99,48 +99,74 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import * as echarts from 'echarts'
+import { getMentalOverview } from '@/api/mental'
 
 const trendChartRef = ref<HTMLElement>()
 let trendChart: echarts.ECharts | null = null
 
-const warningList = ref([
-  { name: '王同学', dept: '物理学院', level: '高', time: '2026-04-05' },
-  { name: '李同学', dept: '数学学院', level: '中', time: '2026-04-04' },
-  { name: '张同学', dept: '计算机学院', level: '中', time: '2026-04-03' }
-])
+const overviewData = reactive({
+  goodRate: 0,
+  attentionRate: 0,
+  interventionRate: 0,
+  todayCompleted: 0
+})
+
+const warningList = ref<any[]>([])
+const trendData = ref<any[]>([])
 
 const initTrendChart = () => {
   if (!trendChartRef.value) return
 
   trendChart = echarts.init(trendChartRef.value)
+
+  // 按月份分组的趋势数据
+  const months = [...new Set(trendData.value.map((item: any) => item.month))]
+  const goodData: number[] = []
+  const attentionData: number[] = []
+  const interventionData: number[] = []
+
+  months.forEach(month => {
+    const monthItems = trendData.value.filter((item: any) => item.month === month)
+    let good = 0, attention = 0, intervention = 0
+    monthItems.forEach((item: any) => {
+      const count = Number(item.count)
+      if (item.level === '正常' || item.level === '轻度') good += count
+      else if (item.level === '中度') attention += count
+      else if (item.level === '重度' || item.level === '高危') intervention += count
+    })
+    goodData.push(good)
+    attentionData.push(attention)
+    interventionData.push(intervention)
+  })
+
   const option = {
     tooltip: { trigger: 'axis' },
     legend: { data: ['良好', '关注', '干预'] },
     grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
     xAxis: {
       type: 'category',
-      data: ['1月', '2月', '3月', '4月', '5月', '6月']
+      data: months
     },
     yAxis: { type: 'value' },
     series: [
       {
         name: '良好',
         type: 'line',
-        data: [82, 83, 85, 85, 86, 85],
+        data: goodData,
         itemStyle: { color: '#52c41a' }
       },
       {
         name: '关注',
         type: 'line',
-        data: [14, 13, 12, 12, 11, 12],
+        data: attentionData,
         itemStyle: { color: '#faad14' }
       },
       {
         name: '干预',
         type: 'line',
-        data: [4, 4, 3, 3, 3, 3],
+        data: interventionData,
         itemStyle: { color: '#f5222d' }
       }
     ]
@@ -148,8 +174,24 @@ const initTrendChart = () => {
   trendChart.setOption(option)
 }
 
+const fetchData = async () => {
+  try {
+    const res = await getMentalOverview()
+    const data = res.data
+    overviewData.goodRate = data.goodRate || 0
+    overviewData.attentionRate = data.attentionRate || 0
+    overviewData.interventionRate = data.interventionRate || 0
+    overviewData.todayCompleted = data.todayCompleted || 0
+    warningList.value = data.warningList || []
+    trendData.value = data.trendData || []
+    initTrendChart()
+  } catch (e) {
+    console.error('获取心理概览数据失败', e)
+  }
+}
+
 onMounted(() => {
-  initTrendChart()
+  fetchData()
 })
 
 onUnmounted(() => {

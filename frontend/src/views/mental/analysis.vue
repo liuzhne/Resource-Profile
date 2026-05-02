@@ -26,15 +26,10 @@
       <el-divider />
 
       <h4>重点人群分析</h4>
-      <el-table :data="focusGroups" stripe style="margin-top: 16px">
+      <el-table :data="focusGroups" stripe style="margin-top: 16px" v-loading="loading">
         <el-table-column type="index" width="50" />
         <el-table-column prop="group" label="人群类型" />
         <el-table-column prop="count" label="人数" width="100" />
-        <el-table-column prop="percentage" label="占比" width="100">
-          <template #default="{ row }">
-            {{ row.percentage }}%
-          </template>
-        </el-table-column>
         <el-table-column prop="risk" label="风险等级" width="120">
           <template #default="{ row }">
             <el-tag :type="row.risk === '高' ? 'danger' : row.risk === '中' ? 'warning' : 'success'">
@@ -42,7 +37,6 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="suggestion" label="建议措施" min-width="300" />
       </el-table>
     </el-card>
   </div>
@@ -51,6 +45,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import * as echarts from 'echarts'
+import { getMentalAnalysis } from '@/api/mental'
 
 const deptChartRef = ref<HTMLElement>()
 const gradeChartRef = ref<HTMLElement>()
@@ -60,99 +55,100 @@ let deptChart: echarts.ECharts | null = null
 let gradeChart: echarts.ECharts | null = null
 let genderChart: echarts.ECharts | null = null
 
-const focusGroups = ref([
-  {
-    group: '学业困难学生',
-    count: 156,
-    percentage: 6.4,
-    risk: '中',
-    suggestion: '提供学业辅导，建立学习小组，定期跟踪学业进展'
-  },
-  {
-    group: '家庭经济困难学生',
-    count: 89,
-    percentage: 3.6,
-    risk: '中',
-    suggestion: '落实资助政策，提供勤工俭学机会，关注心理健康'
-  },
-  {
-    group: '人际关系困扰学生',
-    count: 45,
-    percentage: 1.8,
-    risk: '高',
-    suggestion: '心理咨询介入，开展团体辅导，建立支持网络'
-  },
-  {
-    group: '近期遭遇重大事件学生',
-    count: 23,
-    percentage: 0.9,
-    risk: '高',
-    suggestion: '一对一心理干预，建立危机干预小组，定期评估'
+const loading = ref(false)
+const focusGroups = ref<any[]>([])
+
+const initDeptChart = (data: any[]) => {
+  if (!deptChartRef.value) return
+  deptChart = echarts.init(deptChartRef.value)
+
+  // 汇总各学院数据为饼图
+  let totalGood = 0, totalAttention = 0, totalIntervention = 0
+  data.forEach((item: any) => {
+    totalGood += Number(item.good) || 0
+    totalAttention += Number(item.attention) || 0
+    totalIntervention += Number(item.intervention) || 0
+  })
+
+  deptChart.setOption({
+    tooltip: { trigger: 'item' },
+    legend: { orient: 'vertical', right: '5%', top: 'center' },
+    series: [{
+      type: 'pie',
+      radius: ['40%', '70%'],
+      data: [
+        { value: totalGood, name: '良好', itemStyle: { color: '#52c41a' } },
+        { value: totalAttention, name: '关注', itemStyle: { color: '#faad14' } },
+        { value: totalIntervention, name: '干预', itemStyle: { color: '#f5222d' } }
+      ]
+    }]
+  })
+}
+
+const initGradeChart = (data: any[]) => {
+  if (!gradeChartRef.value) return
+  gradeChart = echarts.init(gradeChartRef.value)
+
+  const grades = data.map((item: any) => item.grade)
+  const rates = data.map((item: any) => Number(item.rate))
+  const barColors = rates.map(r => r >= 80 ? '#52c41a' : r >= 60 ? '#faad14' : '#f5222d')
+
+  gradeChart.setOption({
+    tooltip: { trigger: 'axis' },
+    xAxis: { type: 'category', data: grades },
+    yAxis: { type: 'value', max: 100 },
+    series: [{
+      type: 'bar',
+      data: rates.map((v, i) => ({ value: v, itemStyle: { color: barColors[i] } }))
+    }]
+  })
+}
+
+const initGenderChart = (data: any[]) => {
+  if (!genderChartRef.value) return
+  genderChart = echarts.init(genderChartRef.value)
+
+  const series: any[] = []
+  const genderLabels: Record<number, string> = { 0: '女生', 1: '男生' }
+  const genderColors: Record<number, string> = { 0: '#eb2f96', 1: '#1890ff' }
+
+  data.forEach((item: any) => {
+    const gender = Number(item.gender)
+    series.push({
+      name: genderLabels[gender] || `性别${gender}`,
+      type: 'bar',
+      data: [Number(item.good) || 0, Number(item.attention) || 0, Number(item.intervention) || 0],
+      itemStyle: { color: genderColors[gender] || '#999' }
+    })
+  })
+
+  genderChart.setOption({
+    tooltip: { trigger: 'axis' },
+    legend: { data: series.map(s => s.name) },
+    xAxis: { type: 'category', data: ['良好', '关注', '干预'] },
+    yAxis: { type: 'value' },
+    series
+  })
+}
+
+const fetchData = async () => {
+  loading.value = true
+  try {
+    const res = await getMentalAnalysis()
+    const data = res.data
+    focusGroups.value = data.focusGroups || []
+    initDeptChart(data.deptDistribution || [])
+    initGradeChart(data.gradeComparison || [])
+    initGenderChart(data.genderAnalysis || [])
+  } catch (e) {
+    console.error('获取心理分析数据失败', e)
+  } finally {
+    loading.value = false
   }
-])
+}
 
 onMounted(() => {
-  if (deptChartRef.value) {
-    deptChart = echarts.init(deptChartRef.value)
-    deptChart.setOption({
-      tooltip: { trigger: 'item' },
-      legend: { orient: 'vertical', right: '5%', top: 'center' },
-      series: [{
-        type: 'pie',
-        radius: ['40%', '70%'],
-        data: [
-          { value: 85, name: '良好', itemStyle: { color: '#52c41a' } },
-          { value: 12, name: '关注', itemStyle: { color: '#faad14' } },
-          { value: 3, name: '干预', itemStyle: { color: '#f5222d' } }
-        ]
-      }]
-    })
-  }
-
-  if (gradeChartRef.value) {
-    gradeChart = echarts.init(gradeChartRef.value)
-    gradeChart.setOption({
-      tooltip: { trigger: 'axis' },
-      xAxis: { type: 'category', data: ['大一', '大二', '大三', '大四', '研一', '研二', '研三'] },
-      yAxis: { type: 'value' },
-      series: [{
-        type: 'bar',
-        data: [
-          { value: 85, itemStyle: { color: '#52c41a' } },
-          { value: 82, itemStyle: { color: '#52c41a' } },
-          { value: 78, itemStyle: { color: '#faad14' } },
-          { value: 75, itemStyle: { color: '#faad14' } },
-          { value: 83, itemStyle: { color: '#52c41a' } },
-          { value: 80, itemStyle: { color: '#52c41a' } },
-          { value: 88, itemStyle: { color: '#52c41a' } }
-        ]
-      }]
-    })
-  }
-
-  if (genderChartRef.value) {
-    genderChart = echarts.init(genderChartRef.value)
-    genderChart.setOption({
-      tooltip: { trigger: 'axis' },
-      legend: { data: ['男生', '女生'] },
-      xAxis: { type: 'category', data: ['良好', '关注', '干预'] },
-      yAxis: { type: 'value' },
-      series: [
-        {
-          name: '男生',
-          type: 'bar',
-          data: [1200, 150, 35],
-          itemStyle: { color: '#1890ff' }
-        },
-        {
-          name: '女生',
-          type: 'bar',
-          data: [880, 145, 46],
-          itemStyle: { color: '#eb2f96' }
-        }
-      ]
-    })
-  }
+  fetchData()
 })
 
 onUnmounted(() => {

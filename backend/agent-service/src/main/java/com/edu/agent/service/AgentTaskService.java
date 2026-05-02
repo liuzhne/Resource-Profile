@@ -5,7 +5,7 @@ public interface AgentTaskService {
     /**
      * 创建任务（同步）
      */
-    Long createTask(String studentId);
+    Long createTask(Long studentId);
 
     /**
      * 异步执行 4-Agent 流水线

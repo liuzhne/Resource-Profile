@@ -3,6 +3,7 @@ package com.edu.agent.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Slf4j
@@ -12,30 +13,39 @@ public class RiskAnalyzeService {
 
     private final ChatClient chatClient;
 
-    /**
-     * 使用 ChatClient Fluent API 调用 LLM
-     * 1.0.0-M6 特性：.prompt().system().user().call().content()
-     */
-    public String analyzeRisk(String studentProfileJson) {
-        String response = chatClient.prompt()
-                .system("你是一位教育数据分析师，请严格按JSON格式输出学生风险分析结果，包含risk_level、risk_score、primary_risk_type字段")
-                .user(studentProfileJson)
-                .call()
-                .content();
+    @Value("${educare.prompt.risk-analyze}")
+    private String riskSystemPrompt;
 
-        log.info("LLM 风险识别结果: {}", response);
-        return response;
+    /**
+     * 调用本地 llama.cpp（Spring AI M6 ChatClient）进行风险识别
+     */
+    public String analyzeRisk(String maskedProfileJson) {
+        log.info("开始风险识别，输入长度: {} bytes", maskedProfileJson.length());
+
+        try {
+            String response = chatClient.prompt()
+                    .system(riskSystemPrompt)
+                    .user(maskedProfileJson)
+                    .call()
+                    .content();
+
+            log.info("LLM 风险识别完成，输出: {}", response);
+
+            // 基础校验：确保返回合法 JSON
+            if (!response.trim().startsWith("{")) {
+                log.error("LLM 返回非 JSON 格式: {}", response);
+                return fallbackRiskResult();
+            }
+
+            return response;
+
+        } catch (Exception e) {
+            log.error("LLM 调用异常，降级返回默认风险", e);
+            return fallbackRiskResult();
+        }
     }
 
-    /**
-     * 结构化输出（M6 支持 BeanOutputConverter）
-     * 后续可替换为：.call().entity(RiskAnalysisResult.class)
-     */
-    public <T> T analyzeRiskStructured(String studentProfileJson, Class<T> clazz) {
-        return chatClient.prompt()
-                .system("你是一位教育数据分析师，请严格按JSON格式输出学生风险分析结果")
-                .user(studentProfileJson)
-                .call()
-                .entity(clazz);
+    private String fallbackRiskResult() {
+        return "{\"risk_level\":\"medium\",\"risk_score\":50,\"primary_risk_type\":\"数据异常需人工复核\",\"root_cause_analysis\":\"LLM服务暂时不可用，默认中风险处理\"}";
     }
 }

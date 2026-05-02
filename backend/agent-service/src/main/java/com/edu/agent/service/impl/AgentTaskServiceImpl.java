@@ -1,6 +1,8 @@
 package com.edu.agent.service.impl;
 
 import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONObject;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.edu.agent.entity.AgentTask;
 import com.edu.agent.enums.RiskLevel;
@@ -8,6 +10,8 @@ import com.edu.agent.enums.TaskStatus;
 import com.edu.agent.feign.AiInferenceClient;
 import com.edu.agent.mapper.AgentTaskMapper;
 import com.edu.agent.service.AgentTaskService;
+import com.edu.agent.service.RiskAnalyzeService;
+import com.edu.agent.service.StudentPortraitAggregator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -17,8 +21,8 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.Collections;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
@@ -29,18 +33,22 @@ import java.util.concurrent.TimeUnit;
 public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask> implements AgentTaskService {
 
     private final AgentTaskMapper agentTaskMapper;
-    private final AiInferenceClient aiInferenceClient;
+    private final AiInferenceClient aiInferenceClient;          // P3 阶段接入 RAG / 方案 / 合规
+    private final StudentPortraitAggregator portraitAggregator;   // P2-5：基于真实端点的画像聚合
+    private final RiskAnalyzeService riskAnalyzeService;          // P2-5：真实 LLM 风险识别
     private final StringRedisTemplate redisTemplate;
 
     @Qualifier("agentExecutor")
-    private final Executor agentExecutor; // 仅用于自检，实际用 @Async
+    private final Executor agentExecutor;
 
     private static final String LOCK_PREFIX = "agent:task:lock:";
     private static final long LOCK_EXPIRE_SECONDS = 120;
 
+    // ==================== 1. 任务创建 ====================
+
     @Override
     @Transactional
-    public Long createTask(String studentId) {
+    public Long createTask(Long studentId) {
         AgentTask task = new AgentTask();
         task.setStudentId(studentId);
         task.setStatus(TaskStatus.PENDING);
@@ -48,6 +56,8 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
         log.info("创建 Agent 任务: taskId={}, studentId={}", task.getId(), studentId);
         return task.getId();
     }
+
+    // ==================== 2. 异步执行入口 ====================
 
     @Override
     @Async("agentExecutor")
@@ -69,39 +79,45 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
             log.error("任务 {} 执行异常", taskId, e);
             failTask(taskId);
         } finally {
-            // Lua 原子释放锁
             String script = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
             redisTemplate.execute(new DefaultRedisScript<>(script, Long.class),
                     Collections.singletonList(lockKey), lockValue);
         }
     }
 
-    /**
-     * 状态机核心：4 阶段流水线
-     */
+    // ==================== 3. 4 阶段状态机 ====================
+
     private void doExecute(Long taskId) {
         AgentTask task = agentTaskMapper.selectById(taskId);
         if (task == null || task.getDeleted() == 1) {
+            log.warn("任务 {} 不存在或已删除", taskId);
             return;
         }
 
         log.info("任务 {} 开始执行，当前状态: {}", taskId, task.getStatus());
 
-        // ========== 阶段 1: 风险识别 ==========
+        // ========== 阶段 1: 风险识别（P2-5 真实接入）==========
         if (task.getStatus() == TaskStatus.PENDING) {
             transition(taskId, TaskStatus.PENDING, TaskStatus.RISK_ANALYZING);
 
-            // TODO: P2-5 完成后接入真实 Feign 调用
-            // 当前先用模拟数据验证状态机流转
-            String riskJson = executeRiskAnalyzeMock(task);
+            // 【关键修复】同步内存对象状态，防止 updateById 覆盖
+            task.setStatus(TaskStatus.RISK_ANALYZING);
+
+            // ① 聚合画像（调用既有真实端点）→ ② LLM 推理
+            String riskJson = executeRiskAnalyze(task);
             task.setRiskAnalysisResult(riskJson);
 
-            // 解析风险等级（后续可用 JSON Schema 强校验）
+
+
             RiskLevel level = parseRiskLevel(riskJson);
             task.setRiskLevel(level);
-            agentTaskMapper.updateById(task);
+//            agentTaskMapper.updateById(task);
+            agentTaskMapper.update(null, new LambdaUpdateWrapper<AgentTask>()
+                    .eq(AgentTask::getId, taskId)
+                    .set(AgentTask::getRiskAnalysisResult, task.getRiskAnalysisResult())
+                    .set(AgentTask::getRiskLevel, task.getRiskLevel()));
 
-            // 低风险/无风险 -> 直接完成，跳过后续 Agent
+            // 低风险/无风险 → 短路完成
             if (level == RiskLevel.NONE || level == RiskLevel.LOW) {
                 transition(taskId, TaskStatus.RISK_ANALYZING, TaskStatus.COMPLETED);
                 completeTask(taskId);
@@ -110,29 +126,26 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
             }
         }
 
-        // ========== 阶段 2: RAG 知识检索 ==========
+        // ========== 阶段 2: RAG 检索（P3-1 接入，当前 Mock）==========
         if (task.getStatus() == TaskStatus.RISK_ANALYZING) {
             transition(taskId, TaskStatus.RISK_ANALYZING, TaskStatus.KNOWLEDGE_RETRIEVING);
-
-            String knowledge = executeKnowledgeRetrieveMock(task);
+            String knowledge = executeKnowledgeRetrieve(task);
             task.setRetrievedKnowledge(knowledge);
             agentTaskMapper.updateById(task);
         }
 
-        // ========== 阶段 3: 干预方案生成 ==========
+        // ========== 阶段 3: 方案生成（P3-2 接入，当前 Mock）==========
         if (task.getStatus() == TaskStatus.KNOWLEDGE_RETRIEVING) {
             transition(taskId, TaskStatus.KNOWLEDGE_RETRIEVING, TaskStatus.PLAN_GENERATING);
-
-            String plan = executePlanGenerateMock(task);
+            String plan = executePlanGenerate(task);
             task.setInterventionPlan(plan);
             agentTaskMapper.updateById(task);
         }
 
-        // ========== 阶段 4: 合规审核 ==========
+        // ========== 阶段 4: 合规审核（P3-3 接入，当前 Mock）==========
         if (task.getStatus() == TaskStatus.PLAN_GENERATING) {
             transition(taskId, TaskStatus.PLAN_GENERATING, TaskStatus.COMPLIANCE_CHECKING);
-
-            String audit = executeComplianceAuditMock(task);
+            String audit = executeComplianceAudit(task);
             task.setComplianceAudit(audit);
             agentTaskMapper.updateById(task);
 
@@ -152,9 +165,40 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
         }
     }
 
+    // ==================== 4. 各阶段执行方法 ====================
+
     /**
-     * 乐观锁状态流转
+     * 阶段 1：真实风险识别
+     * 调用既有服务真实端点（/student/{id} + /mental/analysis + /data/dashboard/statistics）
      */
+    private String executeRiskAnalyze(AgentTask task) {
+        Long studentId = task.getStudentId();
+        log.info("任务 {} 开始风险识别，学生: {}", task.getId(), studentId);
+
+        // ① 聚合画像（基于既有真实端点，mental/data 降级处理）
+        String maskedProfile = portraitAggregator.buildMaskedProfile(studentId);
+
+        // ② 调用本地 llama.cpp
+        return riskAnalyzeService.analyzeRisk(maskedProfile);
+    }
+
+    /**
+     * 阶段 2-4：Mock（P3 接入）
+     */
+    private String executeKnowledgeRetrieve(AgentTask task) {
+        return "[{\"source_db\":\"case_db\",\"case_id\":\"C2024001\",\"relevance_score\":0.95}]";
+    }
+
+    private String executePlanGenerate(AgentTask task) {
+        return "{\"report_title\":\"干预方案\",\"immediate_actions\":[]}";
+    }
+
+    private String executeComplianceAudit(AgentTask task) {
+        return "{\"audit_passed\":true,\"audit_items\":[]}";
+    }
+
+    // ==================== 5. 状态机工具方法 ====================
+
     private void transition(Long taskId, TaskStatus from, TaskStatus to) {
         int rows = agentTaskMapper.updateStatus(taskId, from.name(), to.name());
         if (rows == 0) {
@@ -167,7 +211,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
     private void completeTask(Long taskId) {
         AgentTask update = new AgentTask();
         update.setId(taskId);
-        update.setCompletedAt(java.time.LocalDateTime.now());
+        update.setCompletedAt(LocalDateTime.now());
         agentTaskMapper.updateById(update);
     }
 
@@ -178,45 +222,23 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
         agentTaskMapper.updateById(update);
     }
 
-    // ==================== Mock 方法（P2-5 / P3 接入真实 AI 调用） ====================
-
-    private String executeRiskAnalyzeMock(AgentTask task) {
-        // TODO: 调用 data-service/mental-service 获取画像，再调用 aiInferenceClient.riskAnalyze()
-        return "{\"risk_level\":\"high\",\"risk_score\":85,\"primary_risk_type\":\"学业滑坡\"}";
-    }
-
-    private String executeKnowledgeRetrieveMock(AgentTask task) {
-        // TODO: 调用 aiInferenceClient.retrieveKnowledge(...)
-        return "[{\"source_db\":\"case_db\",\"case_id\":\"C2024001\",\"relevance_score\":0.95}]";
-    }
-
-    private String executePlanGenerateMock(AgentTask task) {
-        // TODO: 调用 aiInferenceClient.generatePlan(...)
-        return "{\"report_title\":\"干预方案\",\"immediate_actions\":[]}";
-    }
-
-    private String executeComplianceAuditMock(AgentTask task) {
-        // TODO: 调用 aiInferenceClient.complianceAudit(...)
-        return "{\"audit_passed\":true,\"audit_items\":[]}";
-    }
-
-    // ==================== JSON 解析辅助 ====================
+    // ==================== 6. JSON 解析辅助 ====================
 
     private RiskLevel parseRiskLevel(String json) {
         try {
-            Map<String, Object> map = JSON.parseObject(json);
-            String level = (String) map.get("risk_level");
+            JSONObject map = JSON.parseObject(json);
+            String level = map.getString("risk_level");
             return RiskLevel.valueOf(level.toUpperCase());
         } catch (Exception e) {
             log.error("解析风险等级失败: {}", json, e);
-            return RiskLevel.MEDIUM; // 默认中风险，走完整流程
+            return RiskLevel.MEDIUM;
         }
     }
 
     private boolean parseAuditPassed(String json) {
         try {
-            Map<String, Object> map = JSON.parseObject(json);
-            return Boolean.TRUE.equals(map.get("audit_passed"));
+            JSONObject map = JSON.parseObject(json);
+            return Boolean.TRUE.equals(map.getBoolean("audit_passed"));
         } catch (Exception e) {
             log.error("解析合规审核结果失败: {}", json, e);
             return false;
