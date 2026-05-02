@@ -29,6 +29,9 @@ public class Questionnaire {
 
     private Integer status;
 
+    @TableField("template_content")
+    private String templateContent;
+
     @TableLogic
     private Integer deleted;
 

@@ -148,7 +148,40 @@ CREATE TABLE IF NOT EXISTS mental_questionnaire (
     deleted TINYINT DEFAULT 0 COMMENT '删除标记',
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'
+    template_content JSON DEFAULT NULL COMMENT '上传的问卷模板JSON原文',
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='心理健康问卷表';
+
+-- 问卷题目表
+CREATE TABLE IF NOT EXISTS mental_question (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+    questionnaire_id BIGINT NOT NULL COMMENT '所属问卷ID',
+    sort_order INT DEFAULT 0 COMMENT '题目排序',
+    content VARCHAR(1000) NOT NULL COMMENT '题目内容',
+    question_type VARCHAR(30) NOT NULL COMMENT '题目类型：single_choice/multiple_choice/text/scale',
+    options JSON DEFAULT NULL COMMENT '选项列表JSON',
+    scoring_rules JSON DEFAULT NULL COMMENT '评分规则JSON',
+    scale_min INT DEFAULT NULL COMMENT '量表最小值',
+    scale_max INT DEFAULT NULL COMMENT '量表最大值',
+    scale_labels JSON DEFAULT NULL COMMENT '量表两端标签JSON',
+    required TINYINT DEFAULT 1 COMMENT '是否必答：0-否，1-是',
+    deleted TINYINT DEFAULT 0 COMMENT '删除标记',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    INDEX idx_questionnaire_id (questionnaire_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='问卷题目表';
+
+-- 问卷答题记录表
+CREATE TABLE IF NOT EXISTS mental_response (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+    student_id BIGINT NOT NULL COMMENT '学生ID',
+    questionnaire_id BIGINT NOT NULL COMMENT '问卷ID',
+    answers JSON NOT NULL COMMENT '答题内容JSON',
+    score INT DEFAULT 0 COMMENT '自动计算得分',
+    status TINYINT DEFAULT 0 COMMENT '状态：0-已提交，1-已评估',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '提交时间',
+    UNIQUE KEY uk_student_questionnaire (student_id, questionnaire_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='问卷答题记录表';
 
 -- 心理评估表
 CREATE TABLE IF NOT EXISTS mental_assessment (
@@ -219,6 +252,7 @@ INSERT INTO sys_permission (name, code, type, parent_id, sort_order, icon, path)
 ('心理概览', 'mental:overview', 2, 8, 1, '', '/mental/overview'),
 ('问卷管理', 'mental:questionnaire', 2, 8, 2, '', '/mental/questionnaire'),
 ('分析报告', 'mental:analysis', 2, 8, 3, '', '/mental/analysis'),
+('填写问卷', 'mental:student', 2, 8, 4, '', '/mental/student'),
 ('系统管理', 'admin', 1, 0, 5, 'Setting', '/admin'),
 ('用户管理', 'admin:user', 2, 12, 1, '', '/admin/users'),
 ('角色权限', 'admin:role', 2, 12, 2, '', '/admin/roles');
