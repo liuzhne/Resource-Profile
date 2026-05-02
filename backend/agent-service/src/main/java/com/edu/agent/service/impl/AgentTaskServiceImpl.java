@@ -67,7 +67,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
 
         Boolean locked = redisTemplate.opsForValue()
                 .setIfAbsent(lockKey, lockValue, LOCK_EXPIRE_SECONDS, TimeUnit.SECONDS);
-
+        log.info("分布式锁！");
         if (!Boolean.TRUE.equals(locked)) {
             log.warn("任务 {} 正在执行中，跳过重复调度", taskId);
             return;
@@ -79,6 +79,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
             log.error("任务 {} 执行异常", taskId, e);
             failTask(taskId);
         } finally {
+            log.info("释放锁！");
             String script = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
             redisTemplate.execute(new DefaultRedisScript<>(script, Long.class),
                     Collections.singletonList(lockKey), lockValue);
@@ -106,8 +107,6 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
             // ① 聚合画像（调用既有真实端点）→ ② LLM 推理
             String riskJson = executeRiskAnalyze(task);
             task.setRiskAnalysisResult(riskJson);
-
-
 
             RiskLevel level = parseRiskLevel(riskJson);
             task.setRiskLevel(level);
@@ -176,7 +175,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
         log.info("任务 {} 开始风险识别，学生: {}", task.getId(), studentId);
 
         // ① 聚合画像（基于既有真实端点，mental/data 降级处理）
-        String maskedProfile = portraitAggregator.buildMaskedProfile(studentId);
+        String maskedProfile = portraitAggregator.buildMaskedProfile(String.valueOf(studentId));
 
         // ② 调用本地 llama.cpp
         return riskAnalyzeService.analyzeRisk(maskedProfile);

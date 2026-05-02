@@ -72,7 +72,11 @@ logging:
   level:
     com.edu.agent.mapper: debug
 
+
 educare:
+  debug:
+    mock-data:
+      true
   prompt:
     risk-analyze: |
       你是一位专业的教育数据分析师，擅长从多维度学生画像数据中识别学业风险信号。
