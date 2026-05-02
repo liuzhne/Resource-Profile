@@ -4,23 +4,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Resource-Profile is a **Teacher-Student Resource Portrait System** (师生资源画像系统) - a microservices-based educational platform with a Vue 3 frontend and Spring Boot backend.
+Resource-Profile is a **Teacher-Student Resource Portrait System** (师生资源画像系统) — a microservices-based educational platform with a Vue 3 frontend, Spring Boot backend, and a Python AI inference sidecar (LLM + RAG over Milvus).
 
 ## Architecture
 
-**Multi-Module Project Structure:**
-- `/backend` - Java/Spring Boot microservices
-- `/frontend` - Vue 3 + Vite single-page application
-- `/docker` - Docker and docker-compose configuration
-- `/sql` - Database initialization scripts
+**Top-level layout:**
+- `/backend` — Java/Spring Boot microservices (Maven multi-module)
+- `/ai-inference-service` — Python FastAPI service for LLM inference & vector retrieval
+- `/frontend` — Vue 3 + Vite single-page application
+- `/docker` — Docker and docker-compose configuration
+- `/sql` — Database initialization scripts
 
-## Backend - Spring Boot Microservices
+The Java side handles business logic, persistence, and orchestration. AI calls go through `agent-service`, which either talks to a local LLM via Spring AI's OpenAI-compatible client (default) or delegates to the Python `ai-inference-service` via Feign for RAG / embedding-heavy work.
+
+## Backend — Spring Boot Microservices
 
 **Build Tool:** Maven 3+
 **Java Version:** 17
 **Spring Boot:** 3.2.5
 **Spring Cloud:** 2023.0.1
 **Spring Cloud Alibaba:** 2023.0.1.0
+**Spring AI:** 1.0.0-M6 (milestone repo `https://repo.spring.io/milestone` declared in parent POM)
 
 **Microservices Modules:**
 
@@ -33,25 +37,29 @@ Resource-Profile is a **Teacher-Student Resource Portrait System** (师生资源
 | `student-service` | 8084 | Student profile management |
 | `mental-service` | 8085 | Mental health assessment |
 | `data-service` | 8086 | Data analysis and dashboard |
-| `common` | - | Shared library (JWT, Result wrapper) |
+| `agent-service` | 8087 | LLM/Agent orchestration (Spring AI + Feign to Python) |
+| `common` | — | Shared library (JWT, Result wrapper) |
 
 **Key Dependencies:**
 - MyBatis Plus 3.5.11 (ORM)
 - JWT 0.12.5 (jjwt-api, jjwt-impl, jjwt-jackson)
 - MySQL 8.0.33
 - Spring Cloud Alibaba Nacos (Service Discovery + Configuration)
+- Spring AI OpenAI starter (`spring-ai-openai-spring-boot-starter`) — used by `agent-service`
+- Spring Cloud OpenFeign — used by `agent-service` to call `ai-inference-service`
 - Lombok 1.18.30
 
 **Backend Code Patterns:**
 
 All services follow a consistent layered architecture:
-- `entity/` - MyBatis Plus entities using Lombok `@Data`
-- `mapper/` - Mappers extending `BaseMapper<Entity>` (no XML mappers; all SQL via annotations or MyBatis Plus wrappers)
-- `service/` + `service/impl/` - Service interfaces and `@Service` implementations
-- `controller/` - `@RestController` with `@RequestMapping` and `@RequiredArgsConstructor` for dependency injection
-- `dto/` - Request/response DTOs using Lombok
-- `config/` - Spring `@Configuration` classes
-- `exception/GlobalExceptionHandler.java` - `@RestControllerAdvice` handling validation and runtime exceptions
+- `entity/` — MyBatis Plus entities using Lombok `@Data`
+- `mapper/` — Mappers extending `BaseMapper<Entity>` (no XML mappers; all SQL via annotations or MyBatis Plus wrappers)
+- `service/` + `service/impl/` — Service interfaces and `@Service` implementations
+- `controller/` — `@RestController` with `@RequestMapping` and `@RequiredArgsConstructor` for dependency injection
+- `dto/` — Request/response DTOs using Lombok
+- `config/` — Spring `@Configuration` classes
+- `exception/GlobalExceptionHandler.java` — `@RestControllerAdvice` handling validation and runtime exceptions
+- `feign/` — (agent-service) Feign clients for remote services like `AiInferenceClient`
 
 **MyBatis Plus Global Config** (in each `application.yml`):
 - Logic delete: field `deleted`, value `1` = deleted, `0` = not deleted
@@ -73,6 +81,8 @@ config:
     - optional:nacos:common.yml?group=DEFAULT_GROUP
 ```
 
+Nacos is configured with auth (`NACOS_AUTH_IDENTITY_KEY=serverIdentity`, `NACOS_AUTH_IDENTITY_VALUE=security`); each service `application.yml` references these via env vars.
+
 **Gateway Routing:**
 Routes use load-balanced URIs (`lb://{service-name}`) with `StripPrefix=0`:
 - `/auth/**` → auth-service
@@ -81,6 +91,7 @@ Routes use load-balanced URIs (`lb://{service-name}`) with `StripPrefix=0`:
 - `/student/**` → student-service
 - `/mental/**` → mental-service
 - `/data/**` → data-service
+- `/agent/**` → agent-service
 
 Global CORS is configured on the gateway (`allowedOrigins: "*"`).
 
@@ -92,25 +103,54 @@ Global CORS is configured on the gateway (`allowedOrigins: "*"`).
 - Frontend sends `Authorization: Bearer {token}` header
 - Auth endpoints (`/auth/**`) are public; all other requests require authentication (enforced by Spring Security in auth-service)
 
-## Frontend - Vue 3
+## agent-service — AI Orchestration
+
+`agent-service` is the bridge between business services and LLM/RAG capabilities.
+
+- **Spring AI ChatClient** (configured in `SpringAiConfig`) is wired against an OpenAI-compatible endpoint set by `spring.ai.openai.base-url` (defaults to `http://host.docker.internal:8091` — i.e., a llama.cpp / vLLM server running on the host) with model `qwen2.5-32b-instruct-q4_k_m`. Use the fluent API: `chatClient.prompt().system(...).user(...).call().content()` or `.entity(Class)` for structured output (see `RiskAnalyzeService`).
+- **Feign client** `AiInferenceClient` (`name = "ai-inference-service"`, URL `${ai.inference.url:http://host.docker.internal:8090}`) calls into the Python service for `/api/v1/agent/risk`, `/api/v1/rag/retrieve`, `/api/v1/agent/plan`, and `/api/v1/agent/audit`. Use this when the call needs vector search or LangChain-side logic; use `ChatClient` directly for plain LLM calls.
+- Async work is dispatched via the executor in `AsyncConfig`.
+- MyBatis-Plus auto-fill is wired in `MyMetaObjectHandler`.
+
+## ai-inference-service — Python FastAPI
+
+**Runtime:** Python 3.10, FastAPI 0.110, uvicorn (single worker), default port **8090**.
+
+**Stack:**
+- LangChain 0.1.12 + `langchain-openai` for LLM chains against an OpenAI-compatible backend
+- `pymilvus` 2.4.1 for vector store access
+- `httpx`, `tenacity` for outbound calls and retries
+
+**Layout** (`/ai-inference-service/app`):
+- `main.py` — FastAPI factory, CORS, router registration
+- `core/config.py` — `Settings` reading env vars (`LLM_BASE_URL`, `LLM_MODEL`, `MILVUS_HOST`, `MILVUS_PORT`, `EMBEDDING_BASE_URL`, etc.)
+- `api/health.py`, `api/llm.py` — HTTP routers; add new endpoints here
+- `services/llm_client.py` — LLM client wrapper
+
+**Important env defaults:**
+- `LLM_BASE_URL` → host LLM server (OpenAI-compatible)
+- `MILVUS_HOST` defaults to `milvus-standalone` (the docker-compose service name on `edu-network`)
+- The container reaches the host via `host.docker.internal`
+
+## Frontend — Vue 3
 
 **Build Tool:** Vite 5.2.8
 **Framework:** Vue 3.4.21
 **Package Manager:** npm
 
 **Key Dependencies:**
-- `vue-router` 4.3.0 - Client-side routing
-- `pinia` 2.1.7 - State management
-- `element-plus` 2.6.3 - UI Component Library
-- `@element-plus/icons-vue` 2.3.1 - Icons
-- `axios` 1.6.8 - HTTP client
-- `echarts` 5.5.0 + `vue-echarts` 6.6.9 - Data visualization
-- `js-cookie` 3.0.5 - Cookie management
-- `nprogress` 0.2.0 - Progress bar
+- `vue-router` 4.3.0 — Client-side routing
+- `pinia` 2.1.7 — State management
+- `element-plus` 2.6.3 — UI Component Library
+- `@element-plus/icons-vue` 2.3.1 — Icons
+- `axios` 1.6.8 — HTTP client
+- `echarts` 5.5.0 + `vue-echarts` 6.6.9 — Data visualization
+- `js-cookie` 3.0.5 — Cookie management
+- `nprogress` 0.2.0 — Progress bar
 
 **Vite Config:**
 - Dev Server: `http://localhost:5173`
-- API Proxy: `/api` → `http://localhost:8080`
+- API Proxy: `/api` → `http://localhost:8080` (path-rewrite strips `/api`)
 - Auto-import: `unplugin-auto-import` for Vue/Vue Router/Pinia APIs and Element Plus components
 - Alias: `@` → `src`
 
@@ -138,6 +178,11 @@ Global CORS is configured on the gateway (`allowedOrigins: "*"`).
 | redis | redis:7-alpine | 6379:6379 | Cache & session storage |
 | nacos | nacos/nacos-server:v2.3.0 | 8848, 9848 | Service discovery & config |
 | gateway | Custom build | 8080:8080 | API gateway |
+| ai-inference-service | Custom build | 8090:8090 | Python LLM/RAG service |
+| milvus-standalone | milvusdb/milvus:v2.4.1 | 19530, 9091 | Vector database |
+| etcd | quay.io/coreos/etcd:v3.5.5 | — | Milvus metadata |
+| minio | minio/minio | 9000, 9001 | Milvus object storage (console on 9001) |
+| attu | zilliz/attu:v2.4 | 8000:3000 | Milvus Web UI |
 
 **Database:**
 - Name: `edu_portrait`
@@ -159,72 +204,85 @@ mvn clean install -DskipTests
 
 # Run individual service (from service directory)
 mvn spring-boot:run
+
+# Run a single test class / method
+mvn -pl <module> test -Dtest=ClassName
+mvn -pl <module> test -Dtest=ClassName#methodName
 ```
+
+Note: Spring AI 1.0.0-M6 is on the Spring milestone repo, declared in the parent `pom.xml`. A first-time `mvn clean install` will fetch from `repo.spring.io/milestone`.
 
 **Frontend (npm):**
 ```bash
 cd frontend
 
-# Install dependencies
 npm install
-
-# Start development server (port 5173)
-npm run dev
-
-# Build for production
-npm run build
-
-# Preview production build
-npm run preview
-
-# Lint and fix
-npm run lint
-
-# Format code
-npm run format
+npm run dev        # Vite dev server on :5173
+npm run build      # Production build to dist/
+npm run preview    # Serve production build
+npm run lint       # ESLint --fix on .vue/.js/.jsx/.cjs/.mjs
+npm run format     # Prettier on src/
 ```
+
+**ai-inference-service (Python):**
+```bash
+cd ai-inference-service
+
+# Local dev (Python 3.10)
+pip install -r requirements.txt
+uvicorn app.main:app --host 0.0.0.0 --port 8090 --reload
+
+# Or build & run via docker-compose along with Milvus
+cd ../docker && docker-compose up -d ai-inference-service milvus-standalone
+```
+
+There is no Python test runner configured yet; if adding tests, prefer `pytest`.
 
 **Docker:**
 ```bash
 cd docker
 
-# Start all infrastructure services
-docker-compose up -d
-
-# View logs
-docker-compose logs -f
-
-# Stop all services
-docker-compose down
-
-# Stop and remove volumes
-docker-compose down -v
+docker-compose up -d                    # all infra
+docker-compose up -d mysql redis nacos  # backend deps only
+docker-compose logs -f <service>
+docker-compose down                     # stop
+docker-compose down -v                  # stop + drop volumes (wipes MySQL/Redis data)
 ```
 
 ## Configuration & Environment Variables
 
 **Nacos Configuration:**
 - Server: `localhost:8848` (default)
-- Environment variables: `NACOS_SERVER`, `NACOS_NAMESPACE`, `NACOS_USERNAME`, `NACOS_PASSWORD`
+- Env vars: `NACOS_SERVER`, `NACOS_NAMESPACE`, `NACOS_USERNAME`, `NACOS_PASSWORD`, `NACOS_AUTH_IDENTITY_KEY`, `NACOS_AUTH_IDENTITY_VALUE`
 
 **MySQL Configuration:**
-- Environment variables: `MYSQL_HOST`, `MYSQL_USER`, `MYSQL_PASSWORD`
+- Env vars: `MYSQL_HOST`, `MYSQL_USER`, `MYSQL_PASSWORD`
 
 **Redis Configuration:**
-- Environment variables: `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`
+- Env vars: `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`
 
 **JWT Configuration:**
-- Secret: `JWT_SECRET` environment variable
-- Access token expire: 24 hours
-- Refresh token expire: 7 days
+- `JWT_SECRET`, access token 24h, refresh token 7d
+
+**LLM / AI Configuration:**
+- `LLM_BASE_URL` — OpenAI-compatible endpoint URL (host LLM)
+- `LLM_MODEL`, `LLM_TEMPERATURE`, `LLM_MAX_TOKENS`, `LLM_API_KEY`
+- `MILVUS_HOST`, `MILVUS_PORT`
+- `EMBEDDING_BASE_URL`, `EMBEDDING_MODEL`
+- `ai.inference.url` (Java) — overrides the Feign target for `AiInferenceClient`
 
 ## Key File Locations
 
 | Purpose | Path |
 |---------|------|
-| Parent POM | `/backend/pom.xml` |
+| Parent POM (Spring AI milestone repo defined here) | `/backend/pom.xml` |
 | Gateway Config | `/backend/gateway/src/main/resources/application.yml` |
 | Auth Config | `/backend/auth-service/src/main/resources/application.yml` |
+| Agent Config | `/backend/agent-service/src/main/resources/application.yml` |
+| Spring AI ChatClient wiring | `/backend/agent-service/src/main/java/com/edu/agent/config/SpringAiConfig.java` |
+| Feign → Python | `/backend/agent-service/src/main/java/com/edu/agent/feign/AiInferenceClient.java` |
+| Python entrypoint | `/ai-inference-service/app/main.py` |
+| Python settings | `/ai-inference-service/app/core/config.py` |
 | Frontend Config | `/frontend/vite.config.js` |
 | Docker Compose | `/docker/docker-compose.yml` |
 | Database Init | `/sql/init/01_init.sql` |
