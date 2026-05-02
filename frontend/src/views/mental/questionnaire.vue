@@ -24,9 +24,10 @@
         </el-table-column>
         <el-table-column prop="startTime" label="开始时间" width="120" />
         <el-table-column prop="endTime" label="结束时间" width="120" />
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" width="320" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" @click="handleView(row)">查看</el-button>
+            <el-button link type="primary" @click="handleDesign(row)">设计题目</el-button>
+            <el-button link type="primary" @click="handleResult(row)">完成情况</el-button>
             <el-button link type="primary" @click="handleEdit(row)">编辑</el-button>
             <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
           </template>
@@ -101,8 +102,13 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getQuestionnaireList, getQuestionnaireDetail, createQuestionnaire, updateQuestionnaire, deleteQuestionnaire } from '@/api/mental'
+
+const router = useRouter()
+const handleDesign = (row: any) => router.push(`/mental/questionnaire/design/${row.id}`)
+const handleResult = (row: any) => router.push(`/mental/questionnaire/result/${row.id}`)
 
 const loading = ref(false)
 const questionnaires = ref<any[]>([])
@@ -142,7 +148,7 @@ const fetchData = async () => {
     const res = await getQuestionnaireList({ page: currentPage.value, size: pageSize.value })
     const data = res.data
     questionnaires.value = data.records || []
-    total.value = data.total || 0
+    total.value = Number(data.total) || 0
   } catch (e) {
     console.error('获取问卷列表失败', e)
   } finally {
