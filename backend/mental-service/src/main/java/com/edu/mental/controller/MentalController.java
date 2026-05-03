@@ -2,14 +2,17 @@ package com.edu.mental.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.edu.common.result.Result;
+import com.edu.mental.dto.QuestionnaireFullDto;
+import com.edu.mental.entity.Question;
 import com.edu.mental.entity.Questionnaire;
 import com.edu.mental.mapper.MentalAssessmentMapper;
+import com.edu.mental.service.MentalAssessmentService;
+import com.edu.mental.service.QuestionService;
 import com.edu.mental.service.QuestionnaireService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/mental")
@@ -17,61 +20,61 @@ import java.util.stream.Collectors;
 public class MentalController {
 
     private final QuestionnaireService questionnaireService;
+    private final QuestionService questionService;
+    private final MentalAssessmentService assessmentService;
     private final MentalAssessmentMapper mentalAssessmentMapper;
+
+    /* ========== 心理概览 / 分析报告（保留原有逻辑） ========== */
 
     @GetMapping("/overview")
     public Result<Map<String, Object>> overview() {
         Map<String, Object> result = new HashMap<>();
-
-        // 统计近30天的心理健康数据
         List<Map<String, Object>> stats = mentalAssessmentMapper.selectRecentStats();
         result.put("recentStats", stats);
 
-        // 从数据库结果计算总体统计
         int goodCount = 0, attentionCount = 0, interventionCount = 0, totalCount = 0;
         for (Map<String, Object> stat : stats) {
             String level = (String) stat.get("level");
             int count = ((Number) stat.get("count")).intValue();
             totalCount += count;
-            if ("正常".equals(level) || "轻度".equals(level)) {
-                goodCount += count;
-            } else if ("中度".equals(level)) {
-                attentionCount += count;
-            } else if ("重度".equals(level) || "高危".equals(level)) {
-                interventionCount += count;
-            }
+            if ("正常".equals(level) || "轻度".equals(level)) goodCount += count;
+            else if ("中度".equals(level)) attentionCount += count;
+            else if ("重度".equals(level) || "高危".equals(level)) interventionCount += count;
         }
-
         int goodRate = totalCount > 0 ? (goodCount * 100 / totalCount) : 0;
         int attentionRate = totalCount > 0 ? (attentionCount * 100 / totalCount) : 0;
         int interventionRate = totalCount > 0 ? (interventionCount * 100 / totalCount) : 0;
-
         result.put("goodRate", goodRate);
         result.put("attentionRate", attentionRate);
         result.put("interventionRate", interventionRate);
         result.put("todayCompleted", totalCount);
-
-        // 预警列表
         result.put("warningList", mentalAssessmentMapper.selectWarningList());
-
-        // 趋势数据
         result.put("trendData", mentalAssessmentMapper.selectTrendData());
-
         return Result.success(result);
     }
+
+    @GetMapping("/analysis")
+    public Result<Map<String, Object>> analysis() {
+        Map<String, Object> result = new HashMap<>();
+        result.put("deptDistribution", mentalAssessmentMapper.selectDeptDistribution());
+        result.put("gradeComparison", mentalAssessmentMapper.selectGradeComparison());
+        result.put("focusGroups", mentalAssessmentMapper.selectFocusGroups());
+        result.put("genderAnalysis", mentalAssessmentMapper.selectGenderAnalysis());
+        return Result.success(result);
+    }
+
+    /* ========== 问卷元数据 CRUD ========== */
 
     @GetMapping("/questionnaires")
     public Result<Page<Questionnaire>> listQuestionnaires(
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "10") Integer size) {
-        Page<Questionnaire> result = questionnaireService.list(page, size);
-        return Result.success(result);
+        return Result.success(questionnaireService.list(page, size));
     }
 
     @GetMapping("/questionnaires/{id}")
     public Result<Questionnaire> getQuestionnaire(@PathVariable Long id) {
-        Questionnaire questionnaire = questionnaireService.getById(id);
-        return Result.success(questionnaire);
+        return Result.success(questionnaireService.getById(id));
     }
 
     @PostMapping("/questionnaires")
@@ -93,22 +96,43 @@ public class MentalController {
         return Result.success();
     }
 
-    @GetMapping("/analysis")
-    public Result<Map<String, Object>> analysis() {
-        Map<String, Object> result = new HashMap<>();
+    /* ========== 问卷完整内容（含题目+等级规则）：设计/预览复用 ========== */
 
-        // 各学院分布 — 从数据库查询
-        result.put("deptDistribution", mentalAssessmentMapper.selectDeptDistribution());
+    @GetMapping("/questionnaires/{id}/full")
+    public Result<QuestionnaireFullDto> getFull(@PathVariable Long id) {
+        return Result.success(questionService.getFull(id));
+    }
 
-        // 年级对比 — 从数据库查询
-        result.put("gradeComparison", mentalAssessmentMapper.selectGradeComparison());
+    /* ========== 题目 CRUD（教师/管理员） ========== */
 
-        // 重点人群 — 从数据库查询
-        result.put("focusGroups", mentalAssessmentMapper.selectFocusGroups());
+    @GetMapping("/questionnaires/{id}/questions")
+    public Result<List<Question>> listQuestions(@PathVariable Long id) {
+        return Result.success(questionService.listByQuestionnaire(id));
+    }
 
-        // 性别差异 — 从数据库查询
-        result.put("genderAnalysis", mentalAssessmentMapper.selectGenderAnalysis());
+    @PostMapping("/questionnaires/{id}/questions")
+    public Result<Question> addQuestion(@PathVariable Long id, @RequestBody Question question) {
+        question.setQuestionnaireId(id);
+        return Result.success(questionService.save(question));
+    }
 
-        return Result.success(result);
+    @PutMapping("/questions/{questionId}")
+    public Result<Void> updateQuestion(@PathVariable Long questionId, @RequestBody Question question) {
+        question.setId(questionId);
+        questionService.update(question);
+        return Result.success();
+    }
+
+    @DeleteMapping("/questions/{questionId}")
+    public Result<Void> deleteQuestion(@PathVariable Long questionId) {
+        questionService.delete(questionId);
+        return Result.success();
+    }
+
+    /* ========== 完成情况（教师/管理员看哪些学生答了） ========== */
+
+    @GetMapping("/questionnaires/{id}/completion")
+    public Result<List<Map<String, Object>>> completion(@PathVariable Long id) {
+        return Result.success(assessmentService.listCompletion(id));
     }
 }

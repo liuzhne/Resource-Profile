@@ -154,8 +154,8 @@ services:
   # Gateway
   gateway:
     build:
-      context: ../backend/gateway
-      dockerfile: ../../docker/Dockerfile.gateway
+      context: ../backend
+      dockerfile: ../docker/Dockerfile.gateway
     container_name: edu-portrait-gateway
     environment:
       NACOS_SERVER: nacos:8848

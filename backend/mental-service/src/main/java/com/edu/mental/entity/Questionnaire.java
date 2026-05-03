@@ -29,6 +29,12 @@ public class Questionnaire {
 
     private Integer status;
 
+    @TableField("level_rules")
+    private String levelRules;
+
+    @TableField("creator_id")
+    private Long creatorId;
+
     @TableLogic
     private Integer deleted;
 
