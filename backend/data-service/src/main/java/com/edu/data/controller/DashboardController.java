@@ -5,6 +5,7 @@ import com.edu.data.service.DashboardService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -23,8 +24,9 @@ public class DashboardController {
     }
 
     @GetMapping("/trend")
-    public Result<Map<String, Object>> trend() {
-        return Result.success(dashboardService.getTrend());
+    public Result<Map<String, Object>> trend(
+            @RequestParam(defaultValue = "week") String period) {
+        return Result.success(dashboardService.getTrend(period));
     }
 
     @GetMapping("/distribution")

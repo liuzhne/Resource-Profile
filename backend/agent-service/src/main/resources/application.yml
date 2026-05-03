@@ -10,6 +10,17 @@ spring:
       - optional:nacos:agent-service.yml?group=DEFAULT_GROUP
       - optional:nacos:common.yml?group=DEFAULT_GROUP
   cloud:
+    openfeign:
+      okhttp:
+        enabled: true
+      client:
+        config:
+          default:
+            connectTimeout: 5000
+            readTimeout: 90000   # plan/audit 经过 LLM 可能 60s+，留余量
+          ai-inference-service:
+            connectTimeout: 5000
+            readTimeout: 120000  # AI 链路允许更长
     nacos:
       # 注册中心
       discovery:
@@ -73,6 +84,10 @@ logging:
     com.edu.agent.mapper: debug
 
 educare:
+  debug:
+    # 仅用于端到端冒烟测试：强制风险等级跳过 LLM 直接进入完整 4 阶段流水线。
+    # 生产环境请保持为空。可设 high/medium/low/none。
+    force-risk-level: ${EDUCARE_DEBUG_FORCE_RISK_LEVEL:}
   prompt:
     risk-analyze: |
       你是一位专业的教育数据分析师，擅长从多维度学生画像数据中识别学业风险信号。

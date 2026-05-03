@@ -11,8 +11,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 复制应用代码
+# 复制应用代码与运维脚本
 COPY app ./app
+COPY scripts ./scripts
 
 # 非 root 运行（安全）
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app

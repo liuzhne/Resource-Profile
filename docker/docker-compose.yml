@@ -9,11 +9,21 @@ services:
     ports:
       - "8090:8090"
     environment:
+      # 三个模型均运行在宿主机 llama.cpp（Metal GPU 加速），通过 host.docker.internal 访问：
+      #   8091 = Qwen2.5 生成 LLM    （~/edu-ai/start-llm-server.sh）
+      #   8092 = BGE-large-zh embedding（scripts/start-embedding-server.sh）
+      #   8093 = BGE-reranker rerank   （scripts/start-reranker-server.sh）
       - LLM_BASE_URL=http://host.docker.internal:8091/v1
       - MILVUS_HOST=milvus-standalone
       - MILVUS_PORT=19530
       - LLM_TEMPERATURE=0.3
       - LLM_MAX_TOKENS=2048
+      - EMBEDDING_BASE_URL=http://host.docker.internal:8092/v1
+      - EMBEDDING_MODEL=bge-large-zh-v1.5
+      - EMBEDDING_DIM=1024
+      - RERANKER_BASE_URL=http://host.docker.internal:8093
+      - RERANKER_MODEL=bge-reranker-base
+      - RERANKER_ENABLED=true
     networks:
       - edu-network
     depends_on:

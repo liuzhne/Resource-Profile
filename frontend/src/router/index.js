@@ -134,6 +134,26 @@ const routes = [
         ]
       },
       {
+        path: '/agent',
+        name: 'Agent',
+        redirect: '/agent/warning',
+        meta: { title: 'AI 预警', icon: 'Bell', roles: ['admin', 'teacher'] },
+        children: [
+          {
+            path: '/agent/warning',
+            name: 'AgentWarning',
+            component: () => import('@/views/agent/Warning.vue'),
+            meta: { title: '预警中心', roles: ['admin', 'teacher'] }
+          },
+          {
+            path: '/agent/report/:id',
+            name: 'AgentReport',
+            component: () => import('@/views/agent/ReportDetail.vue'),
+            meta: { title: '干预报告', hidden: true, roles: ['admin', 'teacher'] }
+          }
+        ]
+      },
+      {
         path: '/profile',
         name: 'Profile',
         component: () => import('@/views/profile/index.vue'),

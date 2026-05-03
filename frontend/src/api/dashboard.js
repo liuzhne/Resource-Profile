@@ -4,8 +4,8 @@ export const getStatistics = () => {
   return request.get('/data/dashboard/statistics')
 }
 
-export const getTrendData = () => {
-  return request.get('/data/dashboard/trend')
+export const getTrendData = (period = 'week') => {
+  return request.get('/data/dashboard/trend', { params: { period } })
 }
 
 export const getDistributionData = () => {

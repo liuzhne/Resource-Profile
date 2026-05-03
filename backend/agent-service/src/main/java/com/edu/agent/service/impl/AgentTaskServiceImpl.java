@@ -1,8 +1,12 @@
 package com.edu.agent.service.impl;
 
 import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.edu.agent.entity.AgentTask;
 import com.edu.agent.enums.RiskLevel;
@@ -23,6 +27,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
@@ -43,6 +50,26 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
 
     private static final String LOCK_PREFIX = "agent:task:lock:";
     private static final long LOCK_EXPIRE_SECONDS = 120;
+
+    // ==================== 0. 查询接口 ====================
+
+    @Override
+    public AgentTask getTaskDetail(Long taskId) {
+        return agentTaskMapper.selectById(taskId);
+    }
+
+    @Override
+    public IPage<AgentTask> listTasks(long page, long size, String status, String riskLevel) {
+        LambdaQueryWrapper<AgentTask> qw = new LambdaQueryWrapper<>();
+        if (status != null && !status.isBlank()) {
+            qw.eq(AgentTask::getStatus, TaskStatus.valueOf(status));
+        }
+        if (riskLevel != null && !riskLevel.isBlank()) {
+            qw.eq(AgentTask::getRiskLevel, RiskLevel.valueOf(riskLevel));
+        }
+        qw.orderByDesc(AgentTask::getCreatedAt);
+        return agentTaskMapper.selectPage(new Page<>(page, size), qw);
+    }
 
     // ==================== 1. 任务创建 ====================
 
@@ -126,28 +153,40 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
             }
         }
 
-        // ========== 阶段 2: RAG 检索（P3-1 接入，当前 Mock）==========
+        // ========== 阶段 2: RAG 检索 ==========
         if (task.getStatus() == TaskStatus.RISK_ANALYZING) {
             transition(taskId, TaskStatus.RISK_ANALYZING, TaskStatus.KNOWLEDGE_RETRIEVING);
+            task.setStatus(TaskStatus.KNOWLEDGE_RETRIEVING); // 同步内存，防止后续 updateById 回写
+
             String knowledge = executeKnowledgeRetrieve(task);
             task.setRetrievedKnowledge(knowledge);
-            agentTaskMapper.updateById(task);
+            agentTaskMapper.update(null, new LambdaUpdateWrapper<AgentTask>()
+                    .eq(AgentTask::getId, taskId)
+                    .set(AgentTask::getRetrievedKnowledge, knowledge));
         }
 
-        // ========== 阶段 3: 方案生成（P3-2 接入，当前 Mock）==========
+        // ========== 阶段 3: 方案生成 ==========
         if (task.getStatus() == TaskStatus.KNOWLEDGE_RETRIEVING) {
             transition(taskId, TaskStatus.KNOWLEDGE_RETRIEVING, TaskStatus.PLAN_GENERATING);
+            task.setStatus(TaskStatus.PLAN_GENERATING);
+
             String plan = executePlanGenerate(task);
             task.setInterventionPlan(plan);
-            agentTaskMapper.updateById(task);
+            agentTaskMapper.update(null, new LambdaUpdateWrapper<AgentTask>()
+                    .eq(AgentTask::getId, taskId)
+                    .set(AgentTask::getInterventionPlan, plan));
         }
 
-        // ========== 阶段 4: 合规审核（P3-3 接入，当前 Mock）==========
+        // ========== 阶段 4: 合规审核 ==========
         if (task.getStatus() == TaskStatus.PLAN_GENERATING) {
             transition(taskId, TaskStatus.PLAN_GENERATING, TaskStatus.COMPLIANCE_CHECKING);
+            task.setStatus(TaskStatus.COMPLIANCE_CHECKING);
+
             String audit = executeComplianceAudit(task);
             task.setComplianceAudit(audit);
-            agentTaskMapper.updateById(task);
+            agentTaskMapper.update(null, new LambdaUpdateWrapper<AgentTask>()
+                    .eq(AgentTask::getId, taskId)
+                    .set(AgentTask::getComplianceAudit, audit));
 
             boolean passed = parseAuditPassed(audit);
             if (!passed) {
@@ -183,18 +222,92 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
     }
 
     /**
-     * 阶段 2-4：Mock（P3 接入）
+     * 阶段 2：RAG 检索
+     * 用风险类型 + 根因分析作为多路查询，调用 ai-inference-service 的 Milvus 召回。
      */
     private String executeKnowledgeRetrieve(AgentTask task) {
-        return "[{\"source_db\":\"case_db\",\"case_id\":\"C2024001\",\"relevance_score\":0.95}]";
+        try {
+            JSONObject risk = JSON.parseObject(task.getRiskAnalysisResult());
+            String riskType = risk == null ? null : risk.getString("primary_risk_type");
+            String rootCause = risk == null ? null : risk.getString("root_cause_analysis");
+
+            Map<String, Object> req = new HashMap<>();
+            req.put("risk_type", riskType != null ? riskType : "综合风险");
+            req.put("queries", List.of(
+                    riskType != null ? riskType : "学生学业风险",
+                    rootCause != null ? rootCause : "高校学生干预方法"
+            ));
+            req.put("top_k", 5);
+
+            String response = aiInferenceClient.retrieveKnowledge(req);
+            log.info("任务 {} RAG 检索完成，长度: {}", task.getId(), response == null ? 0 : response.length());
+            return response != null ? response : fallbackKnowledge();
+        } catch (Exception e) {
+            log.error("任务 {} RAG 检索异常", task.getId(), e);
+            return fallbackKnowledge();
+        }
     }
 
+    /**
+     * 阶段 3：方案生成
+     * 入参 = 脱敏画像 + 风险分析 + 召回知识 chunks
+     */
     private String executePlanGenerate(AgentTask task) {
-        return "{\"report_title\":\"干预方案\",\"immediate_actions\":[]}";
+        try {
+            String maskedProfile = portraitAggregator.buildMaskedProfile(task.getStudentId());
+
+            Map<String, Object> req = new HashMap<>();
+            req.put("student_profile", JSON.parseObject(maskedProfile));
+            req.put("risk_analysis", JSON.parseObject(task.getRiskAnalysisResult()));
+
+            JSONObject knowledge = JSON.parseObject(task.getRetrievedKnowledge());
+            JSONArray chunks = knowledge != null ? knowledge.getJSONArray("chunks") : null;
+            req.put("knowledge_chunks", chunks != null ? chunks : Collections.emptyList());
+
+            String response = aiInferenceClient.generatePlan(req);
+            log.info("任务 {} 方案生成完成", task.getId());
+            return response != null ? response : fallbackPlan();
+        } catch (Exception e) {
+            log.error("任务 {} 方案生成异常", task.getId(), e);
+            return fallbackPlan();
+        }
     }
 
+    /**
+     * 阶段 4：合规审核
+     * 失败时强制 audit_passed=false → 任务转 REJECTED 进入人工兜底。
+     */
     private String executeComplianceAudit(AgentTask task) {
-        return "{\"audit_passed\":true,\"audit_items\":[]}";
+        try {
+            String maskedProfile = portraitAggregator.buildMaskedProfile(task.getStudentId());
+
+            Map<String, Object> req = new HashMap<>();
+            req.put("student_profile", JSON.parseObject(maskedProfile));
+            req.put("intervention_plan", JSON.parseObject(task.getInterventionPlan()));
+
+            String response = aiInferenceClient.complianceAudit(req);
+            log.info("任务 {} 合规审核完成", task.getId());
+            return response != null ? response : fallbackAudit();
+        } catch (Exception e) {
+            log.error("任务 {} 合规审核异常", task.getId(), e);
+            return fallbackAudit();
+        }
+    }
+
+    private String fallbackKnowledge() {
+        return "{\"chunks\":[],\"fallback\":true}";
+    }
+
+    private String fallbackPlan() {
+        return "{\"report_title\":\"方案生成失败，转人工制定\",\"summary\":\"AI服务异常\","
+                + "\"immediate_actions\":[],\"long_term_plan\":[],\"talk_outline\":\"请由辅导员主导\","
+                + "\"resources\":[],\"references\":[]}";
+    }
+
+    private String fallbackAudit() {
+        return "{\"audit_passed\":false,\"manual_review_required\":true,"
+                + "\"audit_items\":[{\"dimension\":\"system\",\"passed\":false,\"issue\":\"审核服务异常\"}],"
+                + "\"redacted_suggestions\":[\"请人工审核此方案\"]}";
     }
 
     // ==================== 5. 状态机工具方法 ====================

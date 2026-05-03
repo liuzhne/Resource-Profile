@@ -56,6 +56,12 @@
             <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
         </dependency>
 
+        <!-- MyBatis Plus 分页/SQL 解析（MP 3.5.9+ 必需） -->
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-jsqlparser</artifactId>
+        </dependency>
+
         <!-- MySQL -->
         <dependency>
             <groupId>mysql</groupId>
@@ -65,6 +71,12 @@
         <dependency>
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-openfeign</artifactId>
+        </dependency>
+
+        <!-- 用 OkHttp 替换默认 HttpURLConnection，避免容器重启后 keep-alive 死连接 -->
+        <dependency>
+            <groupId>io.github.openfeign</groupId>
+            <artifactId>feign-okhttp</artifactId>
         </dependency>
 
         <!-- Redis -->
