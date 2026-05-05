@@ -1,7 +1,7 @@
 // 全局样式入口
-@import './variables.scss';
-@import './layout.scss';
-@import './element-plus.scss';
+@use './variables';
+@use './layout';
+@use './element-plus';
 
 * {
   margin: 0;

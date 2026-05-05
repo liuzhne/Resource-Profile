@@ -1,59 +1,41 @@
 import request from '@/utils/request'
 
-export const getMentalOverview = () => {
-  return request.get('/mental/overview')
-}
+/* ========== 概览 / 报告 ========== */
+export const getMentalOverview = () => request.get('/mental/overview')
+export const getMentalAnalysis = () => request.get('/mental/analysis')
 
-export const getQuestionnaireList = (params) => {
-  return request.get('/mental/questionnaires', { params })
-}
+/* ========== 问卷元数据（教师/管理员） ========== */
+export const getQuestionnaireList = (params) => request.get('/mental/questionnaires', { params })
+export const getQuestionnaireDetail = (id) => request.get(`/mental/questionnaires/${id}`)
+export const createQuestionnaire = (data) => request.post('/mental/questionnaires', data)
+export const updateQuestionnaire = (id, data) => request.put(`/mental/questionnaires/${id}`, data)
+export const deleteQuestionnaire = (id) => request.delete(`/mental/questionnaires/${id}`)
 
-export const getQuestionnaireDetail = (id) => {
-  return request.get(`/mental/questionnaires/${id}`)
-}
+/* ========== 问卷完整内容（题目 + 等级规则） ========== */
+export const getQuestionnaireFull = (id) => request.get(`/mental/questionnaires/${id}/full`)
 
-export const createQuestionnaire = (data) => {
-  return request.post('/mental/questionnaires', data)
-}
+/* ========== 题目 CRUD（教师/管理员） ========== */
+export const listQuestions = (questionnaireId) =>
+  request.get(`/mental/questionnaires/${questionnaireId}/questions`)
+export const addQuestion = (questionnaireId, data) =>
+  request.post(`/mental/questionnaires/${questionnaireId}/questions`, data)
+export const updateQuestion = (questionId, data) =>
+  request.put(`/mental/questions/${questionId}`, data)
+export const deleteQuestion = (questionId) =>
+  request.delete(`/mental/questions/${questionId}`)
 
-export const updateQuestionnaire = (id, data) => {
-  return request.put(`/mental/questionnaires/${id}`, data)
-}
+/* ========== 完成情况（教师/管理员） ========== */
+export const getCompletionList = (questionnaireId) =>
+  request.get(`/mental/questionnaires/${questionnaireId}/completion`)
 
-export const deleteQuestionnaire = (id) => {
-  return request.delete(`/mental/questionnaires/${id}`)
-}
-
-export const uploadQuestionnaireQuestions = (id, formData) => {
-  return request.post(`/mental/questionnaires/${id}/upload`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
-  })
-}
-
-export const downloadQuestionnaireTemplate = () => {
-  return request.get('/mental/questionnaires/template', {
-    responseType: 'blob'
-  })
-}
-
-export const getQuestionnaireQuestions = (id) => {
-  return request.get(`/mental/questionnaires/${id}/questions`)
-}
-
-export const getAvailableQuestionnaires = () => {
-  return request.get('/mental/questionnaires/available')
-}
-
-export const submitQuestionnaireResponse = (data) => {
-  return request.post('/mental/responses', data)
-}
-
-export const checkQuestionnaireResponse = (studentId, questionnaireId) => {
-  return request.get('/mental/responses/check', {
-    params: { studentId, questionnaireId }
-  })
-}
-
-export const getMentalAnalysis = () => {
-  return request.get('/mental/analysis')
-}
+/* ========== 学生侧 ========== */
+export const studentListQuestionnaires = (userId) =>
+  request.get('/mental/student/questionnaires', { params: { userId } })
+export const studentGetQuestionnaireForTaking = (id) =>
+  request.get(`/mental/student/questionnaires/${id}`)
+export const studentSubmitAnswers = (data) =>
+  request.post('/mental/student/assessments', data)
+export const studentMyHistory = (userId) =>
+  request.get('/mental/student/assessments', { params: { userId } })
+export const studentGetMyAssessment = (userId, assessmentId) =>
+  request.get(`/mental/student/assessments/${assessmentId}`, { params: { userId } })

@@ -99,7 +99,7 @@ const fetchList = async () => {
     })
     const pageData = res.data
     teacherList.value = pageData.records || []
-    total.value = pageData.total || 0
+    total.value = Number(pageData.total) || 0
   } catch (error) {
     ElMessage.error('获取教师列表失败')
   } finally {

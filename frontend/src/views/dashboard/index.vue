@@ -165,7 +165,7 @@ const loadStatistics = async () => {
 // 加载趋势数据
 const loadTrendData = async () => {
   try {
-    const res = await getTrendData()
+    const res = await getTrendData(trendPeriod.value)
     if (res.data) {
       trendData.value = {
         days: res.data.days || [],
@@ -336,7 +336,6 @@ onUnmounted(() => {
 })
 
 watch(trendPeriod, () => {
-  // 根据选择的周期更新数据，后端当前仅提供一套数据，可后续扩展
   loadTrendData()
 })
 </script>

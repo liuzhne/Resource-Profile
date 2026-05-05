@@ -67,37 +67,89 @@ const routes = [
         path: '/mental',
         name: 'Mental',
         redirect: '/mental/overview',
-        meta: { title: '心理健康', icon: 'FirstAidKit' },
+        meta: { title: '心理健康', icon: 'FirstAidKit', roles: ['admin', 'teacher'] },
         children: [
           {
             path: '/mental/overview',
             name: 'MentalOverview',
             component: () => import('@/views/mental/overview.vue'),
-            meta: { title: '心理概览' }
+            meta: { title: '心理概览', roles: ['admin', 'teacher'] }
           },
           {
             path: '/mental/questionnaire',
             name: 'MentalQuestionnaire',
             component: () => import('@/views/mental/questionnaire.vue'),
-            meta: { title: '问卷管理' }
+            meta: { title: '问卷管理', roles: ['admin', 'teacher'] }
+          },
+          {
+            path: '/mental/questionnaire/design/:id',
+            name: 'MentalQuestionnaireDesign',
+            component: () => import('@/views/mental/questionnaire-design.vue'),
+            meta: { title: '题目设计', hidden: true, roles: ['admin', 'teacher'] }
+          },
+          {
+            path: '/mental/questionnaire/result/:id',
+            name: 'MentalQuestionnaireResult',
+            component: () => import('@/views/mental/questionnaire-result.vue'),
+            meta: { title: '完成情况', hidden: true, roles: ['admin', 'teacher'] }
           },
           {
             path: '/mental/analysis',
             name: 'MentalAnalysis',
             component: () => import('@/views/mental/analysis.vue'),
-            meta: { title: '分析报告' }
+            meta: { title: '分析报告', roles: ['admin', 'teacher'] }
+          }
+        ]
+      },
+      {
+        path: '/student-mental',
+        name: 'StudentMental',
+        redirect: '/student-mental/list',
+        meta: { title: '我的问卷', icon: 'EditPen', roles: ['student'] },
+        children: [
+          {
+            path: '/student-mental/list',
+            name: 'StudentMentalList',
+            component: () => import('@/views/student-mental/list.vue'),
+            meta: { title: '问卷列表', roles: ['student'] }
           },
           {
-            path: '/mental/student',
-            name: 'MentalStudent',
-            component: () => import('@/views/mental/student-list.vue'),
-            meta: { title: '填写问卷' }
+            path: '/student-mental/take/:id',
+            name: 'StudentMentalTake',
+            component: () => import('@/views/student-mental/take.vue'),
+            meta: { title: '填写问卷', hidden: true, roles: ['student'] }
           },
           {
-            path: '/mental/fill/:id',
-            name: 'MentalFill',
-            component: () => import('@/views/mental/fill.vue'),
-            meta: { title: '问卷填写', hidden: true }
+            path: '/student-mental/result/:assessmentId',
+            name: 'StudentMentalResult',
+            component: () => import('@/views/student-mental/result.vue'),
+            meta: { title: '评估结果', hidden: true, roles: ['student'] }
+          },
+          {
+            path: '/student-mental/history',
+            name: 'StudentMentalHistory',
+            component: () => import('@/views/student-mental/history.vue'),
+            meta: { title: '历史评估', hidden: true, roles: ['student'] }
+          }
+        ]
+      },
+      {
+        path: '/agent',
+        name: 'Agent',
+        redirect: '/agent/warning',
+        meta: { title: 'AI 预警', icon: 'Bell', roles: ['admin', 'teacher'] },
+        children: [
+          {
+            path: '/agent/warning',
+            name: 'AgentWarning',
+            component: () => import('@/views/agent/Warning.vue'),
+            meta: { title: '预警中心', roles: ['admin', 'teacher'] }
+          },
+          {
+            path: '/agent/report/:id',
+            name: 'AgentReport',
+            component: () => import('@/views/agent/ReportDetail.vue'),
+            meta: { title: '干预报告', hidden: true, roles: ['admin', 'teacher'] }
           }
         ]
       },

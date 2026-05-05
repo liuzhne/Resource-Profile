@@ -4,10 +4,7 @@
       <template #header>
         <div class="card-header">
           <span>问卷管理</span>
-          <div>
-            <el-button @click="handleDownloadTemplate"><Download /> 下载模板</el-button>
-            <el-button type="primary" @click="handleAdd"><Plus /> 新建问卷</el-button>
-          </div>
+          <el-button type="primary" @click="handleAdd"><Plus /> 新建问卷</el-button>
         </div>
       </template>
 
@@ -27,10 +24,10 @@
         </el-table-column>
         <el-table-column prop="startTime" label="开始时间" width="120" />
         <el-table-column prop="endTime" label="结束时间" width="120" />
-        <el-table-column label="操作" width="260" fixed="right">
+        <el-table-column label="操作" width="320" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" @click="handleView(row)">查看</el-button>
-            <el-button link type="success" @click="handleUpload(row)"><Upload /> 上传题目</el-button>
+            <el-button link type="primary" @click="handleDesign(row)">设计题目</el-button>
+            <el-button link type="primary" @click="handleResult(row)">完成情况</el-button>
             <el-button link type="primary" @click="handleEdit(row)">编辑</el-button>
             <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
           </template>
@@ -88,41 +85,8 @@
       </template>
     </el-dialog>
 
-    <!-- 上传题目对话框 -->
-    <el-dialog v-model="uploadDialogVisible" :title="`上传题目 - ${uploadTarget?.title || ''}`" width="500px">
-      <el-alert
-        type="info"
-        :closable="false"
-        style="margin-bottom: 16px;"
-      >
-        <template #title>
-          请先<el-link type="primary" @click="handleDownloadTemplate" style="font-size: inherit;">下载模板</el-link>，
-          按格式填写题目后上传。上传将覆盖该问卷已有题目。
-        </template>
-      </el-alert>
-      <el-upload
-        ref="uploadRef"
-        :auto-upload="false"
-        :limit="1"
-        accept=".xlsx,.xls"
-        :on-change="handleFileChange"
-        :on-exceed="handleExceed"
-        drag
-      >
-        <el-icon :size="40"><UploadFilled /></el-icon>
-        <div>将Excel文件拖到此处，或<em>点击上传</em></div>
-        <template #tip>
-          <div class="el-upload__tip">仅支持 .xlsx / .xls 格式的问卷模板文件</div>
-        </template>
-      </el-upload>
-      <template #footer>
-        <el-button @click="uploadDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleUploadSubmit" :loading="uploading">确认上传</el-button>
-      </template>
-    </el-dialog>
-
     <!-- 查看对话框 -->
-    <el-dialog v-model="viewDialogVisible" title="问卷详情" width="600px">
+    <el-dialog v-model="viewDialogVisible" title="问卷详情" width="500px">
       <el-descriptions :column="1" border v-if="viewData">
         <el-descriptions-item label="问卷标题">{{ viewData.title }}</el-descriptions-item>
         <el-descriptions-item label="问卷类型">{{ viewData.type }}</el-descriptions-item>
@@ -132,42 +96,19 @@
         <el-descriptions-item label="结束时间">{{ viewData.endTime }}</el-descriptions-item>
         <el-descriptions-item label="状态">{{ statusLabel(viewData.status) }}</el-descriptions-item>
       </el-descriptions>
-
-      <div v-if="viewQuestions.length > 0" style="margin-top: 20px;">
-        <h4 style="margin-bottom: 12px;">题目列表</h4>
-        <div v-for="q in viewQuestions" :key="q.id" class="question-preview">
-          <div class="question-title">{{ q.sortOrder }}. {{ q.content }}</div>
-          <el-tag size="small" type="info" style="margin-right: 8px;">{{ questionTypeLabel(q.questionType) }}</el-tag>
-          <el-tag v-if="q.required === 1" size="small" type="danger">必答</el-tag>
-          <div v-if="q.options" class="question-options">
-            <div v-for="opt in parseOptions(q.options)" :key="opt.value" class="option-item">
-              {{ opt.label }}
-            </div>
-          </div>
-          <div v-if="q.questionType === 'scale'" class="scale-info">
-            <el-tag size="small">{{ q.scaleMin }} ~ {{ q.scaleMax }}</el-tag>
-          </div>
-        </div>
-      </div>
-      <el-empty v-else-if="!viewQuestionsLoading" description="暂无题目，请上传题目文件" />
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { UploadFilled } from '@element-plus/icons-vue'
-import {
-  getQuestionnaireList,
-  getQuestionnaireDetail,
-  createQuestionnaire,
-  updateQuestionnaire,
-  deleteQuestionnaire,
-  uploadQuestionnaireQuestions,
-  downloadQuestionnaireTemplate,
-  getQuestionnaireQuestions
-} from '@/api/mental'
+import { getQuestionnaireList, getQuestionnaireDetail, createQuestionnaire, updateQuestionnaire, deleteQuestionnaire } from '@/api/mental'
+
+const router = useRouter()
+const handleDesign = (row: any) => router.push(`/mental/questionnaire/design/${row.id}`)
+const handleResult = (row: any) => router.push(`/mental/questionnaire/result/${row.id}`)
 
 const loading = ref(false)
 const questionnaires = ref<any[]>([])
@@ -190,13 +131,6 @@ const formData = reactive({
 
 const viewDialogVisible = ref(false)
 const viewData = ref<any>(null)
-const viewQuestions = ref<any[]>([])
-const viewQuestionsLoading = ref(false)
-
-const uploadDialogVisible = ref(false)
-const uploading = ref(false)
-const uploadFile = ref<File | null>(null)
-const uploadTarget = ref<any>(null)
 
 const statusLabel = (status: number) => {
   const map: Record<number, string> = { 0: '未开始', 1: '进行中', 2: '已结束' }
@@ -208,31 +142,13 @@ const statusTagType = (status: number) => {
   return map[status] ?? ''
 }
 
-const questionTypeLabel = (type: string) => {
-  const map: Record<string, string> = {
-    single_choice: '单选',
-    multiple_choice: '多选',
-    text: '文本',
-    scale: '量表'
-  }
-  return map[type] ?? type
-}
-
-const parseOptions = (jsonStr: string) => {
-  try {
-    return jsonStr ? JSON.parse(jsonStr) : []
-  } catch {
-    return []
-  }
-}
-
 const fetchData = async () => {
   loading.value = true
   try {
     const res = await getQuestionnaireList({ page: currentPage.value, size: pageSize.value })
     const data = res.data
     questionnaires.value = data.records || []
-    total.value = data.total || 0
+    total.value = Number(data.total) || 0
   } catch (e) {
     console.error('获取问卷列表失败', e)
   } finally {
@@ -285,16 +201,9 @@ const handleView = async (row: any) => {
   try {
     const res = await getQuestionnaireDetail(row.id)
     viewData.value = res.data
-    viewQuestions.value = []
-    viewQuestionsLoading.value = true
     viewDialogVisible.value = true
-
-    const qRes = await getQuestionnaireQuestions(row.id)
-    viewQuestions.value = qRes.data || []
   } catch (e) {
     console.error('获取问卷详情失败', e)
-  } finally {
-    viewQuestionsLoading.value = false
   }
 }
 
@@ -326,64 +235,6 @@ const handleSubmit = async () => {
   }
 }
 
-// 上传题目相关
-const handleUpload = (row: any) => {
-  uploadTarget.value = row
-  uploadFile.value = null
-  uploadDialogVisible.value = true
-}
-
-const handleFileChange = (file: any) => {
-  uploadFile.value = file.raw
-}
-
-const handleExceed = () => {
-  ElMessage.warning('只能上传一个文件')
-}
-
-const handleUploadSubmit = async () => {
-  if (!uploadFile.value) {
-    ElMessage.warning('请先选择文件')
-    return
-  }
-  if (!uploadTarget.value) {
-    ElMessage.warning('未关联问卷')
-    return
-  }
-  uploading.value = true
-  try {
-    const fd = new FormData()
-    fd.append('file', uploadFile.value)
-    await uploadQuestionnaireQuestions(uploadTarget.value.id, fd)
-    ElMessage.success('题目上传成功')
-    uploadDialogVisible.value = false
-    fetchData()
-  } catch (e) {
-    console.error('上传题目失败', e)
-  } finally {
-    uploading.value = false
-  }
-}
-
-// 下载模板
-const handleDownloadTemplate = async () => {
-  try {
-    const res = await downloadQuestionnaireTemplate()
-    const blob = new Blob([res.data], {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    })
-    const url = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = 'questionnaire_template.xlsx'
-    link.click()
-    window.URL.revokeObjectURL(url)
-  } catch (e) {
-    console.error('下载模板失败', e)
-    ElMessage.error('下载模板失败')
-  }
-}
-
 onMounted(() => {
   fetchData()
 })
@@ -394,32 +245,5 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-}
-
-.question-preview {
-  padding: 10px;
-  margin-bottom: 8px;
-  background: #f5f7fa;
-  border-radius: 4px;
-
-  .question-title {
-    font-weight: 500;
-    margin-bottom: 6px;
-  }
-
-  .question-options {
-    margin-top: 6px;
-    padding-left: 16px;
-
-    .option-item {
-      color: #606266;
-      font-size: 13px;
-      line-height: 1.8;
-    }
-  }
-
-  .scale-info {
-    margin-top: 6px;
-  }
 }
 </style>

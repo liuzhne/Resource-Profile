@@ -25,18 +25,6 @@ public class Question {
 
     private String options;
 
-    @TableField("scoring_rules")
-    private String scoringRules;
-
-    @TableField("scale_min")
-    private Integer scaleMin;
-
-    @TableField("scale_max")
-    private Integer scaleMax;
-
-    @TableField("scale_labels")
-    private String scaleLabels;
-
     private Integer required;
 
     @TableLogic

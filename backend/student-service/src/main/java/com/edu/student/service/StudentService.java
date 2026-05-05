@@ -3,6 +3,8 @@ package com.edu.student.service;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.edu.student.entity.Student;
 
+import java.util.List;
+
 public interface StudentService {
 
     Page<Student> list(Integer page, Integer size, String name, String dept, String grade);
@@ -14,4 +16,7 @@ public interface StudentService {
     void update(Student student);
 
     void delete(Long id);
+
+    /** 在学的所有学生 id（status=1 表示在读，按 status 字段语义；扫描调度用） */
+    List<Long> listActiveIds();
 }

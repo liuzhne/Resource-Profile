@@ -38,6 +38,26 @@
         ORDER BY day
     </select>
 
+    <select id="selectTeacherTrendByMonth" resultType="java.util.HashMap">
+        SELECT
+            DATE_FORMAT(create_time, '%Y-%m') as ym,
+            COUNT(*) as count
+        FROM teacher_info
+        WHERE deleted = 0 AND DATE(create_time) &gt;= #{startDate}
+        GROUP BY DATE_FORMAT(create_time, '%Y-%m')
+        ORDER BY ym
+    </select>
+
+    <select id="selectStudentTrendByMonth" resultType="java.util.HashMap">
+        SELECT
+            DATE_FORMAT(create_time, '%Y-%m') as ym,
+            COUNT(*) as count
+        FROM student_info
+        WHERE deleted = 0 AND DATE(create_time) &gt;= #{startDate}
+        GROUP BY DATE_FORMAT(create_time, '%Y-%m')
+        ORDER BY ym
+    </select>
+
     <select id="selectUserDistribution" resultType="java.util.HashMap">
         SELECT
             CASE user_type

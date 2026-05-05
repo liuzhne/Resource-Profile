@@ -1,14 +1,19 @@
 package com.edu.mental.service;
 
+import com.edu.mental.dto.QuestionnaireFullDto;
 import com.edu.mental.entity.Question;
 
 import java.util.List;
 
 public interface QuestionService {
 
-    List<Question> listByQuestionnaireId(Long questionnaireId);
+    List<Question> listByQuestionnaire(Long questionnaireId);
 
-    void saveBatch(Long questionnaireId, List<Question> questions);
+    QuestionnaireFullDto getFull(Long questionnaireId);
 
-    void deleteByQuestionnaireId(Long questionnaireId);
+    Question save(Question question);
+
+    void update(Question question);
+
+    void delete(Long questionId);
 }

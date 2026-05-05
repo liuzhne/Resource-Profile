@@ -7,7 +7,10 @@ public interface DashboardService {
 
     Map<String, Object> getStatistics();
 
-    Map<String, Object> getTrend();
+    /**
+     * @param period week=最近 7 天按天 / month=最近 30 天按天 / year=最近 12 月按月
+     */
+    Map<String, Object> getTrend(String period);
 
     Map<String, Object> getDistribution();
 

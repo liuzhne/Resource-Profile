@@ -8,7 +8,7 @@ import java.util.Map;
 
 @FeignClient(
         name = "ai-inference-service",
-        url = "${ai.inference.url:http://host.docker.internal:8090}"
+        url = "${ai.inference.url:http://localhost:8090}"
 )
 public interface AiInferenceClient {
 
