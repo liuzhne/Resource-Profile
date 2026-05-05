@@ -8,7 +8,11 @@ RAG 检索路由：/api/v1/rag/retrieve
   4. 否则按 milvus 分数降序截断 top_k
 
 Milvus 集合未初始化时返回示例数据，保障端到端链路不断。
+
+D 阶段新增：相同请求的 1 小时 Redis 缓存。命中时日志输出 X-Cache: HIT 便于排查。
 """
+import hashlib
+import json
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -19,9 +23,22 @@ from app.core.config import settings
 from app.services.embedding_client import get_embedding_client
 from app.services.milvus_client import search as milvus_search
 from app.services.reranker_client import get_reranker_client
+from app.services.redis_client import cache_get, cache_setex
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/rag", tags=["rag"])
+
+
+def _rag_cache_key(top_k: int, sources: List[str], queries: List[str], risk_type: Optional[str]) -> str:
+    h = hashlib.sha256()
+    h.update(str(top_k).encode())
+    h.update(b"|")
+    h.update(",".join(sorted(sources)).encode())
+    h.update(b"|")
+    h.update("\x1f".join(q.strip().lower() for q in queries).encode("utf-8"))
+    h.update(b"|")
+    h.update((risk_type or "").encode("utf-8"))
+    return "edu:rag:" + h.hexdigest()[:32]
 
 
 class RetrieveRequest(BaseModel):
@@ -79,6 +96,16 @@ async def retrieve_knowledge(req: RetrieveRequest) -> RetrieveResponse:
     top_k = req.top_k or settings.RAG_TOP_K
     sources = req.sources or list(settings.MILVUS_COLLECTIONS.keys())
     recall_per_route = top_k * settings.RAG_RECALL_EXPAND
+
+    cache_key = _rag_cache_key(top_k, sources, req.queries, req.risk_type)
+    cached = await cache_get(cache_key)
+    if cached:
+        try:
+            payload = json.loads(cached)
+            logger.info("X-Cache: HIT key=%s queries=%s", cache_key, req.queries[:1])
+            return RetrieveResponse(**payload)
+        except Exception as exc:
+            logger.warning("RAG 缓存反序列化失败 key=%s: %s", cache_key, exc)
 
     embed_client = get_embedding_client()
     all_hits: List[Dict[str, Any]] = []
@@ -150,4 +177,7 @@ async def retrieve_knowledge(req: RetrieveRequest) -> RetrieveResponse:
         )
         for h in final
     ]
-    return RetrieveResponse(chunks=chunks, fallback=False, reranked=reranked)
+    response = RetrieveResponse(chunks=chunks, fallback=False, reranked=reranked)
+    await cache_setex(cache_key, settings.RAG_CACHE_TTL, response.model_dump_json())
+    logger.info("X-Cache: MISS key=%s 写回缓存 ttl=%ss", cache_key, settings.RAG_CACHE_TTL)
+    return response

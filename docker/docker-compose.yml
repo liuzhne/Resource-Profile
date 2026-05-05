@@ -24,10 +24,14 @@ services:
       - RERANKER_BASE_URL=http://host.docker.internal:8093
       - RERANKER_MODEL=bge-reranker-base
       - RERANKER_ENABLED=true
+      # D 阶段：与 Java 服务共用同一 Redis（embedding/RAG 缓存）
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     networks:
       - edu-network
     depends_on:
       - milvus-standalone
+      - redis
     restart: unless-stopped
 
   # 在现有 docker-compose.yml 末尾追加

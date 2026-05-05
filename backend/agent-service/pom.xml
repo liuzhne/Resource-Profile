@@ -85,6 +85,12 @@
             <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
 
+        <!-- Sentinel 流控（D 阶段：保护 /trigger 端点不被刷爆 GPU 推理） -->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-sentinel</artifactId>
+        </dependency>
+
         <!-- 复用 common 模块 -->
         <dependency>
             <groupId>com.edu</groupId>

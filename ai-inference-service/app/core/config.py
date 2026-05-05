@@ -40,6 +40,14 @@ class Settings:
     RAG_TOP_K: int = int(os.getenv("RAG_TOP_K", "5"))
     RAG_RECALL_EXPAND: int = int(os.getenv("RAG_RECALL_EXPAND", "3"))  # 候选 = top_k * expand
 
+    # Redis 缓存（与 Java 服务共用同一实例；连接失败时调用方走无缓存路径）
+    REDIS_HOST: str = os.getenv("REDIS_HOST", "localhost")
+    REDIS_PORT: int = int(os.getenv("REDIS_PORT", "6379"))
+    REDIS_PASSWORD: str = os.getenv("REDIS_PASSWORD", "")
+    REDIS_DB: int = int(os.getenv("REDIS_DB", "0"))
+    EMBEDDING_CACHE_TTL: int = int(os.getenv("EMBEDDING_CACHE_TTL", "86400"))  # 24h
+    RAG_CACHE_TTL: int = int(os.getenv("RAG_CACHE_TTL", "3600"))  # 1h
+
 
 @lru_cache()
 def get_settings() -> Settings:

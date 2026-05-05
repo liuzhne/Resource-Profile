@@ -19,6 +19,7 @@ import com.edu.agent.service.StudentPortraitAggregator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.scheduling.annotation.Async;
@@ -48,8 +49,20 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
     @Qualifier("agentExecutor")
     private final Executor agentExecutor;
 
+    @Value("${educare.idempotency.trigger-window-seconds:30}")
+    private long triggerIdempotencyWindowSeconds;
+
     private static final String LOCK_PREFIX = "agent:task:lock:";
+    private static final String TRIGGER_IDEM_PREFIX = "edu:agent:trigger:";
     private static final long LOCK_EXPIRE_SECONDS = 120;
+
+    private static final List<TaskStatus> ACTIVE_STATUSES = List.of(
+            TaskStatus.PENDING,
+            TaskStatus.RISK_ANALYZING,
+            TaskStatus.KNOWLEDGE_RETRIEVING,
+            TaskStatus.PLAN_GENERATING,
+            TaskStatus.COMPLIANCE_CHECKING
+    );
 
     // ==================== 0. 查询接口 ====================
 
@@ -73,6 +86,32 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
 
     // ==================== 1. 任务创建 ====================
 
+    /**
+     * D 阶段：幂等触发。
+     * 1) Redis SETNX 占位（窗口 = educare.idempotency.trigger-window-seconds，默认 30s）
+     * 2) 命中则查询该 studentId 最近的活跃任务并返回，不创建新任务也不再触发执行
+     * 3) 未命中则正常 createTask + asyncExecute，返回新 taskId
+     */
+    @Override
+    public Long triggerTask(Long studentId) {
+        String idemKey = TRIGGER_IDEM_PREFIX + studentId;
+        Boolean acquired = redisTemplate.opsForValue()
+                .setIfAbsent(idemKey, "1", triggerIdempotencyWindowSeconds, TimeUnit.SECONDS);
+
+        if (!Boolean.TRUE.equals(acquired)) {
+            AgentTask existing = findLatestActiveByStudent(studentId);
+            if (existing != null) {
+                log.info("幂等命中：studentId={} 已有活跃任务 taskId={}，复用", studentId, existing.getId());
+                return existing.getId();
+            }
+            log.info("幂等命中但未找到活跃任务，studentId={} 继续创建新任务", studentId);
+        }
+
+        Long taskId = createTask(studentId);
+        asyncExecute(taskId);
+        return taskId;
+    }
+
     @Override
     @Transactional
     public Long createTask(Long studentId) {
@@ -82,6 +121,16 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
         agentTaskMapper.insert(task);
         log.info("创建 Agent 任务: taskId={}, studentId={}", task.getId(), studentId);
         return task.getId();
+    }
+
+    private AgentTask findLatestActiveByStudent(Long studentId) {
+        return agentTaskMapper.selectOne(
+                new LambdaQueryWrapper<AgentTask>()
+                        .eq(AgentTask::getStudentId, studentId)
+                        .in(AgentTask::getStatus, ACTIVE_STATUSES)
+                        .orderByDesc(AgentTask::getCreatedAt)
+                        .last("LIMIT 1")
+        );
     }
 
     // ==================== 2. 异步执行入口 ====================
