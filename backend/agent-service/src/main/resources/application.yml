@@ -96,6 +96,11 @@ educare:
   idempotency:
     # 同一 studentId 在该窗口内不重复触发；命中则返回已有任务 id
     trigger-window-seconds: ${EDUCARE_TRIGGER_WINDOW:30}
+  schedule:
+    # E-1：定时扫描总开关。默认关闭，避免开发环境误触发整校扫描；生产经 Nacos 改为 true
+    enabled: ${EDUCARE_SCHEDULE_ENABLED:false}
+    # 每日 02:00 触发；Spring cron 6 字段（秒 分 时 日 月 周）
+    cron: ${EDUCARE_SCHEDULE_CRON:0 0 2 * * ?}
   debug:
     # 仅用于端到端冒烟测试：强制风险等级跳过 LLM 直接进入完整 4 阶段流水线。
     # 生产环境请保持为空。可设 high/medium/low/none。

@@ -1,0 +1,286 @@
+# EduCare 部署运维手册
+
+> 适用对象：首次部署、停启服务、排查异常的同学。
+> 整套架构参见 [`architecture.md`](./architecture.md)。
+
+---
+
+## 1. 先决条件
+
+| 项 | 版本/要求 |
+|---|---|
+| 操作系统 | macOS（Apple Silicon 推荐，Metal 加速）/ Linux（CUDA 待评估） |
+| Docker | Docker Desktop 4.x，docker-compose v2 |
+| Java | JDK 17 |
+| Maven | 3.8+ |
+| Node.js | 18+，npm 9+ |
+| Python | 3.10（仅本地调试 ai-inference 时需要） |
+| 磁盘 | ≥ 30GB（Qwen2.5-14B Q5_K_M ≈ 10GB；BGE-large ≈ 1GB；BGE-reranker ≈ 250MB） |
+| 内存 | ≥ 24GB（LLM 进程常驻 ~12GB） |
+
+llama.cpp 模型与启动脚本约定放在 `~/edu-ai/`（与 ROADMAP 一致）。
+
+---
+
+## 2. 首次部署（按顺序）
+
+> 工作目录：项目根 `/Users/<you>/.../Resource-Profile/.claude/worktrees/cc-dev`
+
+### 2.1 启动基础设施
+
+```bash
+docker compose -f docker/docker-compose.yml up -d \
+    mysql redis nacos milvus-standalone etcd minio
+```
+
+确认就绪：
+```bash
+docker compose -f docker/docker-compose.yml ps
+docker exec edu-redis redis-cli ping       # PONG
+curl http://localhost:8848/nacos           # 控制台
+curl http://localhost:9091/healthz         # Milvus
+```
+
+### 2.2 加载数据库 DDL（首次）
+
+```bash
+docker exec -i $(docker compose -f docker/docker-compose.yml ps -q mysql) \
+    mysql -uroot -proot edu_portrait < sql/init/03_agent_init.sql
+```
+
+> `01_init.sql` / `02_questionnaire_extension.sql` 由 docker-compose 在初始化时自动加载；只有 03 是 EduCare 增量。
+
+### 2.3 启动 ai-inference-service（容器）
+
+```bash
+docker compose -f docker/docker-compose.yml up -d --build ai-inference-service
+docker compose -f docker/docker-compose.yml logs -f ai-inference-service | head -50
+```
+
+### 2.4 启动宿主机 LLM 三件套
+
+```bash
+# 启动后用 ps 确认 8091/8092/8093 都在监听
+~/edu-ai/start-llm-server.sh        # Qwen2.5-14B → :8091
+~/edu-ai/start-embedding-server.sh  # bge-large-zh → :8092
+~/edu-ai/start-reranker-server.sh   # bge-reranker → :8093
+
+# 健康检查
+curl -sS http://localhost:8091/v1/models | jq .data[0].id
+curl -sS -X POST http://localhost:8092/v1/embeddings \
+    -H 'Content-Type: application/json' \
+    -d '{"model":"bge-large-zh-v1.5","input":"测试"}' | jq '.data[0].embedding | length'
+curl -sS -X POST http://localhost:8093/rerank \
+    -H 'Content-Type: application/json' \
+    -d '{"model":"bge-reranker-base","query":"q","documents":["a","b"]}' | jq .
+```
+
+### 2.5 初始化 Milvus 集合 + 写入种子知识
+
+```bash
+docker compose -f docker/docker-compose.yml exec ai-inference-service \
+    python -m scripts.init_milvus
+docker compose -f docker/docker-compose.yml exec ai-inference-service \
+    python -m scripts.seed_knowledge
+```
+
+> 输出含 "使用零向量降级" 即代表 8092 没接通，链路能跑但召回失真，必须修。
+
+### 2.6 启动 Spring Boot 服务（顺序）
+
+agent-service 依赖 auth/user/student/mental/data 都注册到 Nacos 才能取到画像，先把这些拉起来：
+
+```bash
+cd backend
+mvn -pl auth-service     spring-boot:run &
+mvn -pl user-service     spring-boot:run &
+mvn -pl student-service  spring-boot:run &
+mvn -pl mental-service   spring-boot:run &
+mvn -pl data-service     spring-boot:run &
+mvn -pl gateway          spring-boot:run &
+# 待 Nacos 控制台显示以上 6 个实例全部 healthy 后：
+mvn -pl agent-service    spring-boot:run
+```
+
+也可以分多个 terminal / IDE Run 配置。
+
+### 2.7 启动前端
+
+```bash
+cd frontend
+npm install
+npm run dev    # http://localhost:5173
+```
+
+### 2.8 端到端冒烟
+
+```bash
+GATEWAY=http://localhost:8080 STUDENT_ID=1 bash scripts/smoke_test_agent.sh
+```
+
+通过后再考虑放开定时扫描（见 §4.1）。
+
+---
+
+## 3. 关键配置项
+
+### 3.1 agent-service（`application.yml` + Nacos `agent-service.yml`）
+
+| Key | 默认 | 含义 |
+|---|---|---|
+| `educare.rate-limit.trigger-qps` | 2 | Sentinel 限流阈值 |
+| `educare.idempotency.trigger-window-seconds` | 30 | 触发幂等窗口 |
+| `educare.schedule.enabled` | false | 是否开启每日定时扫描（E-1） |
+| `educare.schedule.cron` | `0 0 2 * * ?` | 扫描 cron（Spring 6 字段格式） |
+| `educare.debug.force-risk-level` | 空 | 调试用，强制 high 走全流水线，验完必须 unset |
+| `spring.ai.openai.base-url` | `http://localhost:8091` | 宿主 LLM；容器内会改成 `host.docker.internal:8091` |
+| `ai.inference.url` | `http://localhost:8090` | Feign 目标 |
+
+### 3.2 ai-inference-service（环境变量）
+
+| Key | 默认 | 含义 |
+|---|---|---|
+| `LLM_BASE_URL` | `http://host.docker.internal:8091/v1` | 生成 LLM |
+| `LLM_MODEL` | `qwen2.5-14b-instruct-q5_k_m` | |
+| `EMBEDDING_BASE_URL` | `http://host.docker.internal:8092/v1` | BGE-large |
+| `EMBEDDING_DIM` | 1024 | 必须与模型一致 |
+| `RERANKER_BASE_URL` | `http://host.docker.internal:8093` | BGE-reranker |
+| `RERANKER_ENABLED` | true | 关掉走单路召回 |
+| `MILVUS_HOST` | `milvus-standalone` | |
+| `RAG_TOP_K` | 5 | |
+| `RAG_RECALL_EXPAND` | 3 | 候选倍数 |
+| `EMBEDDING_CACHE_TTL` | 86400 | 24h |
+| `RAG_CACHE_TTL` | 3600 | 1h |
+
+环境变量在 `docker/docker-compose.yml` 的 `ai-inference-service.environment` 下统一改。
+
+### 3.3 JWT / 数据源
+
+| Env | 默认 | 来源 |
+|---|---|---|
+| `JWT_SECRET` | 见 common.yml | 各服务共享 |
+| `MYSQL_HOST/USER/PASSWORD` | localhost / edu / edu123456 | docker-compose.yml |
+| `REDIS_HOST/PORT/PASSWORD` | localhost / 6379 / (空) | 同上 |
+| `NACOS_SERVER` | localhost:8848 | 同上 |
+
+---
+
+## 4. 日常运维操作
+
+### 4.1 开关定时扫描
+
+**通过 Nacos**（推荐，不需重启）：
+1. Nacos 控制台 → 配置管理 → `agent-service.yml`。
+2. 改 `educare.schedule.enabled: true`，可顺手调 `educare.schedule.cron`。
+3. 推送后下一次 cron 命中即生效（`Environment.getProperty` 实时取值）。
+
+**通过环境变量**（重启）：
+```bash
+EDUCARE_SCHEDULE_ENABLED=true mvn -pl agent-service spring-boot:run
+```
+
+### 4.2 RAG 知识库重建
+
+知识库 / 向量字段任何变更后：
+```bash
+# 1) 删旧集合
+docker compose -f docker/docker-compose.yml exec ai-inference-service python -c "
+from pymilvus import connections, utility
+from app.core.config import settings
+connections.connect(host=settings.MILVUS_HOST, port=settings.MILVUS_PORT)
+for name in settings.MILVUS_COLLECTIONS.values():
+    if utility.has_collection(name):
+        utility.drop_collection(name)
+        print('dropped', name)
+"
+# 2) 重新初始化 + 写种子
+docker compose -f docker/docker-compose.yml exec ai-inference-service python -m scripts.init_milvus
+docker compose -f docker/docker-compose.yml exec ai-inference-service python -m scripts.seed_knowledge
+```
+
+### 4.3 缓存清理
+
+```bash
+# 清 RAG / Embedding 缓存（保守，按前缀）
+docker exec edu-redis redis-cli --scan --pattern 'edu:emb:*' | xargs -r docker exec -i edu-redis redis-cli del
+docker exec edu-redis redis-cli --scan --pattern 'edu:rag:*' | xargs -r docker exec -i edu-redis redis-cli del
+```
+
+### 4.4 RAG 检索效果评估（E-2）
+
+```bash
+docker compose -f docker/docker-compose.yml exec ai-inference-service \
+    python -m scripts.eval_retrieval --output /tmp/rag_eval.md
+docker cp ai-inference-service:/tmp/rag_eval.md ./docs/educare/rag_eval_report.md
+```
+
+阈值参考：Recall@5 ≥ 0.85、MRR ≥ 0.70 视为可用。低于阈值时优先复查 embedding 服务、Milvus 索引参数。
+
+### 4.5 简化压测（E-3）
+
+```bash
+bash scripts/bench_agent.sh --n 10 --timeout 240
+# 或显式 ids
+STUDENT_IDS="1,2,3,4,5" bash scripts/bench_agent.sh
+```
+
+观测：耗时 P99、Redis 命中率；命中率第二轮明显高于首轮即代表缓存生效。
+
+---
+
+## 5. 故障排查
+
+| 症状 | 可能原因 | 排查 |
+|---|---|---|
+| `agent_service` 启动报 `Unable to find Spring AI ChatClient` | parent POM 没拿到 milestone 仓 | 首次 `mvn -U clean install`；确认 `repo.spring.io/milestone` 可达 |
+| `ai-inference` 调 8091 超时 | 宿主 llama.cpp 没起 | `lsof -iTCP:8091`；`~/edu-ai/start-llm-server.sh` |
+| 任务停在 RISK_ANALYZING 不动 | LLM 推理卡住 / 槽位满 | `docker logs agent-service`；llama.cpp 日志 `--metrics` |
+| RAG 返回空 chunks | Milvus 集合为空或 embedding 全零 | `attu` 查 collection row count；`docker logs ai-inference-service` 找"使用零向量降级" |
+| 任务全部 REJECTED | 合规 LLM prompt 过严 / fallback 触发 | 看 `compliance_audit` 字段；fallback 默认强制 false |
+| 大量 429 | Sentinel 触发 / 30s 幂等被合并 | 临时调高 `educare.rate-limit.trigger-qps`；线上保留即可 |
+| 容器内 Redis 命中率 0 | Redis 未连接 | `docker logs ai-inference-service` 搜 "redis"；检查 `REDIS_HOST` |
+| 定时扫描没触发 | `educare.schedule.enabled=false` 或锁未释放 | Nacos 改 true；检查 `edu:agent:schedule:daily-scan` 是否残留 |
+
+释放残留锁（极端情况）：
+```bash
+docker exec edu-redis redis-cli del edu:agent:schedule:daily-scan
+docker exec edu-redis redis-cli --scan --pattern 'agent:task:lock:*' | xargs -r docker exec -i edu-redis redis-cli del
+```
+
+---
+
+## 6. 备份与停服
+
+### 6.1 优雅停服
+
+```bash
+# Spring Boot：Ctrl+C / kill <pid>，asyncExecutor 等待 60s
+# 容器：
+docker compose -f docker/docker-compose.yml stop ai-inference-service
+docker compose -f docker/docker-compose.yml stop                # 全量
+```
+
+### 6.2 数据卷与备份
+
+| 卷 | 容器 | 内容 |
+|---|---|---|
+| `edu-mysql-data` | mysql | 业务数据库 |
+| `edu-milvus-data` | milvus-standalone | 向量索引 |
+| `edu-minio-data` | minio | Milvus 对象存储 |
+| `edu-redis-data` | redis | （未启用持久化默认 inmem） |
+
+```bash
+# MySQL 逻辑备份
+docker exec edu-mysql sh -c 'mysqldump -uroot -proot edu_portrait' > backup_$(date +%F).sql
+```
+
+`docker-compose down -v` 会**抹掉**卷，数据库 / 向量库都会清空 — 仅在重置环境时执行。
+
+---
+
+## 7. 升级要点
+
+- **更换 LLM 模型**：改 `LLM_MODEL` 与 `~/edu-ai/start-llm-server.sh` 的模型路径，无需改代码。
+- **更换 Embedding 模型**：必须同步更新 `EMBEDDING_DIM`（Milvus 集合 schema 也要重建）；走 §4.2 流程。
+- **新增 Milvus 集合**：在 `app/core/config.py::MILVUS_COLLECTIONS` 添加 → 重跑 `init_milvus`。
+- **Spring AI 升级**：1.0.0-M6 → 正式版后，仍在 `repo.spring.io/milestone` 拉则继续保留仓库声明；切到中央仓时移除即可。

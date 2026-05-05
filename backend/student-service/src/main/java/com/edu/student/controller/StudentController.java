@@ -7,6 +7,8 @@ import com.edu.student.service.StudentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/student")
 @RequiredArgsConstructor
@@ -23,6 +25,12 @@ public class StudentController {
             @RequestParam(required = false) String grade) {
         Page<Student> result = studentService.list(page, size, name, dept, grade);
         return Result.success(result);
+    }
+
+    /** EduCare 定时扫描用：在读学生 ID 列表（status=1）。仅返回 id，避免传 PII。 */
+    @GetMapping("/ids")
+    public Result<List<Long>> listActiveIds() {
+        return Result.success(studentService.listActiveIds());
     }
 
     @GetMapping("/{id}")

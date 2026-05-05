@@ -6,6 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Resource-Profile is a **Teacher-Student Resource Portrait System** (师生资源画像系统) — a microservices-based educational platform with a Vue 3 frontend, Spring Boot backend, and a Python AI inference sidecar (LLM + RAG over Milvus).
 
+## EduCare 子系统路线图
+
+The AI subsystem (agent-service + ai-inference-service + Multi-Agent + RAG + 本地 LLM) is tracked in **`docs/educare/ROADMAP.md`** — single source of truth for phase status (A/B/C0/C/D done; E pending), stage task lists, end-to-end startup commands, and known gotchas. **Read it first** instead of grepping git log or prior session jsonls. After finishing a stage, update the progress board and any leftover task lists in that file.
+
 ## Architecture
 
 **Top-level layout:**

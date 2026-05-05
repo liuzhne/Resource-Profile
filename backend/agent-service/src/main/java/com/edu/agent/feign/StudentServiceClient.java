@@ -5,11 +5,11 @@ import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 
+import java.util.List;
 import java.util.Map;
 
 /**
  * 调用 student-service (Port: 8084)
- * 文档端点: GET /student/{id}
  * Gateway 路由: /student/** → student-service (StripPrefix=0)
  */
 @FeignClient(name = "student-service")
@@ -20,4 +20,10 @@ public interface StudentServiceClient {
      */
     @GetMapping("/student/{id}")
     Result<Map<String, Object>> getStudentById(@PathVariable("id") Long  id);
+
+    /**
+     * E-1：定时扫描调度用，返回所有在读学生 id（status=1）。
+     */
+    @GetMapping("/student/ids")
+    Result<List<Long>> listActiveIds();
 }

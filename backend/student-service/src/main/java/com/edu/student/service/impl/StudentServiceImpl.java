@@ -1,6 +1,7 @@
 package com.edu.student.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.edu.student.entity.Student;
 import com.edu.student.mapper.StudentMapper;
@@ -8,6 +9,8 @@ import com.edu.student.service.StudentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -52,5 +55,14 @@ public class StudentServiceImpl implements StudentService {
     @Override
     public void delete(Long id) {
         studentMapper.deleteById(id);
+    }
+
+    @Override
+    public List<Long> listActiveIds() {
+        return studentMapper.selectList(
+                Wrappers.<Student>lambdaQuery()
+                        .select(Student::getId)
+                        .eq(Student::getStatus, 1)
+        ).stream().map(Student::getId).toList();
     }
 }
