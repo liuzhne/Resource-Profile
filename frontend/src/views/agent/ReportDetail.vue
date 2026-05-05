@@ -60,7 +60,8 @@
               show-icon
               class="mt-12"
             />
-            <div v-if="risk.key_indicators?.length" class="mt-12">
+            <!-- 关键指标可能含心理量表原始分等敏感字段；普通辅导员视角隐藏 -->
+            <div v-if="risk.key_indicators?.length" v-permission="['psychologist','admin']" class="mt-12">
               <div class="sub-h">关键指标</div>
               <el-tag v-for="(k, i) in risk.key_indicators" :key="i" class="tag-mr">{{ k }}</el-tag>
             </div>

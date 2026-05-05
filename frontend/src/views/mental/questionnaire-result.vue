@@ -9,7 +9,7 @@
           </div>
           <div class="stats">
             <span>已完成 <strong>{{ rows.length }}</strong> 人</span>
-            <span v-if="avgScore !== null">| 平均分 <strong>{{ avgScore }}</strong></span>
+            <span v-if="avgScore !== null" v-permission="['psychologist','admin']">| 平均分 <strong>{{ avgScore }}</strong></span>
           </div>
         </div>
       </template>
@@ -22,7 +22,8 @@
         <el-table-column prop="deptName" label="学院" min-width="120" show-overflow-tooltip />
         <el-table-column prop="grade" label="年级" width="80" />
         <el-table-column prop="className" label="班级" width="100" />
-        <el-table-column prop="score" label="得分" width="80" sortable />
+        <!-- 原始得分仅 psychologist/admin 可见；其它角色看 等级 列即可 -->
+        <el-table-column v-if="hasRole(['psychologist','admin'])" prop="score" label="得分" width="80" sortable />
         <el-table-column label="等级" width="100">
           <template #default="{ row }">
             <el-tag :type="levelTagColor(row.level)">{{ row.level || '-' }}</el-tag>
@@ -38,6 +39,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getCompletionList, getQuestionnaireDetail } from '@/api/mental'
+import { usePermission } from '@/directives/permission'
+
+const { hasRole } = usePermission()
 
 const route = useRoute()
 const router = useRouter()
