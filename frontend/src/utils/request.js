@@ -25,9 +25,8 @@ request.interceptors.request.use(
 
 request.interceptors.response.use(
   (response) => {
-    // F-1：blob 下载（PDF 等）跳过 Result<T> 解包，直接把二进制返回给调用方
     if (response.config.responseType === 'blob') {
-      return response.data
+      return response
     }
 
     const res = response.data

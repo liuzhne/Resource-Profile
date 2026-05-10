@@ -51,6 +51,7 @@
         <mybatis-plus.version>3.5.11</mybatis-plus.version>
         <jwt.version>0.12.5</jwt.version>
         <mysql.version>8.0.33</mysql.version>
+        <poi.version>5.2.5</poi.version>
     </properties>
 
     <!-- 关键：Spring AI 里程碑仓库 -->
@@ -130,6 +131,13 @@
                 <groupId>mysql</groupId>
                 <artifactId>mysql-connector-java</artifactId>
                 <version>${mysql.version}</version>
+            </dependency>
+
+            <!-- Apache POI -->
+            <dependency>
+                <groupId>org.apache.poi</groupId>
+                <artifactId>poi-ooxml</artifactId>
+                <version>${poi.version}</version>
             </dependency>
 
             <!-- Spring AI OpenAI（对接 llama.cpp 的 OpenAI 兼容 API） -->
