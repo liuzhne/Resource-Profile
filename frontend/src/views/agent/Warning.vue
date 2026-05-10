@@ -28,9 +28,13 @@
           <el-button @click="handleReset">重置</el-button>
         </el-form-item>
         <el-form-item style="margin-left: auto">
-          <el-tag v-if="hasInProgressTask" type="warning" effect="plain">
+          <el-tag v-if="sseConnected" type="success" effect="plain" class="status-tag">
+            <span class="dot dot-live"></span>
+            实时推送已连接
+          </el-tag>
+          <el-tag v-else-if="hasInProgressTask" type="warning" effect="plain" class="status-tag">
             <el-icon class="poll-icon"><Loading /></el-icon>
-            自动刷新中
+            轮询中（SSE 未连接）
           </el-tag>
         </el-form-item>
       </el-form>
@@ -124,7 +128,11 @@ import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Refresh, MagicStick, Loading } from '@element-plus/icons-vue'
+import { fetchEventSource } from '@microsoft/fetch-event-source'
 import { getAgentTaskList, triggerAgentTask } from '@/api/agent'
+import { useUserStore } from '@/store/modules/user'
+
+const userStore = useUserStore()
 
 const router = useRouter()
 // 初始化为 true：组件首次渲染就显示 loading，避免"空白页"闪烁
@@ -213,16 +221,67 @@ const hasInProgressTask = computed(() =>
   taskList.value.some((t) => IN_PROGRESS_STATUSES.has(t.status))
 )
 
+// ====== F-2：SSE 实时推送 + 轮询兜底 ======
+// 设计：SSE 推送 4 阶段流水线终态（COMPLETED / REJECTED / FAILED）；
+// 中间状态（RISK_ANALYZING 等）仍靠 3s 轮询，仅在 hasInProgressTask 时打 API。
+// SSE 断开时由 fetch-event-source 自动指数退避重连，期间轮询继续兜底。
 let pollTimer = null
+let sseAbortCtrl = null
+const sseConnected = ref(false)
+
+const connectSse = async () => {
+  if (sseAbortCtrl) sseAbortCtrl.abort()
+  sseAbortCtrl = new AbortController()
+  try {
+    await fetchEventSource('/api/agent/api/v1/warning/stream', {
+      signal: sseAbortCtrl.signal,
+      headers: userStore.token ? { Authorization: `Bearer ${userStore.token}` } : {},
+      openWhenHidden: true, // 切到后台标签页也保持连接
+      onopen: async (resp) => {
+        if (resp.ok && resp.headers.get('content-type')?.includes('text/event-stream')) {
+          sseConnected.value = true
+        } else {
+          // 非 200 或非 SSE 内容 —— 直接抛错，让 fetch-event-source 走 onerror
+          throw new Error(`SSE 握手失败 status=${resp.status}`)
+        }
+      },
+      onmessage: (ev) => {
+        // 后端事件名：hello / warning。心跳是注释行（: ping），onmessage 不会收到
+        if (ev.event === 'warning') {
+          // 收到任意终态事件 → 刷新列表
+          fetchList()
+        }
+      },
+      onerror: (err) => {
+        sseConnected.value = false
+        // 返回 undefined 让 fetch-event-source 走默认指数退避重连；
+        // 抛异常则停止重连（这里我们想自动重连，故不抛）
+        console.warn('SSE 连接异常，将自动重连', err?.message || err)
+      },
+      onclose: () => {
+        sseConnected.value = false
+      }
+    })
+  } catch (e) {
+    sseConnected.value = false
+    // 主动 abort 不算错误
+    if (e?.name !== 'AbortError') {
+      console.warn('SSE 终止', e)
+    }
+  }
+}
+
 onMounted(() => {
   fetchList()
-  // 仅当存在 in-progress 任务时刷新，避免无谓打 API
   pollTimer = setInterval(() => {
     if (hasInProgressTask.value) fetchList()
   }, 3000)
+  connectSse()
 })
+
 onUnmounted(() => {
   if (pollTimer) clearInterval(pollTimer)
+  if (sseAbortCtrl) sseAbortCtrl.abort()
 })
 
 const statusType = (s) =>
@@ -280,6 +339,25 @@ const formatTime = (s) => {
 .poll-icon {
   margin-right: 4px;
   animation: spin 1.4s linear infinite;
+}
+.status-tag {
+  display: inline-flex;
+  align-items: center;
+}
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  background: #67c23a;
+}
+.dot-live {
+  animation: pulse 1.6s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
 }
 @keyframes spin {
   from { transform: rotate(0deg); }

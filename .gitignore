@@ -104,3 +104,7 @@ GATEWAY_ISSUE_SUMMARY.md
 */target
 
 docs/educare/ROADMAP.md
+
+# F-1: 中文字体不进 Git，部署时按 deploy.md 下载
+backend/agent-service/src/main/resources/fonts/*.ttf
+backend/agent-service/src/main/resources/fonts/*.otf

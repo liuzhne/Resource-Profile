@@ -16,6 +16,7 @@ import com.edu.agent.mapper.AgentTaskMapper;
 import com.edu.agent.service.AgentTaskService;
 import com.edu.agent.service.RiskAnalyzeService;
 import com.edu.agent.service.StudentPortraitAggregator;
+import com.edu.agent.sse.WarningPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -45,6 +46,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
     private final StudentPortraitAggregator portraitAggregator;   // P2-5：基于真实端点的画像聚合
     private final RiskAnalyzeService riskAnalyzeService;          // P2-5：真实 LLM 风险识别
     private final StringRedisTemplate redisTemplate;
+    private final WarningPublisher warningPublisher;              // F-2：终态事件发布
 
     @Qualifier("agentExecutor")
     private final Executor agentExecutor;
@@ -154,6 +156,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
         } catch (Exception e) {
             log.error("任务 {} 执行异常", taskId, e);
             failTask(taskId);
+            publishTerminal(taskId);
         } finally {
             String script = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
             redisTemplate.execute(new DefaultRedisScript<>(script, Long.class),
@@ -197,6 +200,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
             if (level == RiskLevel.NONE || level == RiskLevel.LOW) {
                 transition(taskId, TaskStatus.RISK_ANALYZING, TaskStatus.COMPLETED);
                 completeTask(taskId);
+                publishTerminal(taskId);
                 log.info("任务 {} 风险等级 {}，直接完成", taskId, level);
                 return;
             }
@@ -240,6 +244,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
             boolean passed = parseAuditPassed(audit);
             if (!passed) {
                 transition(taskId, TaskStatus.COMPLIANCE_CHECKING, TaskStatus.REJECTED);
+                publishTerminal(taskId);
                 log.warn("任务 {} 合规审核未通过，转人工", taskId);
                 return;
             }
@@ -249,6 +254,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
         if (task.getStatus() == TaskStatus.COMPLIANCE_CHECKING) {
             transition(taskId, TaskStatus.COMPLIANCE_CHECKING, TaskStatus.COMPLETED);
             completeTask(taskId);
+            publishTerminal(taskId);
             log.info("任务 {} 全部完成", taskId);
         }
     }
@@ -382,6 +388,22 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
         update.setId(taskId);
         update.setStatus(TaskStatus.FAILED);
         agentTaskMapper.updateById(update);
+    }
+
+    /**
+     * F-2：终态（COMPLETED / REJECTED / FAILED）后向 Redis 发布事件，
+     * 由 SSE 订阅器分发给所有已连接前端。重新查询任务以拿到最新 status / riskLevel。
+     */
+    private void publishTerminal(Long taskId) {
+        try {
+            AgentTask t = agentTaskMapper.selectById(taskId);
+            if (t == null) return;
+            String status = t.getStatus() == null ? "UNKNOWN" : t.getStatus().name();
+            String riskLevel = t.getRiskLevel() == null ? null : t.getRiskLevel().name();
+            warningPublisher.publishTerminal(taskId, status, riskLevel, t.getStudentId());
+        } catch (Exception e) {
+            log.warn("F-2：发布终态事件失败 taskId={} err={}", taskId, e.getMessage());
+        }
     }
 
     // ==================== 6. JSON 解析辅助 ====================

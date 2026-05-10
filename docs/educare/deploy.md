@@ -86,6 +86,28 @@ docker compose -f docker/docker-compose.yml exec ai-inference-service \
 
 > 输出含 "使用零向量降级" 即代表 8092 没接通，链路能跑但召回失真，必须修。
 
+### 2.5.1 准备 PDF 导出字体（F-1，首次部署）
+
+agent-service 渲染 PDF 时需要中文字体。字体不进 Git，按下面任一方式准备：
+
+```bash
+cd backend/agent-service/src/main/resources/fonts
+# 方式 A：下载思源黑体 SC Regular（推荐）
+curl -L -o NotoSansSC-Regular.ttf \
+    https://github.com/notofonts/noto-cjk/raw/main/Sans/SubsetOTF/SC/NotoSansSC-Regular.otf
+# 方式 B：复用系统字体（macOS 示例）
+ln -s /System/Library/Fonts/Supplemental/PingFang.ttc NotoSansSC-Regular.ttf
+```
+
+也可以用环境变量绕过 classpath：
+
+```bash
+export EDUCARE_FONT_PATH=file:/System/Library/Fonts/PingFang.ttc
+export EDUCARE_EXPORT_PATH=/var/edu-exports     # 默认 /tmp/edu-exports
+```
+
+启动后日志出现 `F-1：中文字体加载就绪 …` 即生效；若是 `未找到中文字体 …，PDF 中文将显示为方块`，说明字体路径不对。
+
 ### 2.6 启动 Spring Boot 服务（顺序）
 
 agent-service 依赖 auth/user/student/mental/data 都注册到 Nacos 才能取到画像，先把这些拉起来：
@@ -108,8 +130,8 @@ mvn -pl agent-service    spring-boot:run
 
 ```bash
 cd frontend
-npm install
-npm run dev    # http://localhost:5173
+npm install                  # F-2 后须重新 install（新增 @microsoft/fetch-event-source）
+npm run dev                  # http://localhost:5173
 ```
 
 ### 2.8 端到端冒烟
@@ -133,6 +155,11 @@ GATEWAY=http://localhost:8080 STUDENT_ID=1 bash scripts/smoke_test_agent.sh
 | `educare.schedule.enabled` | false | 是否开启每日定时扫描（E-1） |
 | `educare.schedule.cron` | `0 0 2 * * ?` | 扫描 cron（Spring 6 字段格式） |
 | `educare.debug.force-risk-level` | 空 | 调试用，强制 high 走全流水线，验完必须 unset |
+| `educare.export.storage-path` | `/tmp/edu-exports` | F-1 PDF 落盘目录（启动时自动创建） |
+| `educare.export.font-path` | `classpath:/fonts/NotoSansSC-Regular.ttf` | F-1 中文字体路径，可改为 `file:...` |
+| `educare.sse.timeout-millis` | 1800000 | F-2 SSE 单连接最大存活（30 分钟，到期前端自动重连） |
+| `educare.sse.heartbeat-millis` | 30000 | F-2 心跳间隔，应低于 Nginx/Gateway idle timeout |
+| `spring.cloud.openfeign.circuitbreaker.enabled` | true | F-3 熔断/降级开关；关闭后 `@FeignClient(fallbackFactory=)` 失效，下游异常会直接抛 |
 | `spring.ai.openai.base-url` | `http://localhost:8091` | 宿主 LLM；容器内会改成 `host.docker.internal:8091` |
 | `ai.inference.url` | `http://localhost:8090` | Feign 目标 |
 
@@ -238,6 +265,12 @@ STUDENT_IDS="1,2,3,4,5" bash scripts/bench_agent.sh
 | RAG 返回空 chunks | Milvus 集合为空或 embedding 全零 | `attu` 查 collection row count；`docker logs ai-inference-service` 找"使用零向量降级" |
 | 任务全部 REJECTED | 合规 LLM prompt 过严 / fallback 触发 | 看 `compliance_audit` 字段；fallback 默认强制 false |
 | 大量 429 | Sentinel 触发 / 30s 幂等被合并 | 临时调高 `educare.rate-limit.trigger-qps`；线上保留即可 |
+| PDF 中文显示为方块 | 字体未就位 | 看 §2.5.1；启动日志搜 `F-1：中文字体` |
+| PDF 中文显示为 `#` 且 err_msg 含 `_font is null` / `loadMetrics` NPE | 字体是 OpenType (CFF outlines)，PDFBox 2.0.24 的 subset 抛 `Subsetting of OTF based fonts is not supported`，但即便 `subset=false` 走 `PDCIDFontType0Embedder` 全嵌入，noto-cjk 的 SubsetOTF 在 2.0.24 下仍会静默失败 → 字体注册成 null → 渲染回退 Latin-only → 全是 # | **必须换 TrueType outlines（真 TTF）**。当前打包用 LXGW WenKai Lite（`https://github.com/lxgw/LxgwWenKai-Lite/releases/...LXGWWenKaiLite-Regular.ttf`），存为 `resources/fonts/NotoSansSC-Regular.ttf`（family 名沿用以免改 CSS）。`file` 命令应显示 `TrueType Font data` 而非 `OpenType font data`。换字体后 `mvn clean compile` 强刷 `target/classes` 再 `rm -rf /tmp/edu-exports/.fonts/` 清缓存 |
+| PDF 导出停在 PROCESSING | 渲染异常 / 进程被杀 | 查 `agent_export_task.err_msg`；重启 agent-service 后 PROCESSING 不会自动重置（MVP 限制），手动 `UPDATE agent_export_task SET status='FAILED' WHERE status='PROCESSING'` 或重新触发 |
+| SSE 状态条始终显示「轮询中」 | 后端订阅未启动 / Gateway 缓冲了 SSE / token 失败 | 启动日志搜 `F-2：订阅 Redis 通道`；浏览器 DevTools Network → `warning/stream` 确认 200 + `text/event-stream`；CLI 调试 `curl -N -H "Authorization: Bearer $TOKEN" http://localhost:8080/agent/api/v1/warning/stream` |
+| SSE 收不到事件但轮询正常 | Redis Pub/Sub 没起作用 | `docker exec edu-redis redis-cli SUBSCRIBE edu:agent:warning:new` 与触发分析并行观察；若 CLI 收得到而前端收不到 → 看 agent-service 日志「F-2：分发事件」 |
+| 任务 RISK_ANALYZING 阶段秒级失败、画像里只剩 `studentId` | 下游 student/mental/data 全挂；Feign FallbackFactory 接管返回降级数据 | agent-service 日志搜 `[fallback]`，找出哪个下游真实异常并修复；若需排查 fallback 是否被加载，临时改 `spring.cloud.openfeign.circuitbreaker.enabled=false`，异常会直接抛栈帧 |
 | 容器内 Redis 命中率 0 | Redis 未连接 | `docker logs ai-inference-service` 搜 "redis"；检查 `REDIS_HOST` |
 | 定时扫描没触发 | `educare.schedule.enabled=false` 或锁未释放 | Nacos 改 true；检查 `edu:agent:schedule:daily-scan` 是否残留 |
 

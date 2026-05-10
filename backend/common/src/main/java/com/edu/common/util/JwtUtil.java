@@ -76,16 +76,17 @@ public class JwtUtil {
                     .parseSignedClaims(token)
                     .getPayload();
         } catch (ExpiredJwtException e) {
-            log.error("Token已过期: {}", e.getMessage());
+            // 过期是预期的用户行为（24h 失效），不是系统错误。降到 debug 避免污染 ERROR 日志。
+            log.debug("Token已过期: {}", e.getMessage());
             throw e;
         } catch (UnsupportedJwtException e) {
-            log.error("Token格式错误: {}", e.getMessage());
+            log.warn("Token格式错误: {}", e.getMessage());
             throw e;
         } catch (MalformedJwtException e) {
-            log.error("Token非法: {}", e.getMessage());
+            log.warn("Token非法: {}", e.getMessage());
             throw e;
         } catch (Exception e) {
-            log.error("Token解析失败: {}", e.getMessage());
+            log.warn("Token解析失败: {}", e.getMessage());
             throw e;
         }
     }
