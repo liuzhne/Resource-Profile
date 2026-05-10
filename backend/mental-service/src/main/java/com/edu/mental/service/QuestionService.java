@@ -13,7 +13,11 @@ public interface QuestionService {
 
     Question save(Question question);
 
+    void saveBatch(Long questionnaireId, List<Question> questions);
+
     void update(Question question);
 
     void delete(Long questionId);
+
+    void deleteByQuestionnaireId(Long questionnaireId);
 }
