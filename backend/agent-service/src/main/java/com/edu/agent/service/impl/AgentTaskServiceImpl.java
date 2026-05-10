@@ -302,7 +302,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
      */
     private String executePlanGenerate(AgentTask task) {
         try {
-            String maskedProfile = portraitAggregator.buildMaskedProfile(task.getStudentId());
+            String maskedProfile = portraitAggregator.buildMaskedProfile(String.valueOf(task.getStudentId()));
 
             Map<String, Object> req = new HashMap<>();
             req.put("student_profile", JSON.parseObject(maskedProfile));
@@ -327,7 +327,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
      */
     private String executeComplianceAudit(AgentTask task) {
         try {
-            String maskedProfile = portraitAggregator.buildMaskedProfile(task.getStudentId());
+            String maskedProfile = portraitAggregator.buildMaskedProfile(String.valueOf(task.getStudentId()));
 
             Map<String, Object> req = new HashMap<>();
             req.put("student_profile", JSON.parseObject(maskedProfile));

@@ -65,6 +65,26 @@ public class QuestionServiceImpl implements QuestionService {
     }
 
     @Override
+    public void saveBatch(Long questionnaireId, List<Question> questions) {
+        if (questions == null || questions.isEmpty()) {
+            syncQuestionCount(questionnaireId);
+            return;
+        }
+        for (int i = 0; i < questions.size(); i++) {
+            Question question = questions.get(i);
+            question.setQuestionnaireId(questionnaireId);
+            if (question.getSortOrder() == null) {
+                question.setSortOrder(i + 1);
+            }
+            if (question.getRequired() == null) {
+                question.setRequired(1);
+            }
+            questionMapper.insert(question);
+        }
+        syncQuestionCount(questionnaireId);
+    }
+
+    @Override
     public void update(Question question) {
         questionMapper.updateById(question);
     }
@@ -76,6 +96,14 @@ public class QuestionServiceImpl implements QuestionService {
         if (q != null) {
             syncQuestionCount(q.getQuestionnaireId());
         }
+    }
+
+    @Override
+    public void deleteByQuestionnaireId(Long questionnaireId) {
+        questionMapper.delete(
+                new LambdaQueryWrapper<Question>().eq(Question::getQuestionnaireId, questionnaireId)
+        );
+        syncQuestionCount(questionnaireId);
     }
 
     private void syncQuestionCount(Long questionnaireId) {
