@@ -1,16 +1,19 @@
 <template>
   <div class="page-container report-detail-page">
-    <el-page-header @back="goBack" :title="`任务 #${taskId} · 干预报告`">
+    <el-page-header :title="`任务 #${taskId} · 干预报告`" @back="goBack">
       <template #extra>
         <el-button
-            v-permission="['admin','psychologist']"
-            type="primary"
-            :icon="Download"
-            :loading="exporting"
-            :disabled="!canExport"
-            @click="handleExport"
-        >{{ exporting ? '导出中...' : '导出 PDF' }}</el-button>
-        <el-button :icon="Refresh" @click="fetchDetail" :loading="loading">刷新</el-button>
+          v-permission="['admin', 'psychologist']"
+          type="primary"
+          :icon="Download"
+          :loading="exporting"
+          :disabled="!canExport"
+          @click="handleExport"
+          >{{ exporting ? "导出中..." : "导出 PDF" }}</el-button
+        >
+        <el-button :icon="Refresh" :loading="loading" @click="fetchDetail"
+          >刷新</el-button
+        >
       </template>
     </el-page-header>
 
@@ -21,12 +24,6 @@
           任务 #{{ taskId }} · 学生 {{ displayValue(task.studentId) }} ·
           {{ formatTime(task.createdAt) || "-" }}
         </div>
-      </div>
-      <div class="header-actions">
-        <el-button @click="goBack">返回</el-button>
-        <el-button :icon="Refresh" :loading="loading" @click="fetchDetail">
-          刷新
-        </el-button>
       </div>
     </div>
 
@@ -440,9 +437,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ref, computed, onMounted, onUnmounted } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { ElMessage } from "element-plus";
 import {
   Refresh,
   Download,
@@ -452,14 +449,14 @@ import {
   CircleCheck,
   CircleClose,
   SuccessFilled,
-  CircleCloseFilled
-} from '@element-plus/icons-vue'
+  CircleCloseFilled,
+} from "@element-plus/icons-vue";
 import {
   getAgentTaskDetail,
   exportReport,
   getExportStatus,
-  downloadExport
-} from '@/api/agent'
+  downloadExport,
+} from "@/api/agent";
 
 const route = useRoute();
 const router = useRouter();
@@ -534,92 +531,94 @@ onMounted(fetchDetail);
 const goBack = () => router.back();
 
 // ============== F-1：PDF 导出 ==============
-const exporting = ref(false)
-const exportJobId = ref(null)
-let pollTimer = null
-let pollCount = 0
-const MAX_POLL = 30 // 30 * 2s = 60s 超时
+const exporting = ref(false);
+const exportJobId = ref(null);
+let pollTimer = null;
+let pollCount = 0;
+const MAX_POLL = 30; // 30 * 2s = 60s 超时
 
 // 仅当任务为 COMPLETED 或 REJECTED（已有 4 阶段产物）时允许导出
 const canExport = computed(() => {
-  const s = task.value.status
-  return s === 'COMPLETED' || s === 'REJECTED'
-})
+  const s = task.value.status;
+  return s === "COMPLETED" || s === "REJECTED";
+});
 
 const stopPoll = () => {
   if (pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = null
+    clearInterval(pollTimer);
+    pollTimer = null;
   }
-  pollCount = 0
-}
+  pollCount = 0;
+};
 
 const triggerDownload = async (jobId) => {
   try {
-    const blob = await downloadExport(jobId)
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `report-${taskId}.pdf`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-    ElMessage.success('PDF 已下载')
+    const response = await downloadExport(jobId);
+    const blob = response?.data instanceof Blob ? response.data : response;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `report-${taskId}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    ElMessage.success("PDF 已下载");
   } catch (e) {
-    console.error('下载 PDF 失败', e)
-    ElMessage.error('下载 PDF 失败')
+    console.error("下载 PDF 失败", e);
+    ElMessage.error("下载 PDF 失败");
   }
-}
+};
 
 const pollExportStatus = async () => {
-  if (!exportJobId.value) return
-  pollCount += 1
+  if (!exportJobId.value) return;
+  pollCount += 1;
   if (pollCount > MAX_POLL) {
-    stopPoll()
-    exporting.value = false
-    ElMessage.error('导出超时，请稍后重试')
-    return
+    stopPoll();
+    exporting.value = false;
+    ElMessage.error("导出超时，请稍后重试");
+    return;
   }
   try {
-    const res = await getExportStatus(exportJobId.value)
-    const status = res.data?.status
-    if (status === 'DONE') {
-      stopPoll()
-      const jid = exportJobId.value
-      exportJobId.value = null
-      exporting.value = false
-      await triggerDownload(jid)
-    } else if (status === 'FAILED') {
-      stopPoll()
-      exporting.value = false
-      ElMessage.error(res.data?.errMsg || 'PDF 渲染失败')
+    const res = await getExportStatus(exportJobId.value);
+    const status = res.data?.status;
+    if (status === "DONE") {
+      stopPoll();
+      const jid = exportJobId.value;
+      exportJobId.value = null;
+      exporting.value = false;
+      await triggerDownload(jid);
+    } else if (status === "FAILED") {
+      stopPoll();
+      exporting.value = false;
+      ElMessage.error(res.data?.errMsg || "PDF 渲染失败");
     }
   } catch (e) {
-    stopPoll()
-    exporting.value = false
-    console.error('查询导出状态失败', e)
+    stopPoll();
+    exporting.value = false;
+    console.error("查询导出状态失败", e);
   }
-}
+};
 
 const handleExport = async () => {
-  if (exporting.value) return
-  exporting.value = true
+  if (exporting.value) return;
+  exporting.value = true;
   try {
-    const res = await exportReport(taskId)
-    const jobId = res.data?.jobId
-    if (!jobId) throw new Error('未拿到 jobId')
-    exportJobId.value = jobId
-    pollCount = 0
-    pollTimer = setInterval(pollExportStatus, 2000)
+    const res = await exportReport(taskId);
+    const jobId = res.data?.jobId;
+    if (!jobId) throw new Error("未拿到 jobId");
+    exportJobId.value = jobId;
+    pollCount = 0;
+    pollTimer = setInterval(pollExportStatus, 2000);
+    await pollExportStatus();
   } catch (e) {
-    exporting.value = false
-    console.error('触发导出失败', e)
+    exporting.value = false;
+    console.error("触发导出失败", e);
     // request.js 拦截器已弹出错误提示，这里不再重复
   }
-}
+};
 
-onUnmounted(stopPoll)
+onUnmounted(stopPoll);
 
 const STATUS_LABELS = {
   PENDING: "待处理",
@@ -687,14 +686,6 @@ const formatTime = (value) =>
 </script>
 
 <style scoped lang="scss">
-.report-detail-page {
-  .header-actions {
-    display: flex;
-    gap: 10px;
-    flex-shrink: 0;
-  }
-}
-
 .report-shell {
   display: flex;
   flex-direction: column;

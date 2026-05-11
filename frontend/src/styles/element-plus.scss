@@ -121,6 +121,9 @@
 }
 
 .app-confirm-dialog {
+  --el-messagebox-content-color: var(--text-color-secondary);
+  --el-messagebox-title-color: var(--text-color);
+  background: var(--bg-color-container);
   width: min(420px, calc(100vw - 32px));
   padding: 0;
   border: 1px solid var(--border-color);
