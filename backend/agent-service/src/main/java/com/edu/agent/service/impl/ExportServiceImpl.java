@@ -14,6 +14,7 @@ import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
@@ -36,6 +37,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executor;
 
 @Slf4j
 @Service
@@ -46,6 +48,8 @@ public class ExportServiceImpl implements ExportService {
     private final AgentTaskMapper agentTaskMapper;
     private final TemplateEngine templateEngine;
     private final ResourceLoader resourceLoader;
+    @Qualifier("agentExecutor")
+    private final Executor agentExecutor;
 
     @Value("${educare.export.storage-path:/tmp/edu-exports}")
     private String storagePath;
@@ -109,7 +113,7 @@ public class ExportServiceImpl implements ExportService {
         exportMapper.insert(job);
         log.info("F-1：创建导出任务 jobId={} taskId={} userId={}", job.getId(), taskId, userId);
 
-        renderPdfAsync(job.getId());
+        agentExecutor.execute(() -> renderPdfAsync(job.getId()));
         return job.getId();
     }
 
