@@ -87,6 +87,21 @@ mybatis-plus:
       logic-not-delete-value: 0
       id-type: auto
 
+# G-3.1：Actuator + Prometheus 暴露策略
+# 只放出 health / info / prometheus 三端点，其余默认不可达；
+# 路径 /actuator/prometheus 由 ops 抓取。
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: when_authorized
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
 # 日志
 logging:
   level:
@@ -123,3 +138,10 @@ educare:
   llm:
     # G-1.4：透传给 llama.cpp 的扩展开关。新版本 llama.cpp 默认 true，显式声明兼容旧版。
     cache-prompt: ${EDUCARE_LLM_CACHE_PROMPT:true}
+
+# G-5.3：Langfuse trace。所有字段空时 LangfuseClient 自动 no-op，主流程零影响。
+# self-hosted v2：host 用 docker 内网名 langfuse-server:3000；本地裸跑用 http://localhost:3001
+langfuse:
+  public-key: ${LANGFUSE_PUBLIC_KEY:}
+  secret-key: ${LANGFUSE_SECRET_KEY:}
+  host: ${LANGFUSE_HOST:}

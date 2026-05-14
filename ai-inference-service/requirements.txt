@@ -16,3 +16,7 @@ tenacity==8.2.3
 
 # Redis 缓存（embedding / RAG 检索）
 redis==5.0.4
+
+# G-5.2：Langfuse 全链路 trace SDK（v2 系列，对应 self-hosted langfuse:2 server）
+# 三个环境变量缺失时 SDK 自动 no-op，不影响主流程
+langfuse>=2.36,<3.0

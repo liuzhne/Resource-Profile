@@ -1,3 +1,4 @@
 com.edu.common.config.JacksonConfig
 com.edu.common.config.JwtProperties
 com.edu.common.util.JwtUtil
+com.edu.common.security.FieldPermissionAutoConfiguration

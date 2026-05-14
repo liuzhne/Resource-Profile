@@ -20,8 +20,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.services.json_parser import extract_json
-from app.services.llm_client import get_llm_client
-from app.services.llm_metrics import record_llm_response
+from app.services.llm_client import chat_completion_raw
 from app.services.prompt_guard import sanitize, wrap
 
 SAFETY_PREAMBLE = (
@@ -70,15 +69,20 @@ class AuditRequest(BaseModel):
 
 # ==================== 内部工具 ====================
 
-async def _call_llm_json(system: str, user: str) -> Dict[str, Any]:
-    llm = get_llm_client()
+async def _call_llm_json(system: str, user: str, route: str) -> Dict[str, Any]:
+    """G-1.4 + G-1.5: raw call passes cache_prompt=true, then records timings."""
     try:
-        response = await llm.ainvoke(
-            [{"role": "system", "content": system}, {"role": "user", "content": user}]
+        data = await chat_completion_raw(
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            route=route,
         )
-        return extract_json(response.content)
+        content = data["choices"][0]["message"]["content"]
+        return extract_json(content)
     except Exception as exc:
-        logger.error("LLM 调用失败: %s", exc)
+        logger.error("LLM 调用失败 (route=%s): %s", route, exc)
         return {}
 
 
@@ -93,7 +97,7 @@ async def risk_analyze(req: RiskRequest) -> Dict[str, Any]:
         "student_profile",
         _json.dumps(safe_profile, ensure_ascii=False),
     )
-    result = await _call_llm_json(RISK_PROMPT, user)
+    result = await _call_llm_json(RISK_PROMPT, user, route="risk")
     if not result:
         return {
             "risk_level": "medium",
@@ -121,7 +125,7 @@ async def generate_plan(req: PlanRequest) -> Dict[str, Any]:
             wrap("knowledge_chunks", _json.dumps(safe_chunks, ensure_ascii=False)),
         ]
     )
-    result = await _call_llm_json(PLAN_PROMPT, user)
+    result = await _call_llm_json(PLAN_PROMPT, user, route="plan")
     if not result:
         return {
             "report_title": "干预方案 - 待人工补全",
@@ -152,7 +156,7 @@ async def compliance_audit(req: AuditRequest) -> Dict[str, Any]:
             wrap("intervention_plan", _json.dumps(safe_plan, ensure_ascii=False)),
         ]
     )
-    result = await _call_llm_json(AUDIT_PROMPT, user)
+    result = await _call_llm_json(AUDIT_PROMPT, user, route="audit")
     if not result:
         return {
             "audit_passed": False,

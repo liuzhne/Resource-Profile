@@ -51,10 +51,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         // 生成 JWT Token
-        Map<String, Object> claims = new HashMap<>();
-        claims.put("userId", user.getId());
-        claims.put("username", user.getUsername());
-        claims.put("userType", user.getUserType());
+        Map<String, Object> claims = buildClaims(user);
 
         String accessToken = jwtUtil.generateAccessToken(user.getId().toString(), claims);
         String refreshToken = jwtUtil.generateRefreshToken(user.getId().toString());
@@ -73,6 +70,23 @@ public class AuthServiceImpl implements AuthService {
         response.setExpiresIn(24 * 60 * 60L);
 
         return response;
+    }
+
+    /**
+     * G-2.2-b：生成 JWT claims，含 {@code roles} 字符串数组，供
+     * {@link com.edu.common.security.FieldPermissionAdvice} 决策。
+     * 把这步集中到一个方法，避免 login / refreshToken 两处不一致导致刷新后角色丢失。
+     */
+    private Map<String, Object> buildClaims(User user) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userId", user.getId());
+        claims.put("username", user.getUsername());
+        claims.put("userType", user.getUserType());
+        List<String> roleCodes = roleMapper.selectRolesByUserId(user.getId()).stream()
+                .map(Role::getCode)
+                .collect(Collectors.toList());
+        claims.put("roles", roleCodes);
+        return claims;
     }
 
     @Override
@@ -113,10 +127,7 @@ public class AuthServiceImpl implements AuthService {
 
         // 生成新的 access token
         User user = userMapper.selectById(Long.valueOf(userId));
-        Map<String, Object> claims = new HashMap<>();
-        claims.put("userId", user.getId());
-        claims.put("username", user.getUsername());
-        claims.put("userType", user.getUserType());
+        Map<String, Object> claims = buildClaims(user);
 
         String newAccessToken = jwtUtil.generateAccessToken(userId, claims);
         String newRefreshToken = jwtUtil.generateRefreshToken(userId);

@@ -181,9 +181,48 @@ services:
     networks:
       - edu-network
 
+  # G-5.1：Langfuse self-hosted（v2，2 容器版）
+  # 用途：LLM 调用全链路 trace（agent-service ChatClient + ai-inference _call_llm_json 全部接入）
+  # 启动后访问 http://localhost:3001 注册账号 → 创建 project → 拿 PUBLIC/SECRET key 配到各 service
+  # 不放进默认 up 范围（resume 场景可不开），按需 `docker-compose up -d langfuse-server`
+  langfuse-postgres:
+    image: postgres:15-alpine
+    container_name: langfuse-postgres
+    environment:
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: ${LANGFUSE_DB_PASSWORD:-langfuse123}
+      POSTGRES_DB: langfuse
+    volumes:
+      - langfuse_pg_data:/var/lib/postgresql/data
+    networks:
+      - edu-network
+    profiles:
+      - langfuse
+
+  langfuse-server:
+    image: langfuse/langfuse:2
+    container_name: langfuse-server
+    depends_on:
+      - langfuse-postgres
+    environment:
+      DATABASE_URL: postgresql://langfuse:${LANGFUSE_DB_PASSWORD:-langfuse123}@langfuse-postgres:5432/langfuse
+      # 生产请改为强随机：openssl rand -base64 32
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-dev-only-replace-in-prod-aaaaaaaaaaaaaaaaaaaaaaaa}
+      SALT: ${LANGFUSE_SALT:-dev-only-replace-in-prod-bbbbbbbbbbbbbbbbbbbbbbbbb}
+      NEXTAUTH_URL: ${LANGFUSE_PUBLIC_URL:-http://localhost:3001}
+      TELEMETRY_ENABLED: "false"
+      LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: "false"
+    ports:
+      - "3001:3000"
+    networks:
+      - edu-network
+    profiles:
+      - langfuse
+
 volumes:
   mysql_data:
   redis_data:
+  langfuse_pg_data:
 
 networks:
   edu-network:

@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
-from app.api import agent, health, llm, rag
+from app.api import agent, diagnostics, health, llm, rag, rag_upsert
 from app.core.config import settings
 
 @asynccontextmanager
@@ -40,6 +40,8 @@ def create_app() -> FastAPI:
     app.include_router(llm.router)
     app.include_router(agent.router)
     app.include_router(rag.router)
+    app.include_router(diagnostics.router)
+    app.include_router(rag_upsert.router)
 
     return app
 

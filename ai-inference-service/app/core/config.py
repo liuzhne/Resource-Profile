@@ -48,6 +48,16 @@ class Settings:
     EMBEDDING_CACHE_TTL: int = int(os.getenv("EMBEDDING_CACHE_TTL", "86400"))  # 24h
     RAG_CACHE_TTL: int = int(os.getenv("RAG_CACHE_TTL", "3600"))  # 1h
 
+    # G-4.3：管理员接口（/api/v1/rag/upsert 等）的预共享 token。
+    # 默认空 → 端点 503（运维必须显式配置才能启用，安全 fail-closed）
+    ADMIN_TOKEN: str = os.getenv("EDUCARE_ADMIN_TOKEN", "")
+    UPSERT_HASH_TTL: int = int(os.getenv("EDUCARE_UPSERT_HASH_TTL", str(7 * 24 * 3600)))  # 7d
+
+    # G-5.2：Langfuse trace。空 keys → SDK no-op，不影响主流程。
+    LANGFUSE_PUBLIC_KEY: str = os.getenv("LANGFUSE_PUBLIC_KEY", "")
+    LANGFUSE_SECRET_KEY: str = os.getenv("LANGFUSE_SECRET_KEY", "")
+    LANGFUSE_HOST: str = os.getenv("LANGFUSE_HOST", "http://localhost:3001")
+
 
 @lru_cache()
 def get_settings() -> Settings:

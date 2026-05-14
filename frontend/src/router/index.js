@@ -176,6 +176,12 @@ const routes = [
             name: 'AdminRoles',
             component: () => import('@/views/admin/roles.vue'),
             meta: { title: '角色权限' }
+          },
+          {
+            path: '/admin/trace',
+            name: 'AdminTrace',
+            component: () => import('@/views/admin/trace.vue'),
+            meta: { title: 'LLM 追踪', icon: 'Connection' }
           }
         ]
       }

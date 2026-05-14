@@ -10,8 +10,12 @@ import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Date;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Component
@@ -134,5 +138,26 @@ public class JwtUtil {
     public boolean isTokenExpired(String token) {
         Date expiration = getExpiration(token);
         return expiration.before(new Date(System.currentTimeMillis() + 30 * 60 * 1000));
+    }
+
+    /**
+     * G-2.2-b：从 token 中解析 {@code roles} claim（auth-service 登录时写入的字符串数组）。
+     * Token 缺失该 claim、解析失败或值非集合时返回空集合（调用方按"无角色"处理，
+     * {@link com.edu.common.security.FieldPermissionAdvice} 会回退到最低权限）。
+     */
+    public Set<String> parseRoles(String token) {
+        try {
+            Claims claims = parseToken(token);
+            Object raw = claims.get("roles");
+            if (raw instanceof Collection<?> coll) {
+                return coll.stream()
+                        .filter(java.util.Objects::nonNull)
+                        .map(Object::toString)
+                        .collect(Collectors.toUnmodifiableSet());
+            }
+        } catch (Exception e) {
+            log.debug("parseRoles 失败: {}", e.getMessage());
+        }
+        return Collections.emptySet();
     }
 }
