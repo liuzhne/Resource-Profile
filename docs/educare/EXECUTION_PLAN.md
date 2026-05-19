@@ -4,7 +4,7 @@
 >
 > **设计源**：`IMPROVEMENT_2026_MAY.md`（v1.1，2026-05-12 拍板）
 > **创建日期**：2026-05-13
-> **最近更新**：2026-05-14（H-1.1 完成：`MCP_DESIGN.md` 拍板 Spring AI 升 1.0.0 GA + 统一 SSE 传输 + Java/Python 各起一个 MCP server + 8094/8095 端口规划；指针移至 H-1.2 student-data server 实现）
+> **最近更新**：2026-05-19（H-1.1.5 完成：Spring AI `1.0.0-M6 → 1.0.0` GA 升级单独 PR 合入，starter 改名 `spring-ai-starter-model-openai`，`OpenAiApi/OpenAiChatModel` 改 builder，auto-config exclude 改 `OpenAiChatAutoConfiguration` 新包，`mvn clean compile` 40 文件全过；指针移至 H-1.2 student-data server 实现）
 
 ---
 
@@ -28,10 +28,11 @@
 
 ## 1. 下一步指针（Next Action）
 
-**当前阶段**：Phase G（快速赢 + 基础设施）
+**当前阶段**：Phase H（MCP 化 + Agent Loop 重构）
 **下一步**：→ §3 H-1.2 实现 `student-data` MCP server（Java，按 `MCP_DESIGN.md §5` 4 个 tool；建议在 `agent-service` 内嵌一个新 controller 层暴露 SSE，或起独立模块 `backend/mcp-student-data/`）
-- **前置**：Spring AI 升 `1.0.0-M6 → 1.0.0`（按 `MCP_DESIGN.md §2` smoke checklist 单独 PR 验证）
+- **前置已就绪**：Spring AI 1.0.0 GA 已升级合入（H-1.1.5），MCP starter 可用
 - **Phase G 全部完成**（代码侧）；只剩用户侧 `FIELD_PERMISSION_VERIFY.md`（G-2.3）实跑回写
+- **smoke 剩余 3 项待用户实跑**：本地 llama.cpp 起后跑一次 `/agent/api/v1/task/trigger/{id}`，验证 `LlamaCppCachePromptInterceptor` + `LlmMetricsInterceptor` + Langfuse trace 推送（见 `MCP_DESIGN.md §2` 项 2-4）
 
 ---
 
@@ -156,6 +157,15 @@
     - 7 个 tool 命名约定（snake_case + typed args + JSON-serializable return）见 §5
     - 4 类风险与折中（API 漂移 / SDK patch / Python 依赖冲突 / spec 版本演进）见 §7
     - 明确推后：MCP 鉴权 / sandboxing / memory-server（瘦身后视进度）
+- [x] **H-1.1.5** Spring AI `1.0.0-M6 → 1.0.0` GA 升级（单独 PR，H-1.2 前置）
+  - 完成于 2026-05-19：5 处改动 ——
+    1. `backend/pom.xml`：`spring-ai.version` 改 `1.0.0`；移除 `spring-milestones` 仓库声明（GA 已上 Maven Central）
+    2. `backend/agent-service/pom.xml`：starter artifactId 改 `spring-ai-starter-model-openai`（GA 命名规约 `spring-ai-starter-model-{model}`），删去显式 `spring-ai-core`（starter 已传递依赖）
+    3. `AgentServiceApplication.java`：exclude 改 `org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration`（GA 把 auto-config 按 model/vector/mcp 拆包）
+    4. `SpringAiConfig.java`：`new OpenAiApi(...)` → `OpenAiApi.builder().baseUrl(...).apiKey(...).restClientBuilder(...).webClientBuilder(...).build()`；`new OpenAiChatModel(...)` → `OpenAiChatModel.builder().openAiApi(...).defaultOptions(...).build()`；两个拦截器（`LlamaCppCachePromptInterceptor` + `LlmMetricsInterceptor`）通过 `restClientBuilder` 仍挂在 RestClient 链上
+    5. `RiskAnalyzeService.java` 无需改：`chatClient.prompt().system().user().call().content()` fluent API 在 GA 保留
+  - Smoke 项 1：`mvn -pl agent-service -am clean compile` 40 文件全过（M6→GA 后第一次 clean 编译，依赖能解析）
+  - Smoke 项 2-4 留用户实跑：`/agent/api/v1/task/trigger/{id}` 一次 → 看 `/actuator/prometheus` 的 `educare_llm_*` 仍增长 + Langfuse UI 出现 trace
 - [ ] **H-1.2** `student-data-server`（Java）—— tools: `get_student_profile / get_academic_history / get_mental_indicators / get_attendance`
 - [ ] **H-1.3** `knowledge-rag-server`（Python FastMCP）—— tools: `search_cases / search_policies / search_psychology`
 - [ ] **H-1.4** 写一个 `mcp-smoke-test` 脚本，从 Claude Desktop / agent-service 直连两个 server 跑 happy path
@@ -256,6 +266,7 @@ H-4 (ModelRouter) ──► H-2 (Loop 选模型)
 | 2026-05-13 | G-2.2 拆为 a/b/c/d/e 五个子步 | 设计落实后发现 JWT 改造（roles claim）+ 注解定义 + advice 实现 + entity 标注 + 自动配置 各自独立可合并，单 PR 粒度更易 review |
 | 2026-05-14 | G-5.1 选 Langfuse self-hosted v2 + `profiles: [langfuse]` 默认不启 | 已有 compose 编排可复用；v2 两容器够用，v3 的 clickhouse+worker 五容器对 resume 项目超量；profiles 让 default `up` 仍精简 |
 | 2026-05-14 | G-6.1 选 promptfoo 而非 Braintrust SaaS | 无付费 tier；YAML+JSONL 随 git 版本化；Langfuse 已覆盖在线 trace，离线 eval 用轻量 CLI 互补 |
+| 2026-05-19 | H-1.1 拆出 H-1.1.5：Spring AI 升级单独 PR | M6→GA 改动面（starter 改名 + auto-config 拆包 + OpenAiApi/Model builder 化）远超 MCP_DESIGN §2 预估的"4-arg constructor 仍可用"，单 PR 隔离回归风险 |
 
 ---
 

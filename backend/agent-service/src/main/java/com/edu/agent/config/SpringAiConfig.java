@@ -40,6 +40,8 @@ public class SpringAiConfig {
      * <p>用 BufferingClientHttpRequestFactory 让请求/响应 body 都可重读：
      *   - 请求侧 interceptor 改 body 后再放行
      *   - 响应侧 interceptor 抓 timings 但不消费 Spring AI 的后续读取
+     *
+     * <p>Spring AI 1.0.0 GA：OpenAiApi / OpenAiChatModel 改 builder 模式（M6 的直构造器已不可用）。
      */
     @Bean
     public OpenAiApi openAiApi(LlmMetricsInterceptor llmMetricsInterceptor) {
@@ -47,7 +49,12 @@ public class SpringAiConfig {
                 .requestFactory(new BufferingClientHttpRequestFactory(new SimpleClientHttpRequestFactory()))
                 .requestInterceptor(new LlamaCppCachePromptInterceptor())
                 .requestInterceptor(llmMetricsInterceptor);
-        return new OpenAiApi(baseUrl, apiKey, restBuilder, WebClient.builder());
+        return OpenAiApi.builder()
+                .baseUrl(baseUrl)
+                .apiKey(apiKey)
+                .restClientBuilder(restBuilder)
+                .webClientBuilder(WebClient.builder())
+                .build();
     }
 
     @Bean
@@ -57,12 +64,15 @@ public class SpringAiConfig {
                 .temperature(temperature)
                 .maxTokens(maxTokens)
                 .build();
-        return new OpenAiChatModel(openAiApi, options);
+        return OpenAiChatModel.builder()
+                .openAiApi(openAiApi)
+                .defaultOptions(options)
+                .build();
     }
 
     /**
-     * 1.0.0-M6 核心：ChatClient Fluent API
-     * 注入 ChatClient.Builder，由 spring-ai-openai-spring-boot-starter 自动配置提供
+     * ChatClient Fluent API（1.0.0 GA 保留）。
+     * Builder 由 spring-ai-starter-model-openai 自动配置提供，基于上面的 OpenAiChatModel。
      */
     @Bean
     public ChatClient chatClient(ChatClient.Builder builder) {

@@ -45,7 +45,7 @@
         <spring-cloud-alibaba.version>2023.0.1.0</spring-cloud-alibaba.version>
 
         <!-- Spring AI -->
-        <spring-ai.version>1.0.0-M6</spring-ai.version>
+        <spring-ai.version>1.0.0</spring-ai.version>
 
         <!-- 其他依赖 -->
         <mybatis-plus.version>3.5.11</mybatis-plus.version>
@@ -54,17 +54,7 @@
         <poi.version>5.2.5</poi.version>
     </properties>
 
-    <!-- 关键：Spring AI 里程碑仓库 -->
-    <repositories>
-        <repository>
-            <id>spring-milestones</id>
-            <name>Spring Milestones</name>
-            <url>https://repo.spring.io/milestone</url>
-            <snapshots>
-                <enabled>false</enabled>
-            </snapshots>
-        </repository>
-    </repositories>
+    <!-- Spring AI 1.0.0 GA 已上 Maven Central，无需 milestone 仓库 -->
 
     <dependencyManagement>
         <dependencies>
