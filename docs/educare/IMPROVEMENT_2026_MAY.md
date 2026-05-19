@@ -2,7 +2,7 @@
 
 > **状态**：v1.1 — Section 8 关键问题已拍板（2026-05-12），开始执行 Phase G
 > **作者**：基于 SubAgent 架构诊断 + 2026 年 5 月主流范式评测产出
-> **关系**：与 `ROADMAP.md` 并列，作为后续 G/H/I 三阶段执行的权威设计文档
+> **关系**：本文档是 G/H/I 三阶段的**设计源 / 决策依据**；可执行的原子任务清单与进度状态见 [`EXECUTION_PLAN.md`](./EXECUTION_PLAN.md)（按本文档拆解而来）
 
 ## 0. 拍板的范围决策（2026-05-12 对齐结果）
 
@@ -392,6 +392,6 @@ public ChatClient route(TaskType type, Complexity complexity) {
 | 文档版本 | v1.0 |
 | 创建日期 | 2026-05-12 |
 | 下次评审 | Phase G 结束后（约 2 周内） |
-| 关联文档 | `ROADMAP.md`（执行进度）、`architecture.md`（现状）、`COMPLIANCE.md`（待创建） |
+| 关联文档 | `EXECUTION_PLAN.md`（执行进度 + 原子任务）、`architecture.md`（现状）、`COMPLIANCE.md`（待创建） |
 
 **更新约定**：Phase G/H/I 每阶段结束时，本文档同步更新进度勾选与实际工作量复盘。重大决策变更（如放弃 Mem0 改用 Letta）单独在文档底部追加"变更记录"。

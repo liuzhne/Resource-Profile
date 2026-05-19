@@ -8,7 +8,7 @@ Resource-Profile is a **Teacher-Student Resource Portrait System** (师生资源
 
 ## EduCare 子系统路线图
 
-The AI subsystem (agent-service + ai-inference-service + Multi-Agent + RAG + 本地 LLM) is tracked in **`docs/educare/ROADMAP.md`** — single source of truth for phase status (A/B/C0/C/D done; E pending), stage task lists, end-to-end startup commands, and known gotchas. **Read it first** instead of grepping git log or prior session jsonls. After finishing a stage, update the progress board and any leftover task lists in that file.
+The AI subsystem (agent-service + ai-inference-service + Multi-Agent + RAG + 本地 LLM) is tracked in **`docs/educare/EXECUTION_PLAN.md`** — single source of truth for Phase G/H/I 的可执行原子任务清单、§1 下一步指针、§6 变更记录、§8 已知阻塞。当前状态：Phase G 代码侧基本完成（仅 G-2.3/G-3.4 待用户实跑验证），Phase H 启动中（H-1.1 完成，下一步 H-1.2 student-data MCP server），Phase I 储备。设计源（决策依据）见 `docs/educare/IMPROVEMENT_2026_MAY.md` (v1.1, 2026-05-12 拍板)。**Read EXECUTION_PLAN.md first** instead of grepping git log or prior session jsonls. After finishing an atomic task, follow §0 Update Protocol: 勾选 + 追加 `完成于 YYYY-MM-DD：备注` 行 + 更新 §1 指针 + 顶部"最近更新"。
 
 ## Architecture
 

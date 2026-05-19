@@ -18,7 +18,7 @@
 | 磁盘 | ≥ 30GB（Qwen2.5-14B Q5_K_M ≈ 10GB；BGE-large ≈ 1GB；BGE-reranker ≈ 250MB） |
 | 内存 | ≥ 24GB（LLM 进程常驻 ~12GB） |
 
-llama.cpp 模型与启动脚本约定放在 `~/edu-ai/`（与 ROADMAP 一致）。
+llama.cpp 模型与启动脚本约定放在 `~/edu-ai/`。
 
 ---
 
