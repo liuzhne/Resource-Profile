@@ -10,11 +10,11 @@
 
 | 项 | 选定 | 理由 |
 |----|------|------|
-| Spring AI 版本 | **升 `1.0.0-M6 → 1.0.0`（GA）** | M6 没有 MCP starter；GA 提供 `spring-ai-mcp-server-spring-boot-starter` + `spring-ai-mcp-client-spring-boot-starter` |
-| Java MCP server SDK | `spring-ai-mcp-server-spring-boot-starter`（GA） | 与现有 Spring 生态一致；@Tool 注解暴露方法 |
-| Python MCP server SDK | **FastMCP**（`fastmcp>=0.4`） | Python 生态主流，装饰器 API；与 LangChain/Milvus 集成自然 |
-| 传输模式 | **统一用 SSE / streamable HTTP** | docker-compose 友好；跨语言统一；agent-service ↔ Python rag-server 必走网络，不能 stdio |
-| MCP client 集成 | `spring-ai-mcp-client-spring-boot-starter`（GA） | 在 agent-service 配 server URL 列表，自动注册为 ChatClient 可用 tool |
+| Spring AI 版本 | **升到 `1.1.6` GA**（H-1.1.6 拍板，2026-05-20） | 1.0.x 仅支持 SSE/STDIO，无 Streamable HTTP；1.1.0 GA 起原生支持 streamable transport（spec 2025-03-26）。1.0→1.1 主线 API 完全兼容，零代码改动 |
+| Java MCP server SDK | `spring-ai-starter-mcp-server-webmvc`（1.1.x artifactId 不变） | `@Tool` + `@ToolParam` 注解暴露方法，需用 `MethodToolCallbackProvider` 手动登记 |
+| Python MCP server SDK | **FastMCP 2.x**（`fastmcp>=2.3,<3.0`） | 原生支持 `mcp.run(transport="http", ...)`；装饰器 API；与 LangChain/Milvus 集成自然 |
+| 传输模式 | **统一 Streamable HTTP**（单端点 `/mcp`） | MCP spec 2025-03-26 推荐传输；SSE 已 deprecated；单端点同时承担 client→server POST + server→client GET/SSE 流式响应，ops 比双端点简单；跨语言/跨进程统一 |
+| MCP client 集成 | `spring-ai-starter-mcp-client` + `spring.ai.mcp.client.streamable-http.*` 子配置（1.1.x） | 在 agent-service 配 server URL 列表，自动注册为 ChatClient 可用 tool（H-2 时再接入） |
 | Agent Loop 选型 | Spring AI **`ChatClient` + `ToolCallback`**（M6 已有的 fluent API 在 GA 保留） | 无需引第二个 Agent 框架；Tool 调用循环由 Spring AI 内部处理 |
 
 ---
@@ -39,20 +39,22 @@
 
 ---
 
-## 3. 传输模式：为什么不混用
+## 3. 传输模式：为什么选 Streamable HTTP
 
-**stdio 优势**：
-- 父子进程，零网络栈，最低延迟
-- 单机调试简单
+**MCP spec 演进**：
+- 早期 spec 用 SSE 双端点（`/sse` 连接 + `/mcp/message` POST），但 spec 2025-03-26 已将 SSE 标记 **deprecated**
+- 取而代之的 **Streamable HTTP**：单端点 `/mcp` 同时承担 client→server POST 与 server→client GET/SSE 流式响应
+- Spring AI 1.1.0 GA（2025-11-15）原生支持，FastMCP 2.x 原生支持
 
-**SSE 优势**：
-- 跨进程跨容器跨主机
-- 跨语言（Java client + Python server）天然支持
-- 健康检查 / 重连 / 鉴权全走 HTTP 现成机制
+**Streamable HTTP 相对 SSE 的优势**：
+- **运维简化**：单端点替代双端点，反代/网关只需挂一条路由规则
+- **协议一致**：spec 推荐路线，未来 SDK / inspector / cloud 生态都按此演进
+- **能力对等**：仍走 HTTP，跨进程/跨容器/跨主机/跨语言完整支持
+- **健康检查/重连/鉴权**：仍可走 HTTP 现成机制
 
-**为什么不混用**：
-- Java student-data server 也用 SSE 部署在独立端口（8094 候选）→ 与 Python rag-server（8095 候选）行为一致
-- agent-service 的 MCP client 配置只需列两条 URL，不区分对端语言/进程模型
+**为什么不混用 stdio**：
+- agent-service ↔ Python rag-server 必走网络，stdio 不可用
+- Java student-data 也走 HTTP（端口 8094）与 Python rag-server（8095）形成对称结构
 - docker-compose 里两个 server 都是普通 service，运维统一
 
 **唯一退路**：Phase H 末期若性能不达标（每 tool call > 100ms），可把 student-data 改 stdio，但当前不预设。
@@ -64,21 +66,37 @@
 | 服务 | 端口 | 路径 |
 |------|------|------|
 | agent-service（MCP client） | 8087（已有） | — |
-| student-data MCP server | **8094**（新） | SSE on `/sse` |
-| knowledge-rag MCP server | **8095**（新） | SSE on `/sse` |
+| student-data MCP server | **8094** | Streamable HTTP，单端点 `/mcp` |
+| knowledge-rag MCP server | **8095** | Streamable HTTP，单端点 `/mcp` |
 
-agent-service `application.yml` 草案：
+mcp-student-data `application.yml` 实际配置（H-1.1.6 落地）：
+```yaml
+spring:
+  ai:
+    mcp:
+      server:
+        name: student-data
+        version: 1.0.0
+        type: SYNC
+        protocol: STREAMABLE
+        streamable-http:
+          mcp-endpoint: /mcp
+```
+
+agent-service `application.yml` 草案（H-2 接入时填）：
 ```yaml
 spring:
   ai:
     mcp:
       client:
-        sse:
+        streamable-http:
           connections:
             student-data:
               url: ${MCP_STUDENT_DATA_URL:http://localhost:8094}
+              endpoint: /mcp
             knowledge-rag:
               url: ${MCP_KNOWLEDGE_RAG_URL:http://localhost:8095}
+              endpoint: /mcp
 ```
 
 ---
@@ -136,3 +154,5 @@ spring:
 | 日期 | 变更 | 原因 |
 |------|------|------|
 | 2026-05-14 | 初版 | H-1.1 选型决策 |
+| 2026-05-19 | 校准 1.0.0 GA 事实：starter artifactId 改 `spring-ai-starter-mcp-server-webmvc` / `spring-ai-starter-mcp-client-webmvc`；明确 `@Tool` + `@ToolParam` 与 `MethodToolCallbackProvider` 手动登记模式；SSE 端点澄清为 `/sse`（连接）+ `/mcp/message`（消息） | H-1.2 落地实测过程中订正 |
+| 2026-05-20 | **H-1.1.6 升级 + 协议切换**：Spring AI 1.0.0 → 1.1.6 GA；MCP transport 全栈从 SSE 切到 **Streamable HTTP**（单端点 `/mcp`）；§1 拍板表（Spring AI 版本 / Python SDK 改 `fastmcp>=2.3` / 传输模式）、§3 整段（删"为什么不混用 SSE/stdio"换"为什么选 Streamable HTTP"）、§4 端点表与 yml 草案三处同步更新 | MCP spec 2025-03-26 已将 SSE 标记 deprecated，Streamable HTTP 为推荐传输。1.0→1.1 实测主线 API 完全兼容（`@Tool`/`@ToolParam`/`MethodToolCallbackProvider`/`OpenAiApi.builder()`/`OpenAiChatModel.builder()`/`OpenAiChatAutoConfiguration` 全保留），代码零改动；MCP server 仅 application.yml 三行配置切换。Streamable HTTP 实际 property key 为 `spring.ai.mcp.server.protocol=STREAMABLE` + `spring.ai.mcp.server.streamable-http.mcp-endpoint=/mcp`（通过 `spring-ai-autoconfigure-mcp-server-common-1.1.6.jar` 的 `spring-configuration-metadata.json` 核实） |

@@ -48,7 +48,30 @@ docker exec -i $(docker compose -f docker/docker-compose.yml ps -q mysql) \
     mysql -uroot -proot edu_portrait < sql/init/03_agent_init.sql
 ```
 
-> `01_init.sql` / `02_questionnaire_extension.sql` 由 docker-compose 在初始化时自动加载；只有 03 是 EduCare 增量。
+> `01_init.sql` / `02_questionnaire_extension.sql` 由 docker-compose 在初始化时自动加载；EduCare 增量是 `03_agent_init.sql`（agent 任务表）+ `04_student_extras.sql`（H-1.2 成绩 / 考勤表）。
+
+加载 H-1.2 学生扩展表：
+```bash
+docker exec -i $(docker compose -f docker/docker-compose.yml ps -q mysql) \
+    mysql -uroot -proot edu_portrait < sql/init/04_student_extras.sql
+```
+
+**服务端口对照**（Docker / 本地裸跑通用）：
+
+| 服务 | 端口 | 说明 |
+|------|------|------|
+| gateway | 8080 | API gateway，外部入口 |
+| auth-service | 8081 | 登录 / JWT |
+| user-service | 8082 | 用户管理 |
+| teacher-service | 8083 | 教师档案 |
+| student-service | 8084 | 学生档案 + H-1.2 成绩/考勤端点 |
+| mental-service | 8085 | 心理评估 |
+| data-service | 8086 | 数据分析 |
+| agent-service | 8087 | LLM/Agent 编排 |
+| ai-inference-service | 8090 | Python FastAPI（LLM+RAG） |
+| llama.cpp llm | 8091 | 宿主机 LLM 服务 |
+| **mcp-student-data** | **8094** | **H-1.2 + H-1.1.6：student-data MCP server（Streamable HTTP，单端点 `/mcp`）** |
+| knowledge-rag MCP | 8095 | H-1.3 预留（Python FastMCP，Streamable HTTP，单端点 `/mcp`） |
 
 ### 2.3 启动 ai-inference-service（容器）
 
@@ -316,4 +339,4 @@ docker exec edu-mysql sh -c 'mysqldump -uroot -proot edu_portrait' > backup_$(da
 - **更换 LLM 模型**：改 `LLM_MODEL` 与 `~/edu-ai/start-llm-server.sh` 的模型路径，无需改代码。
 - **更换 Embedding 模型**：必须同步更新 `EMBEDDING_DIM`（Milvus 集合 schema 也要重建）；走 §4.2 流程。
 - **新增 Milvus 集合**：在 `app/core/config.py::MILVUS_COLLECTIONS` 添加 → 重跑 `init_milvus`。
-- **Spring AI 升级**：1.0.0-M6 → 正式版后，仍在 `repo.spring.io/milestone` 拉则继续保留仓库声明；切到中央仓时移除即可。
+- **Spring AI 升级**：1.0.0-M6 → 正式版后，仍在 `repo.spring.io/milestone` 拉则继续保留仓库声明；切到中央仓时移除即可。H-1.1.6（2026-05-20）已升到 **1.1.6 GA**（Maven Central），同步把 MCP server 传输从 SSE 切到 **Streamable HTTP**（`spring.ai.mcp.server.protocol=STREAMABLE`，单端点 `/mcp`）。1.0→1.1 主线 API 完全兼容。

@@ -30,6 +30,7 @@
         <module>mental-service</module>
         <module>data-service</module>
         <module>agent-service</module>
+        <module>mcp-student-data</module>
     </modules>
 
     <properties>
@@ -44,8 +45,9 @@
         <spring-cloud.version>2023.0.1</spring-cloud.version>
         <spring-cloud-alibaba.version>2023.0.1.0</spring-cloud-alibaba.version>
 
-        <!-- Spring AI -->
-        <spring-ai.version>1.0.0</spring-ai.version>
+        <!-- Spring AI 1.1.6 GA：升级以启用 MCP Streamable HTTP transport
+             （H-1.1.6 决策；1.0.x 仅支持 SSE/STDIO） -->
+        <spring-ai.version>1.1.6</spring-ai.version>
 
         <!-- 其他依赖 -->
         <mybatis-plus.version>3.5.11</mybatis-plus.version>
@@ -54,7 +56,7 @@
         <poi.version>5.2.5</poi.version>
     </properties>
 
-    <!-- Spring AI 1.0.0 GA 已上 Maven Central，无需 milestone 仓库 -->
+    <!-- Spring AI 1.1.6 GA 已上 Maven Central，无需 milestone 仓库 -->
 
     <dependencyManagement>
         <dependencies>

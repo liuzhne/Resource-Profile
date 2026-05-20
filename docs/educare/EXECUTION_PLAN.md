@@ -4,7 +4,7 @@
 >
 > **设计源**：`IMPROVEMENT_2026_MAY.md`（v1.1，2026-05-12 拍板）
 > **创建日期**：2026-05-13
-> **最近更新**：2026-05-19（H-1.1.5 完成：Spring AI `1.0.0-M6 → 1.0.0` GA 升级单独 PR 合入，starter 改名 `spring-ai-starter-model-openai`，`OpenAiApi/OpenAiChatModel` 改 builder，auto-config exclude 改 `OpenAiChatAutoConfiguration` 新包，`mvn clean compile` 40 文件全过；指针移至 H-1.2 student-data server 实现）
+> **最近更新**：2026-05-20（H-1.1.6 完成：父 pom Spring AI 1.0.0 → 1.1.6 GA；mcp-student-data application.yml 协议从 SSE 切到 Streamable HTTP，端点统一到单点 `/mcp`；agent-service 编译回归通过；MCP_DESIGN.md §1/§3/§4/§9 + deploy.md 端口表协议描述同步更新。指针保持 H-1.3 knowledge-rag MCP server，新增需求：H-1.3 直接用 Streamable HTTP transport）
 
 ---
 
@@ -29,8 +29,9 @@
 ## 1. 下一步指针（Next Action）
 
 **当前阶段**：Phase H（MCP 化 + Agent Loop 重构）
-**下一步**：→ §3 H-1.2 实现 `student-data` MCP server（Java，按 `MCP_DESIGN.md §5` 4 个 tool；建议在 `agent-service` 内嵌一个新 controller 层暴露 SSE，或起独立模块 `backend/mcp-student-data/`）
-- **前置已就绪**：Spring AI 1.0.0 GA 已升级合入（H-1.1.5），MCP starter 可用
+**下一步**：→ §3 H-1.3 实现 `knowledge-rag` MCP server（Python FastMCP **2.x**，3 个 search tool，**Streamable HTTP transport**，端口 8095；见 `MCP_DESIGN.md §5`）
+- **前置已就绪**：H-1.1.5（Spring AI 1.0.0 GA）+ H-1.2（student-data MCP server，端口 8094）+ H-1.1.6（Spring AI 1.1.6 GA + MCP transport 全栈切 Streamable HTTP）已合入
+- **H-1.2 待跑 smoke**：`docker exec mysql ... < sql/init/04_student_extras.sql` 加载新表后，`mvn -pl mcp-student-data spring-boot:run`，用 `npx @modelcontextprotocol/inspector` 选 **Streamable HTTP** → `http://localhost:8094/mcp` 验证 4 个 tool 可见且能拿数据
 - **Phase G 全部完成**（代码侧）；只剩用户侧 `FIELD_PERMISSION_VERIFY.md`（G-2.3）实跑回写
 - **smoke 剩余 3 项待用户实跑**：本地 llama.cpp 起后跑一次 `/agent/api/v1/task/trigger/{id}`，验证 `LlamaCppCachePromptInterceptor` + `LlmMetricsInterceptor` + Langfuse trace 推送（见 `MCP_DESIGN.md §2` 项 2-4）
 
@@ -166,8 +167,22 @@
     5. `RiskAnalyzeService.java` 无需改：`chatClient.prompt().system().user().call().content()` fluent API 在 GA 保留
   - Smoke 项 1：`mvn -pl agent-service -am clean compile` 40 文件全过（M6→GA 后第一次 clean 编译，依赖能解析）
   - Smoke 项 2-4 留用户实跑：`/agent/api/v1/task/trigger/{id}` 一次 → 看 `/actuator/prometheus` 的 `educare_llm_*` 仍增长 + Langfuse UI 出现 trace
-- [ ] **H-1.2** `student-data-server`（Java）—— tools: `get_student_profile / get_academic_history / get_mental_indicators / get_attendance`
-- [ ] **H-1.3** `knowledge-rag-server`（Python FastMCP）—— tools: `search_cases / search_policies / search_psychology`
+- [x] **H-1.2** `student-data-server`（Java）—— tools: `get_student_profile / get_academic_history / get_mental_indicators / get_attendance`
+  - 完成于 2026-05-19：起独立微服务 `backend/mcp-student-data`（端口 8094），不内嵌 agent-service。模块入口 `McpStudentDataApplication.java` 通过 `MethodToolCallbackProvider` 显式登记 `StudentDataTools` 的 4 个 `@Tool`（1.0.x starter 不自动扫描，必须手动登记）。
+  - **DDL 增量**：`sql/init/04_student_extras.sql` 新建 `student_academic_record` + `student_attendance`，含种子数据 student_id=1 共 3 门课 + 4 天考勤。
+  - **student-service 域扩展**：`AcademicRecord`/`Attendance` entity + mapper + service + 两个 controller，端点 `GET /student/{id}/academic` / `/student/{id}/attendance` / `/student/{id}/attendance/summary`。不动既有 `StudentController.java`。
+  - **mcp-student-data 模块**：pom 引 `spring-ai-starter-mcp-server-webmvc` + Nacos + Feign。`StudentDataTools` 通过 Feign 调 student-service + mental-service；`get_mental_indicators` 先 Feign 取 `Student.userId` 再调 `/mental/student/assessments?userId=`，保持 mental-service 改动 0。
+  - **MCP_DESIGN.md 校准**：starter artifactId 改 `spring-ai-starter-mcp-server-webmvc`（GA 重命名）；1.0.x 用 `@Tool`+`@ToolParam` 且需 `MethodToolCallbackProvider` 手动登记；SSE 端点 `/sse`（连接）+ `/mcp/message`（消息）。
+  - Smoke 待用户实跑：加载 04_student_extras.sql → `mvn -pl mcp-student-data spring-boot:run` → mcp-inspector 选 **Streamable HTTP** `http://localhost:8094/mcp`（H-1.1.6 后） → 4 个 tool 各调一次。
+- [x] **H-1.1.6** Spring AI `1.0.0 → 1.1.6` GA 升级 + MCP transport 全栈切 Streamable HTTP（H-1.3 前置）
+  - 完成于 2026-05-20：4 处改动 ——
+    1. `backend/pom.xml`：`spring-ai.version` 改 `1.1.6`；MCP Java SDK 随之升到 0.18.2（依赖树验证）。1.0→1.1 核心 API（`@Tool`/`@ToolParam`/`MethodToolCallbackProvider`/`OpenAiApi.builder()`/`OpenAiChatModel.builder()`/`OpenAiChatAutoConfiguration`）保持 source-compatible，agent-service 40 文件 + mcp-student-data 8 文件 `mvn clean compile` 全过，零代码改动
+    2. `mcp-student-data/application.yml`：删除 `stdio` / `sse-endpoint` / `sse-message-endpoint`；新增 `spring.ai.mcp.server.protocol=STREAMABLE` + `spring.ai.mcp.server.streamable-http.mcp-endpoint=/mcp`（实际 property key 通过 spring-ai-autoconfigure-mcp-server-common 1.1.6 的 spring-configuration-metadata.json 核实）
+    3. `mcp-student-data` Javadoc 注释：`McpStudentDataApplication.java` + `StudentDataTools.java` 顶注 Spring AI 版本与传输协议表述更新
+    4. `MCP_DESIGN.md §1/§3/§4/§9` + `deploy.md` 端口表协议列同步：拍板表 transport `SSE/streamable HTTP` → `Streamable HTTP`；§3 整段重写为"为什么选 Streamable HTTP"；§4 端点表 `/sse + /mcp/message` → 单端点 `/mcp`
+  - Smoke 项 1：`mvn -pl mcp-student-data,agent-service -am clean compile` 全过
+  - Smoke 项 2-4 留用户实跑：`mvn -pl mcp-student-data spring-boot:run` 后日志确认 `protocol=STREAMABLE` + mcp-inspector 选 Streamable HTTP → `http://localhost:8094/mcp` → 4 tool 可见
+- [ ] **H-1.3** `knowledge-rag-server`（Python FastMCP **2.x**，**Streamable HTTP**，端口 8095）—— tools: `search_cases / search_policies / search_psychology`
 - [ ] **H-1.4** 写一个 `mcp-smoke-test` 脚本，从 Claude Desktop / agent-service 直连两个 server 跑 happy path
 
 ### H-2 主 Agent Loop（替换 `AgentTaskServiceImpl.doExecute`）
@@ -267,6 +282,8 @@ H-4 (ModelRouter) ──► H-2 (Loop 选模型)
 | 2026-05-14 | G-5.1 选 Langfuse self-hosted v2 + `profiles: [langfuse]` 默认不启 | 已有 compose 编排可复用；v2 两容器够用，v3 的 clickhouse+worker 五容器对 resume 项目超量；profiles 让 default `up` 仍精简 |
 | 2026-05-14 | G-6.1 选 promptfoo 而非 Braintrust SaaS | 无付费 tier；YAML+JSONL 随 git 版本化；Langfuse 已覆盖在线 trace，离线 eval 用轻量 CLI 互补 |
 | 2026-05-19 | H-1.1 拆出 H-1.1.5：Spring AI 升级单独 PR | M6→GA 改动面（starter 改名 + auto-config 拆包 + OpenAiApi/Model builder 化）远超 MCP_DESIGN §2 预估的"4-arg constructor 仍可用"，单 PR 隔离回归风险 |
+| 2026-05-19 | H-1.2 决定起独立微服务 `backend/mcp-student-data` 而非内嵌 agent-service；同步补 `student_academic_record` / `student_attendance` 两张表 DDL；并订正 MCP_DESIGN.md 中 starter artifactId / 注解 / SSE 端点三处事实错误 | 单一职责 + 端口独立（8094）便于 mcp-inspector 直连 smoke；agent-service 重启不影响 MCP server；与 H-1.3 Python 端口 8095 形成对称结构。MCP_DESIGN 原写法（`spring-ai-mcp-server-spring-boot-starter` + `@Tool` 自动扫描 + `/sse` 路径）在 1.0.0 GA 已重命名/拆分，落地实测后才发现并校准 |
+| 2026-05-20 | 在 H-1.2 与 H-1.3 之间插入 H-1.1.6：Spring AI 1.0.0 → 1.1.6 GA + MCP 传输全栈切到 Streamable HTTP | MCP spec 2025-03-26 已将 SSE 标记 deprecated，Streamable HTTP 为推荐传输；Spring AI 1.0.x 仅支持 SSE/STDIO，必须升 1.1.x 才能切。提早切的好处：H-1.3 直接落 HTTP transport，未来 H-2 client 一次到位，避免后续二次返工。1.0→1.1 实测核心 API 完全兼容（`@Tool`/`@ToolParam`/`MethodToolCallbackProvider`/`OpenAiApi.builder()` 等保留），零代码改动；MCP server 仅 application.yml 三行配置切换 |
 
 ---
 
