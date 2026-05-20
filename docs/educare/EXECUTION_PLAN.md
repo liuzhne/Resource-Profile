@@ -4,7 +4,7 @@
 >
 > **设计源**：`IMPROVEMENT_2026_MAY.md`（v1.1，2026-05-12 拍板）
 > **创建日期**：2026-05-13
-> **最近更新**：2026-05-20（H-1.1.6 完成：父 pom Spring AI 1.0.0 → 1.1.6 GA；mcp-student-data application.yml 协议从 SSE 切到 Streamable HTTP，端点统一到单点 `/mcp`；agent-service 编译回归通过；MCP_DESIGN.md §1/§3/§4/§9 + deploy.md 端口表协议描述同步更新。指针保持 H-1.3 knowledge-rag MCP server，新增需求：H-1.3 直接用 Streamable HTTP transport）
+> **最近更新**：2026-05-20（H-1.3 完成：抽 `app/services/rag_pipeline.py` 单库检索管线；新增 `app/mcp/` 模块（`tools.py` 3 个 FastMCP `@mcp.tool` + `rag_adapter.py` 入参清洗 + `knowledge_rag_server.py` 启动入口）；`requirements.txt` 加 `fastmcp>=2.3,<3.0`；`config.py` 加 `MCP_KNOWLEDGE_RAG_PORT/PATH`；transport 走 Streamable HTTP 单端点 `/mcp` 端口 8095。指针推进至 H-1.4 mcp-smoke-test 脚本）
 
 ---
 
@@ -29,9 +29,11 @@
 ## 1. 下一步指针（Next Action）
 
 **当前阶段**：Phase H（MCP 化 + Agent Loop 重构）
-**下一步**：→ §3 H-1.3 实现 `knowledge-rag` MCP server（Python FastMCP **2.x**，3 个 search tool，**Streamable HTTP transport**，端口 8095；见 `MCP_DESIGN.md §5`）
-- **前置已就绪**：H-1.1.5（Spring AI 1.0.0 GA）+ H-1.2（student-data MCP server，端口 8094）+ H-1.1.6（Spring AI 1.1.6 GA + MCP transport 全栈切 Streamable HTTP）已合入
-- **H-1.2 待跑 smoke**：`docker exec mysql ... < sql/init/04_student_extras.sql` 加载新表后，`mvn -pl mcp-student-data spring-boot:run`，用 `npx @modelcontextprotocol/inspector` 选 **Streamable HTTP** → `http://localhost:8094/mcp` 验证 4 个 tool 可见且能拿数据
+**下一步**：→ §3 H-1.4 写 `mcp-smoke-test.sh`：从 `mcp-inspector` 或 Claude Desktop 直连 student-data(8094) + knowledge-rag(8095) 两个 server 跑 happy path（4+3=7 个 tool 各调一次）
+- **前置已就绪**：H-1.1.5（Spring AI 1.0.0 GA）+ H-1.2（student-data MCP server，8094）+ H-1.1.6（Spring AI 1.1.6 GA + MCP transport 全栈 Streamable HTTP）+ H-1.3（FastMCP knowledge-rag MCP server，8095）均已合入
+- **H-1.2 / H-1.3 待用户实跑 smoke**：
+  - student-data：`docker exec mysql ... < sql/init/04_student_extras.sql` 加载新表后 `mvn -pl mcp-student-data spring-boot:run`；inspector 选 Streamable HTTP → `http://localhost:8094/mcp` 验 4 个 tool
+  - knowledge-rag：`cd ai-inference-service && pip install -r requirements.txt && python -m app.mcp.knowledge_rag_server`；inspector → `http://localhost:8095/mcp` 验 3 个 search tool
 - **Phase G 全部完成**（代码侧）；只剩用户侧 `FIELD_PERMISSION_VERIFY.md`（G-2.3）实跑回写
 - **smoke 剩余 3 项待用户实跑**：本地 llama.cpp 起后跑一次 `/agent/api/v1/task/trigger/{id}`，验证 `LlamaCppCachePromptInterceptor` + `LlmMetricsInterceptor` + Langfuse trace 推送（见 `MCP_DESIGN.md §2` 项 2-4）
 
@@ -182,7 +184,16 @@
     4. `MCP_DESIGN.md §1/§3/§4/§9` + `deploy.md` 端口表协议列同步：拍板表 transport `SSE/streamable HTTP` → `Streamable HTTP`；§3 整段重写为"为什么选 Streamable HTTP"；§4 端点表 `/sse + /mcp/message` → 单端点 `/mcp`
   - Smoke 项 1：`mvn -pl mcp-student-data,agent-service -am clean compile` 全过
   - Smoke 项 2-4 留用户实跑：`mvn -pl mcp-student-data spring-boot:run` 后日志确认 `protocol=STREAMABLE` + mcp-inspector 选 Streamable HTTP → `http://localhost:8094/mcp` → 4 tool 可见
-- [ ] **H-1.3** `knowledge-rag-server`（Python FastMCP **2.x**，**Streamable HTTP**，端口 8095）—— tools: `search_cases / search_policies / search_psychology`
+- [x] **H-1.3** `knowledge-rag-server`（Python FastMCP **2.x**，**Streamable HTTP**，端口 8095）—— tools: `search_cases / search_policies / search_psychology`
+  - 完成于 2026-05-20：4 处改动 ——
+    1. `ai-inference-service/app/services/rag_pipeline.py` 新文件：单 query × 单集合检索（embed → milvus_search → 可选 rerank → Redis 缓存），与 `app/api/rag.py` 的多源聚合管线职责分离；缓存 key `edu:rag:pipe:<sha256>`，TTL 沿用 `settings.RAG_CACHE_TTL`
+    2. `ai-inference-service/app/mcp/` 新模块：`__init__.py` + `rag_adapter.py`（`search_collection` 入口，`top_k` 裁剪到 [1, 20]，空 query 早退） + `tools.py`（3 个 FastMCP `@mcp.tool` async：`search_cases`/`search_policies`/`search_psychology`，分别打到 `case`/`policy`/`psychology` collection） + `knowledge_rag_server.py`（独立进程 main，`mcp.run(transport="http", host, port, path)`）
+    3. `requirements.txt` 加 `fastmcp>=2.3,<3.0`（原生 Streamable HTTP，spec 2025-03-26）
+    4. `app/core/config.py` 加 `MCP_KNOWLEDGE_RAG_PORT=8095` + `MCP_KNOWLEDGE_RAG_PATH=/mcp`
+  - **复用而非重写**：embedding_client / milvus_client / reranker_client / redis_client 全部沿用；`rag.py` `/api/v1/rag/retrieve` 路由零改动（其多源聚合语义与 MCP 单源 tool 不重合，不强抽公共层）
+  - **独立进程**：不合入 FastAPI 主进程（8090），8095 独立 Uvicorn，资源/重启/调试独立；docker-compose 编排留 H-1.4 smoke 时再加
+  - Smoke 项 1：`python3 -c "ast.parse(...)"` 5 文件语法全过
+  - Smoke 项 2-4 留用户实跑：`pip install -r requirements.txt` → `python -m app.mcp.knowledge_rag_server` → mcp-inspector Streamable HTTP `http://localhost:8095/mcp` 验 3 tool 各调一次
 - [ ] **H-1.4** 写一个 `mcp-smoke-test` 脚本，从 Claude Desktop / agent-service 直连两个 server 跑 happy path
 
 ### H-2 主 Agent Loop（替换 `AgentTaskServiceImpl.doExecute`）
@@ -284,6 +295,7 @@ H-4 (ModelRouter) ──► H-2 (Loop 选模型)
 | 2026-05-19 | H-1.1 拆出 H-1.1.5：Spring AI 升级单独 PR | M6→GA 改动面（starter 改名 + auto-config 拆包 + OpenAiApi/Model builder 化）远超 MCP_DESIGN §2 预估的"4-arg constructor 仍可用"，单 PR 隔离回归风险 |
 | 2026-05-19 | H-1.2 决定起独立微服务 `backend/mcp-student-data` 而非内嵌 agent-service；同步补 `student_academic_record` / `student_attendance` 两张表 DDL；并订正 MCP_DESIGN.md 中 starter artifactId / 注解 / SSE 端点三处事实错误 | 单一职责 + 端口独立（8094）便于 mcp-inspector 直连 smoke；agent-service 重启不影响 MCP server；与 H-1.3 Python 端口 8095 形成对称结构。MCP_DESIGN 原写法（`spring-ai-mcp-server-spring-boot-starter` + `@Tool` 自动扫描 + `/sse` 路径）在 1.0.0 GA 已重命名/拆分，落地实测后才发现并校准 |
 | 2026-05-20 | 在 H-1.2 与 H-1.3 之间插入 H-1.1.6：Spring AI 1.0.0 → 1.1.6 GA + MCP 传输全栈切到 Streamable HTTP | MCP spec 2025-03-26 已将 SSE 标记 deprecated，Streamable HTTP 为推荐传输；Spring AI 1.0.x 仅支持 SSE/STDIO，必须升 1.1.x 才能切。提早切的好处：H-1.3 直接落 HTTP transport，未来 H-2 client 一次到位，避免后续二次返工。1.0→1.1 实测核心 API 完全兼容（`@Tool`/`@ToolParam`/`MethodToolCallbackProvider`/`OpenAiApi.builder()` 等保留），零代码改动；MCP server 仅 application.yml 三行配置切换 |
+| 2026-05-20 | H-1.3 落地：抽 `rag_pipeline.py` 单库检索管线（与既有多源聚合 `rag.py` 职责分离）；新增 `app/mcp/` FastMCP 2.x 模块（3 个 `@mcp.tool` + adapter + server entry），跑独立进程端口 8095 / Streamable HTTP / 单端点 `/mcp` | 与 H-1.2 student-data MCP server（8094）形成对称结构；不合入 FastAPI 主进程（8090）以保资源/重启/调试独立；rag.py 路由零改动，只新增依赖（fastmcp）与新模块，最小风险面 |
 
 ---
 

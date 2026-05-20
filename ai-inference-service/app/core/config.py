@@ -58,6 +58,12 @@ class Settings:
     LANGFUSE_SECRET_KEY: str = os.getenv("LANGFUSE_SECRET_KEY", "")
     LANGFUSE_HOST: str = os.getenv("LANGFUSE_HOST", "http://localhost:3001")
 
+    # H-1.3：knowledge-rag MCP server（FastMCP，独立进程）。
+    # 端口与 mcp-student-data(8094) 配对，主 FastAPI 仍占 8090。
+    # transport 固定为 Streamable HTTP，单端点 path（spec 2025-03-26 推荐）。
+    MCP_KNOWLEDGE_RAG_PORT: int = int(os.getenv("MCP_KNOWLEDGE_RAG_PORT", "8095"))
+    MCP_KNOWLEDGE_RAG_PATH: str = os.getenv("MCP_KNOWLEDGE_RAG_PATH", "/mcp")
+
 
 @lru_cache()
 def get_settings() -> Settings:

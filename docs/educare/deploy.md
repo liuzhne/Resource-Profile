@@ -71,7 +71,7 @@ docker exec -i $(docker compose -f docker/docker-compose.yml ps -q mysql) \
 | ai-inference-service | 8090 | Python FastAPI（LLM+RAG） |
 | llama.cpp llm | 8091 | 宿主机 LLM 服务 |
 | **mcp-student-data** | **8094** | **H-1.2 + H-1.1.6：student-data MCP server（Streamable HTTP，单端点 `/mcp`）** |
-| knowledge-rag MCP | 8095 | H-1.3 预留（Python FastMCP，Streamable HTTP，单端点 `/mcp`） |
+| **knowledge-rag MCP** | **8095** | **H-1.3：Python FastMCP knowledge-rag server（Streamable HTTP，单端点 `/mcp`），3 个 search tool（cases/policies/psychology）** |
 
 ### 2.3 启动 ai-inference-service（容器）
 
@@ -79,6 +79,17 @@ docker exec -i $(docker compose -f docker/docker-compose.yml ps -q mysql) \
 docker compose -f docker/docker-compose.yml up -d --build ai-inference-service
 docker compose -f docker/docker-compose.yml logs -f ai-inference-service | head -50
 ```
+
+H-1.3 起额外多一个独立进程的 MCP server（不合入 FastAPI 主进程，端口 8095，Streamable HTTP）：
+
+```bash
+cd ai-inference-service
+pip install -r requirements.txt    # 引入 fastmcp>=2.3,<3.0
+python -m app.mcp.knowledge_rag_server
+# 日志出现 "knowledge-rag MCP server 启动 transport=streamable-http host=0.0.0.0 port=8095 path=/mcp" 即就绪
+```
+
+> docker-compose 编排该 server 留 H-1.4 smoke 时一并加入；当前阶段可本地裸跑。
 
 ### 2.4 启动宿主机 LLM 三件套
 
@@ -340,3 +351,4 @@ docker exec edu-mysql sh -c 'mysqldump -uroot -proot edu_portrait' > backup_$(da
 - **更换 Embedding 模型**：必须同步更新 `EMBEDDING_DIM`（Milvus 集合 schema 也要重建）；走 §4.2 流程。
 - **新增 Milvus 集合**：在 `app/core/config.py::MILVUS_COLLECTIONS` 添加 → 重跑 `init_milvus`。
 - **Spring AI 升级**：1.0.0-M6 → 正式版后，仍在 `repo.spring.io/milestone` 拉则继续保留仓库声明；切到中央仓时移除即可。H-1.1.6（2026-05-20）已升到 **1.1.6 GA**（Maven Central），同步把 MCP server 传输从 SSE 切到 **Streamable HTTP**（`spring.ai.mcp.server.protocol=STREAMABLE`，单端点 `/mcp`）。1.0→1.1 主线 API 完全兼容。
+- **新增 MCP server**：Python 侧（H-1.3）落地后新增依赖 `fastmcp>=2.3,<3.0`，独立进程跑端口 8095，传输 Streamable HTTP 单端点 `/mcp`。环境变量可调 `MCP_KNOWLEDGE_RAG_PORT` / `MCP_KNOWLEDGE_RAG_PATH` / `MCP_KNOWLEDGE_RAG_HOST`；Milvus / embedding / reranker / Redis 沿用既有 `Settings`，零新增连接配置。
