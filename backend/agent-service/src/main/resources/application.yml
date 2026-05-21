@@ -75,6 +75,19 @@ spring:
           model: qwen2.5-32b-instruct-q4_k_m
           temperature: 0.3
           max-tokens: 2048
+    # H-2.2：MCP client 接两个 Streamable HTTP server。
+    # 启动时 Spring AI 1.1.6 auto-config 对每个 connection 走 initialize → tools/list 拉工具清单，
+    # 暴露合并的 ToolCallbackProvider Bean。两端均为 fail-fast：server 起不来则 agent-service 起不来。
+    mcp:
+      client:
+        streamable-http:
+          connections:
+            student-data:
+              url: ${MCP_STUDENT_DATA_URL:http://localhost:8094}
+              endpoint: /mcp
+            knowledge-rag:
+              url: ${MCP_KNOWLEDGE_RAG_URL:http://localhost:8095}
+              endpoint: /mcp
 
 mybatis-plus:
   configuration:

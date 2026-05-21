@@ -2,6 +2,7 @@ package com.edu.agent.core;
 
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
+import com.edu.agent.config.LangfuseClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -9,8 +10,11 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * H-2.1：think → tool → observe 循环骨架。
@@ -36,9 +40,11 @@ public class AgentLoop {
     private static final int CONSECUTIVE_PARSE_ERROR_LIMIT = 2;
 
     private final ChatClient chatClient;
+    private final LangfuseClient langfuseClient;
 
     public AgentLoopResult run(AgentLoopRequest rawReq) {
         AgentLoopRequest req = rawReq.normalized();
+        Instant runStart = Instant.now();
         String systemPrompt = composeSystemPrompt(req);
         List<AgentTrace> traces = new ArrayList<>(req.maxIterations());
         int consecutiveParseError = 0;
@@ -55,7 +61,7 @@ public class AgentLoop {
                 log.error("[AgentLoop][{}] LLM 调用异常 iter={}", req.taskTag(), i, e);
                 traces.add(new AgentTrace(i, "", null, null, null, null,
                         System.currentTimeMillis() - t0, "llm-call-failed: " + e.getMessage()));
-                return new AgentLoopResult(AgentLoopStatus.TOOL_ERROR, null, traces, i);
+                return finishRun(req, new AgentLoopResult(AgentLoopStatus.TOOL_ERROR, null, traces, i), runStart);
             }
 
             ParsedTurn parsed = parseLlmJson(raw);
@@ -65,7 +71,7 @@ public class AgentLoop {
                         System.currentTimeMillis() - t0, null));
                 log.info("[AgentLoop][{}] iter={} COMPLETED finalAnswer={}",
                         req.taskTag(), i, abbreviate(parsed.finalAnswer));
-                return new AgentLoopResult(AgentLoopStatus.COMPLETED, parsed.finalAnswer, traces, i);
+                return finishRun(req, new AgentLoopResult(AgentLoopStatus.COMPLETED, parsed.finalAnswer, traces, i), runStart);
             }
 
             if (parsed.parseError != null) {
@@ -75,7 +81,7 @@ public class AgentLoop {
                 if (consecutiveParseError >= CONSECUTIVE_PARSE_ERROR_LIMIT) {
                     log.warn("[AgentLoop][{}] iter={} 连续 {} 轮 parse error，退出",
                             req.taskTag(), i, consecutiveParseError);
-                    return new AgentLoopResult(AgentLoopStatus.PARSE_ERROR, null, traces, i);
+                    return finishRun(req, new AgentLoopResult(AgentLoopStatus.PARSE_ERROR, null, traces, i), runStart);
                 }
                 continue;
             }
@@ -97,7 +103,7 @@ public class AgentLoop {
                                 "tool-failed-after-retry"));
                         log.error("[AgentLoop][{}] iter={} tool={} 重试仍失败，终止",
                                 req.taskTag(), i, parsed.toolName, second);
-                        return new AgentLoopResult(AgentLoopStatus.TOOL_ERROR, null, traces, i);
+                        return finishRun(req, new AgentLoopResult(AgentLoopStatus.TOOL_ERROR, null, traces, i), runStart);
                     }
                 }
                 String truncated = truncate(observation);
@@ -119,7 +125,45 @@ public class AgentLoop {
 
         log.warn("[AgentLoop][{}] 达到 maxIterations={}，强制退出",
                 req.taskTag(), req.maxIterations());
-        return new AgentLoopResult(AgentLoopStatus.MAX_ITERATIONS, lastThought, traces, req.maxIterations());
+        return finishRun(req,
+                new AgentLoopResult(AgentLoopStatus.MAX_ITERATIONS, lastThought, traces, req.maxIterations()),
+                runStart);
+    }
+
+    /**
+     * H-2.2：所有终止路径汇集到这里上报 Langfuse 顶层 trace。
+     *
+     * <p>每轮 LLM call 仍由 {@code LlmMetricsInterceptor} 各自上报独立 {@code llm.chat} generation trace，
+     * 两类 trace 并列、不嵌套（嵌套留 H-2.4 eval 调优时扩展）。
+     * LangfuseClient 未配 key 时整体 no-op，失败 fail-soft。
+     */
+    private AgentLoopResult finishRun(AgentLoopRequest req, AgentLoopResult result, Instant runStart) {
+        Instant runEnd = Instant.now();
+        try {
+            String tracesSummary = JSON.toJSONString(result.traces());
+            if (tracesSummary.length() > 2048) {
+                tracesSummary = tracesSummary.substring(0, 2048) + "...[truncated]";
+            }
+            Map<String, Object> metadata = new LinkedHashMap<>();
+            metadata.put("task_tag", req.taskTag());
+            metadata.put("iterations", result.iterations());
+            metadata.put("status", result.status().name());
+            metadata.put("traces_summary", tracesSummary);
+            langfuseClient.traceGeneration(
+                    "agent.loop",
+                    "unknown",
+                    req.userPrompt(),
+                    result.finalAnswer(),
+                    0L,
+                    0L,
+                    metadata,
+                    runStart,
+                    runEnd);
+        } catch (Exception e) {
+            log.debug("[AgentLoop][{}] Langfuse trace 上报触发异常（已忽略）: {}",
+                    req.taskTag(), e.getMessage());
+        }
+        return result;
     }
 
     // -------- 拼接 prompt --------
