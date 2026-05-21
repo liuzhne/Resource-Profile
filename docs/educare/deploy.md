@@ -176,6 +176,39 @@ GATEWAY=http://localhost:8080 STUDENT_ID=1 bash scripts/smoke_test_agent.sh
 
 通过后再考虑放开定时扫描（见 §4.1）。
 
+### 2.8.1 MCP 双端冒烟（H-1.4）
+
+H-1.4 起新增 `scripts/mcp_smoke_test.sh`，一键回归 student-data(8094) + knowledge-rag(8095) 两个 MCP server 的 Streamable HTTP 握手 + `tools/list` + 7 个 tool 各调一次 happy path：
+
+```bash
+# 前置：mcp-student-data (8094) + knowledge-rag (8095) 均已启动
+bash scripts/mcp_smoke_test.sh
+
+# 或自定义参数：
+STUDENT_ID=1 \
+    STUDENT_DATA_URL=http://localhost:8094 \
+    KNOWLEDGE_RAG_URL=http://localhost:8095 \
+    bash scripts/mcp_smoke_test.sh
+```
+
+依赖：
+
+- **bash ≥ 4**（mac 默认是 3.2 → `brew install bash`，并显式用 `/opt/homebrew/bin/bash scripts/mcp_smoke_test.sh`）
+- `curl`、`jq`（mac 默认装，缺则 `brew install jq`）
+
+预期输出：两端各打印 `▸ 握手` + `▸ tools/list` + 4/3 个 `✓ tool_name → <preview>` 行；末尾 `✓ H-1.4 smoke 全部通过`，退出码 0。
+
+降级（不 fail，仅 ⚠）：
+
+- student-data 4 tool 返回 `null` / `found=false` → student-service / mental-service / mysql 未起；脚本继续推进
+- knowledge-rag 3 tool 返回 `fallback=true && count=0` → Milvus / embedding / reranker 未起；脚本继续推进
+
+失败（exit 1）：
+
+- handshake 失败、`tools/list` 缺失指定 tool、`tools/call` 返回 `error` 字段
+
+取代了原 H-1.2 / H-1.3 文档里"手开 `npx @modelcontextprotocol/inspector` 选 Streamable HTTP 一个个点击"的流程；用作 Spring AI / FastMCP / Milvus 升级的回归 baseline。
+
 ---
 
 ## 3. 关键配置项
