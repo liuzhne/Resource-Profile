@@ -4,7 +4,7 @@
 >
 > **设计源**：`IMPROVEMENT_2026_MAY.md`（v1.1，2026-05-12 拍板）
 > **创建日期**：2026-05-13
-> **最近更新**：2026-05-21（H-1.4 完成：新增 `scripts/mcp_smoke_test.sh`，纯 `curl + jq` 一键回归两个 MCP server 的 Streamable HTTP 握手 + `tools/list` + 7 个 tool 各调一次，session id 自动接力；失败 ✗ + exit 1，下游降级 ⚠ 不阻断。H-1 子阶段全部完结，指针推进至 H-2.1 新建 `AgentLoop.java`）
+> **最近更新**：2026-05-21（H-2.1 完成：新建包 `com.edu.agent.core/`，落 `AgentLoop` think→tool→observe 循环骨架（ReAct JSON 协议，非 Spring AI native tool calling）+ 4 个数据 record / 1 个 status enum + 3-case Mockito + JUnit 5 单元测试；不动旧 4 阶段、不引 MCP client、不改 yml；agent-service `pom.xml` 加 `spring-boot-starter-test` scope=test。指针推进至 H-2.2 在 `AgentLoop` 上接入 MCP client + G-1 prompt caching + G-5 Langfuse trace）
 
 ---
 
@@ -29,8 +29,9 @@
 ## 1. 下一步指针（Next Action）
 
 **当前阶段**：Phase H（MCP 化 + Agent Loop 重构）
-**下一步**：→ §3 H-2.1 新建 `agent-service/.../core/AgentLoop.java`，实现 think→tool→observe 循环（参考 Claude Agent SDK；通过 `spring-ai-starter-mcp-client` 接入 student-data + knowledge-rag 两个 MCP server）
+**下一步**：→ §3 H-2.2 在 `AgentLoop` 上接入 G-1 prompt caching + G-5 Langfuse trace（含给 `spring-ai-starter-mcp-client-webmvc` 加依赖 + `application.yml` 写 `spring.ai.mcp.client.streamable-http.connections.{student-data,knowledge-rag}`，把 `ToolCallbackProvider` 注入 AgentLoop 调用方）
 - **H-1 子阶段全部完结**：H-1.1（选型）+ H-1.1.5（Spring AI 1.0.0 GA）+ H-1.2（student-data MCP server，8094）+ H-1.1.6（Spring AI 1.1.6 GA + MCP transport 全栈 Streamable HTTP）+ H-1.3（FastMCP knowledge-rag MCP server，8095）+ H-1.4（`mcp_smoke_test.sh` 一键回归脚本）均已合入
+- **H-2.1 完结**：`backend/agent-service/src/main/java/com/edu/agent/core/` 5 个 Java 源（`AgentLoop` + `AgentLoopRequest/Result/Status/AgentTrace`）+ `AgentLoopTest` 3 case 全绿；ReAct JSON 协议跑通，控制流可单测、可 trace、可早停
 - **H-1.2 / H-1.3 用户侧 smoke 一键化**：两个 server 起好后执行 `bash scripts/mcp_smoke_test.sh`（依赖 bash≥4 / curl / jq）即可完成 7 个 tool 的 happy path 回归，取代手动 mcp-inspector 流程
 - **Phase G 全部完成**（代码侧）；只剩用户侧 `FIELD_PERMISSION_VERIFY.md`（G-2.3）实跑回写
 - **smoke 剩余 3 项待用户实跑**：本地 llama.cpp 起后跑一次 `/agent/api/v1/task/trigger/{id}`，验证 `LlamaCppCachePromptInterceptor` + `LlmMetricsInterceptor` + Langfuse trace 推送（见 `MCP_DESIGN.md §2` 项 2-4）
@@ -201,7 +202,12 @@
 
 ### H-2 主 Agent Loop（替换 `AgentTaskServiceImpl.doExecute`）
 
-- [ ] **H-2.1** 新建 `agent-service/.../core/AgentLoop.java`，实现 think→tool→observe 循环（参考 Claude Agent SDK）
+- [x] **H-2.1** 新建 `agent-service/.../core/AgentLoop.java`，实现 think→tool→observe 循环（参考 Claude Agent SDK）
+  - 完成于 2026-05-21：新建包 `com.edu.agent.core`，5 个 Java 源（`AgentLoop` `@Component` 主循环 + `AgentLoopRequest`/`AgentLoopResult`/`AgentTrace` record + `AgentLoopStatus` enum）；选 **ReAct JSON 协议**（每轮 LLM 输出 `{"thought":..., "action":{...}}` 或 `{"thought":..., "final_answer":...}`），不走 Spring AI 1.1.6 `ChatClient.tools(...)` 的隐式内部循环 —— 让 thought / action / observation 三类事件可见、可单测、可后续接 Langfuse trace
+  - 默认 `max_iterations=5`、`CONSECUTIVE_PARSE_ERROR_LIMIT=2`、`TOOL_RESULT_MAX_LEN=4096`、tool 调用失败一次重试，再失败立即 `TOOL_ERROR` 终止；4 种终止态枚举 `COMPLETED / MAX_ITERATIONS / TOOL_ERROR / PARSE_ERROR`
+  - 工具列表类型用 `List<ToolCallback>`（`org.springframework.ai.tool.ToolCallback`），H-2.2 接 MCP 时 `ToolCallbackProvider` 直接喂入，AgentLoop 零改动
+  - `AgentLoopTest.java` 3 case 全绿（`mvn -pl agent-service test -Dtest=AgentLoopTest`）：纯 Mockito `RETURNS_DEEP_STUBS` + JUnit 5，无 `@SpringBootTest`；覆盖 first-turn final / tool→final / max_iterations 触发；agent-service `pom.xml` 增加 `spring-boot-starter-test` scope=test
+  - 不动 `AgentTaskServiceImpl.doExecute` 旧 4 阶段（feature flag 留 H-2.3）；不引 `spring-ai-starter-mcp-client-webmvc` 依赖（H-2.2 时一并加）；不接 Langfuse（H-2.2 一并接）
 - [ ] **H-2.2** 接入 G-1 的 prompt caching + G-5 的 Langfuse
 - [ ] **H-2.3** Feature flag：`educare.agent.loop.enabled`，默认 false；旧 4 阶段保留作 fallback
 - [ ] **H-2.4** 灰度切流脚本（10% → 50% → 100%），观察 eval 集回归
@@ -300,6 +306,7 @@ H-4 (ModelRouter) ──► H-2 (Loop 选模型)
 | 2026-05-20 | 在 H-1.2 与 H-1.3 之间插入 H-1.1.6：Spring AI 1.0.0 → 1.1.6 GA + MCP 传输全栈切到 Streamable HTTP | MCP spec 2025-03-26 已将 SSE 标记 deprecated，Streamable HTTP 为推荐传输；Spring AI 1.0.x 仅支持 SSE/STDIO，必须升 1.1.x 才能切。提早切的好处：H-1.3 直接落 HTTP transport，未来 H-2 client 一次到位，避免后续二次返工。1.0→1.1 实测核心 API 完全兼容（`@Tool`/`@ToolParam`/`MethodToolCallbackProvider`/`OpenAiApi.builder()` 等保留），零代码改动；MCP server 仅 application.yml 三行配置切换 |
 | 2026-05-20 | H-1.3 落地：抽 `rag_pipeline.py` 单库检索管线（与既有多源聚合 `rag.py` 职责分离）；新增 `app/mcp/` FastMCP 2.x 模块（3 个 `@mcp.tool` + adapter + server entry），跑独立进程端口 8095 / Streamable HTTP / 单端点 `/mcp` | 与 H-1.2 student-data MCP server（8094）形成对称结构；不合入 FastAPI 主进程（8090）以保资源/重启/调试独立；rag.py 路由零改动，只新增依赖（fastmcp）与新模块，最小风险面 |
 | 2026-05-21 | H-1.4 落地 `scripts/mcp_smoke_test.sh`：纯 `curl + jq` 一键回归两个 MCP server 的 `initialize → notifications/initialized → tools/list → 7×tools/call`，session id 自动接力；H-1 子阶段全部完结，指针推进至 H-2.1 AgentLoop | 取代手动 `mcp-inspector` 点点点的 H-1.2/H-1.3 smoke 流程；脚本即基线，后续 Spring AI / FastMCP / Milvus 升级跑一次即可回归。无 npm 依赖（保留 macOS 默认 toolchain），但需要 bash≥4（`declare -A` 双 session id 接力），脚本头自检 + 提示 |
+| 2026-05-21 | H-2.1 落地：新建 `com.edu.agent.core.AgentLoop` + 4 个 record/enum + 3-case 单元测试，think→tool→observe 循环走 ReAct JSON 协议 | 选 ReAct 而非 Spring AI 1.1.6 native tool calling 的理由：1.1.6 `ChatClient.tools(...)` 默认内部隐式循环，thought/action/observation 三类事件个体不可见，无法 trace、无法 inject early-stop、无法限 max_iterations；`internalToolExecutionEnabled=false` 路径未实测稳定。ReAct JSON 把控制流封装在 AgentLoop 内部，外部只需 `ToolCallback` 列表，H-2.2 接 MCP 时调用方零改动；后续模型升 32B+ 想换 native tool calling 也只改 AgentLoop 内部。本步不动旧 4 阶段，feature flag 留 H-2.3 |
 
 ---
 

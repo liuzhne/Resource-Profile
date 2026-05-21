@@ -125,6 +125,13 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- H-2.1：单测用 JUnit 5 + Mockito（spring-boot-starter-test 自带） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
         <!-- F-1：PDF 报告异步导出 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
