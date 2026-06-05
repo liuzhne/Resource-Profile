@@ -395,8 +395,18 @@ H-4 (ModelRouter) ──► H-2 (Loop 选模型)
 
 > 本节登记 **跨任务、阻塞下游验证、但本次执行不修** 的预先存在问题。每条都有"何时解锁"标注。
 
-- **B-1（mental-service 编译断）** — `QuestionnaireServiceImpl.java` 引用了 `Question` 实体上不存在的 `scoringRules / scaleMin / scaleMax / scaleLabels` 字段和 `QuestionService` 上不存在的 `deleteByQuestionnaireId / saveBatch(Long, List)` 方法（来自更早的 mental 子模块 WIP）。
-  - 影响：`mvn -pl mental-service` 单独跑不过；G-2.3 端到端验证如果走 mental 接口会卡。
-  - 何时解锁：G-2.3 前；或更早由 mental-service 拥有者补齐实体字段 + 服务方法。
-  - 解决方向：(a) 给 `Question` 补 4 个字段 + 数据库迁移；(b) `QuestionService` 补 `deleteByQuestionnaireId` 和 `saveBatch`；(c) 或回滚 `QuestionnaireServiceImpl` 里这段逻辑。
-  - 标注 G-2.2-d 完成时发现（2026-05-13）。MentalAssessment 实体本身已成功加注解；该 entity 编译独立 OK。
+- ~~**B-1（mental-service 编译断）**~~ **已解决 2026-06-05**：`Question` 补 `scoringRules/scaleMin/scaleMax/scaleLabels` 4 字段（列在 `01_init.sql:163-166` 本就存在，纯 Java 漏映射）+ `QuestionService` 补 `deleteByQuestionnaireId / saveBatch(Long, List)` 并在 `QuestionServiceImpl` 实现。`mvn clean install` 全 11 模块 BUILD SUCCESS。无需数据库迁移（schema 已含这些列）。
+
+---
+
+## 9. 可运行性硬化（2026-06-05，"5 件事"）
+
+针对"是否可运行、合格 Agent"的评估，依次执行 5 项：
+
+1. **修 B-1 → 全量构建绿** ✅ 见 §8。`mvn clean install` 11 模块全过。
+2. **端到端真跑** ⚠ 代码级证据已固化（见第 3 项）；**活模型端到端留 `docs/educare/E2E_RUNBOOK.md`**（本开发沙箱无 Docker daemon / 无 GPU / 无 14B 模型权重，物理不可执行；Runbook 给出逐条命令 + 每步通过判据，把执行成本降到"起模型 + 一条 compose"）。
+3. **冒烟集成测试** ✅ `AgentLoopE2ECodeTest`：用真实 `AgentLoop` + 真实 `agent-loop.system.md` + 真实 `SkillLoader` + 脚本化假 LLM/工具，跑通 `think→调 get_student_profile→final_answer→解析 risk/plan/level` 全链路（除"活模型生成"外的全部代码路径）；`parseAgentLoopFinalAnswer` 改包级 static 可测。agent-service 共 34 case 全绿。
+4. **docker-compose 编排 agent 全栈** ✅ `docker/Dockerfile.springboot`（按 MODULE 参数化）+ compose 加 `agent-service(8087)` `mcp-student-data(8094)` `knowledge-rag-mcp(8095)` `memory-mcp(8096)` 四服务，带 healthcheck + `depends_on: service_healthy`（agent-service 等两个 MCP 探活后启动）；`docker compose config` 校验通过。
+5. **agent vs legacy eval 对比** ⚠ 工具就绪：`eval/agent_vs_legacy.sh` + `eval/agent_vs_legacy_cohort.jsonl`（同组学生分别按 legacy/agent 跑、读回 riskLevel、比对 ground truth 一致率，agent≥legacy 才 exit 0）；需活栈执行（见 Runbook §7）。
+
+> 结论：构建/测试/编排三项已是硬证据；真跑与 eval 对比受限于无 LLM/无容器运行时，已交付一键可跑路径 + 通过判据，待具备模型的机器执行。

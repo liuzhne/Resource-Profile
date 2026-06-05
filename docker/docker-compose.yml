@@ -181,6 +181,148 @@ services:
     networks:
       - edu-network
 
+  # ============================================================
+  # EduCare Agent 全栈（agent-service + 3 个 MCP server）
+  # 本地 LLM/embedding/reranker 仍在宿主 llama.cpp，通过 host.docker.internal 访问。
+  # 真跑 AgentLoop：把 agent-service 的 EDUCARE_AGENT_LOOP_ENABLED 置 true。
+  # ============================================================
+
+  # H-1.2：student-data MCP server（Java，8094）
+  mcp-student-data:
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile.springboot
+      args:
+        MODULE: mcp-student-data
+    container_name: edu-portrait-mcp-student-data
+    environment:
+      NACOS_SERVER: nacos:8848
+      NACOS_NAMESPACE:
+      MYSQL_HOST: mysql
+    ports:
+      - "8094:8094"
+    depends_on:
+      - nacos
+      - mysql
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8094/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - edu-network
+    restart: unless-stopped
+
+  # H-1.3：knowledge-rag MCP server（Python FastMCP，8095，复用 ai-inference 镜像换 command）
+  knowledge-rag-mcp:
+    build:
+      context: ../ai-inference-service
+      dockerfile: Dockerfile
+    container_name: edu-portrait-knowledge-rag-mcp
+    command: ["python", "-m", "app.mcp.knowledge_rag_server"]
+    environment:
+      MILVUS_HOST: milvus-standalone
+      MILVUS_PORT: 19530
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      EMBEDDING_BASE_URL: http://host.docker.internal:8092/v1
+      EMBEDDING_MODEL: bge-large-zh-v1.5
+      RERANKER_BASE_URL: http://host.docker.internal:8093
+      RERANKER_ENABLED: "true"
+      MCP_KNOWLEDGE_RAG_PORT: "8095"
+    ports:
+      - "8095:8095"
+    depends_on:
+      - milvus-standalone
+      - redis
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 8095), 3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    networks:
+      - edu-network
+    restart: unless-stopped
+
+  # H-5：memory MCP server（Python FastMCP，8096，复用 ai-inference 镜像换 command）
+  memory-mcp:
+    build:
+      context: ../ai-inference-service
+      dockerfile: Dockerfile
+    container_name: edu-portrait-memory-mcp
+    command: ["python", "-m", "app.mcp.memory_server"]
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      LLM_BASE_URL: http://host.docker.internal:8091/v1
+      MCP_MEMORY_PORT: "8096"
+    ports:
+      - "8096:8096"
+    depends_on:
+      - redis
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 8096), 3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    networks:
+      - edu-network
+    restart: unless-stopped
+
+  # H-2：agent-service（8087）—— Agent 编排主体，依赖两个 MCP server 就绪
+  agent-service:
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile.springboot
+      args:
+        MODULE: agent-service
+    container_name: edu-portrait-agent
+    environment:
+      NACOS_SERVER: nacos:8848
+      NACOS_NAMESPACE:
+      MYSQL_HOST: mysql
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      # 宿主 llama.cpp（生成 LLM）
+      SPRING_AI_OPENAI_BASE_URL: http://host.docker.internal:8091
+      EDUCARE_LOCAL_LLM_BASE_URL: http://host.docker.internal:8091
+      # 容器网络内的 MCP server
+      MCP_STUDENT_DATA_URL: http://mcp-student-data:8094
+      MCP_KNOWLEDGE_RAG_URL: http://knowledge-rag-mcp:8095
+      # AgentLoop 默认关；真跑切流时置 true（或经 Nacos agent-canary.yml 灰度）
+      EDUCARE_AGENT_LOOP_ENABLED: "false"
+    ports:
+      - "8087:8087"
+    depends_on:
+      nacos:
+        condition: service_started
+      mysql:
+        condition: service_started
+      redis:
+        condition: service_started
+      mcp-student-data:
+        condition: service_healthy
+      knowledge-rag-mcp:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8087/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 90s
+    networks:
+      - edu-network
+    restart: unless-stopped
+
   # G-5.1：Langfuse self-hosted（v2，2 容器版）
   # 用途：LLM 调用全链路 trace（agent-service ChatClient + ai-inference _call_llm_json 全部接入）
   # 启动后访问 http://localhost:3001 注册账号 → 创建 project → 拿 PUBLIC/SECRET key 配到各 service

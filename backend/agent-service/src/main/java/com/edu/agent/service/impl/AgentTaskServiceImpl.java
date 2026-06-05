@@ -439,13 +439,15 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
     }
 
     /** AgentLoop final_answer 解析结果。riskJson / planJson 已序列化为字符串落库；riskLevel 解析失败默认 MEDIUM。 */
-    private record AgentLoopParsed(String riskJson, String planJson, RiskLevel riskLevel) { }
+    static record AgentLoopParsed(String riskJson, String planJson, RiskLevel riskLevel) { }
 
     /**
      * 解析 AgentLoop 的 final_answer：期望是合法 JSON 字符串，内含 {@code risk_analysis} 与
      * {@code intervention_plan} 两个对象。解析失败返回 null（由调用方判 FAILED）。
+     *
+     * <p>包级可见 + static：供集成测试直接验证"final_answer → risk/plan/level"链路（无需起 Spring 上下文）。
      */
-    private AgentLoopParsed parseAgentLoopFinalAnswer(String finalAnswer) {
+    static AgentLoopParsed parseAgentLoopFinalAnswer(String finalAnswer) {
         try {
             JSONObject root = JSON.parseObject(finalAnswer);
             if (root == null) {
@@ -465,7 +467,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
         }
     }
 
-    private RiskLevel parseRiskLevelFromObj(JSONObject riskObj) {
+    static RiskLevel parseRiskLevelFromObj(JSONObject riskObj) {
         try {
             String level = riskObj.getString("risk_level");
             if (level == null || level.isBlank()) {
