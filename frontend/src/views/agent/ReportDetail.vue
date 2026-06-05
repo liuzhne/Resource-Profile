@@ -260,6 +260,45 @@
         </el-timeline-item>
       </el-timeline>
     </el-card>
+
+    <!-- I-5：干预反馈闭环（方案落地约 1 个月后由辅导员回填） -->
+    <el-card v-if="canExport" class="feedback-card">
+      <template #header>
+        <span>干预效果跟进</span>
+        <span class="fb-hint">建议方案落地约 1 个月后回填</span>
+      </template>
+      <el-form :model="feedback" label-width="92px" class="fb-form">
+        <el-form-item label="效果评分">
+          <el-rate v-model="feedback.score" :max="5" show-score score-template="{value} 分" />
+        </el-form-item>
+        <el-form-item label="跟进结果">
+          <el-select v-model="feedback.outcome" placeholder="请选择" clearable style="width: 220px">
+            <el-option label="有改善" value="improved" />
+            <el-option label="无变化" value="unchanged" />
+            <el-option label="恶化" value="worsened" />
+            <el-option label="已升级处理" value="escalated" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="文字反馈">
+          <el-input
+            v-model="feedback.comment"
+            type="textarea"
+            :rows="3"
+            maxlength="1000"
+            show-word-limit
+            placeholder="干预过程、学生反馈、后续建议等"
+          />
+        </el-form-item>
+        <el-form-item>
+          <el-button
+            type="primary"
+            :loading="feedbackSubmitting"
+            :disabled="!feedback.score"
+            @click="handleSubmitFeedback"
+          >提交反馈</el-button>
+        </el-form-item>
+      </el-form>
+    </el-card>
   </div>
 </template>
 
@@ -282,7 +321,8 @@ import {
   getAgentTaskDetail,
   exportReport,
   getExportStatus,
-  downloadExport
+  downloadExport,
+  submitInterventionFeedback
 } from '@/api/agent'
 
 const route = useRoute()
@@ -426,6 +466,33 @@ const handleExport = async () => {
 
 onUnmounted(stopPoll)
 
+// ============== I-5：干预反馈闭环 ==============
+const feedback = ref({ score: 0, outcome: '', comment: '' })
+const feedbackSubmitting = ref(false)
+
+const handleSubmitFeedback = async () => {
+  if (!feedback.value.score) {
+    ElMessage.warning('请先打分')
+    return
+  }
+  feedbackSubmitting.value = true
+  try {
+    await submitInterventionFeedback({
+      taskId: Number(taskId),
+      score: feedback.value.score,
+      outcome: feedback.value.outcome || null,
+      comment: feedback.value.comment || null
+    })
+    ElMessage.success('反馈已提交，感谢跟进')
+    feedback.value = { score: 0, outcome: '', comment: '' }
+  } catch (e) {
+    console.error('提交干预反馈失败', e)
+    // request.js 拦截器已弹错误提示
+  } finally {
+    feedbackSubmitting.value = false
+  }
+}
+
 const STATUS_LABELS = {
   PENDING: '待处理',
   RISK_ANALYZING: '风险识别中',
@@ -474,8 +541,20 @@ const formatTime = (s) => (s ? s.replace('T', ' ').slice(0, 19) : '')
 
 <style scoped lang="scss">
 .meta-card,
-.timeline-card {
+.timeline-card,
+.feedback-card {
   margin-top: 20px;
+}
+.feedback-card {
+  .fb-hint {
+    margin-left: 12px;
+    font-size: 12px;
+    color: rgba(0, 0, 0, 0.45);
+  }
+  .fb-form {
+    max-width: 560px;
+    margin-top: 8px;
+  }
 }
 .stage-title {
   font-size: 16px;

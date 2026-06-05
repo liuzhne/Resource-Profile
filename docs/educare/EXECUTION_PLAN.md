@@ -4,7 +4,8 @@
 >
 > **设计源**：`IMPROVEMENT_2026_MAY.md`（v1.1，2026-05-12 拍板）
 > **创建日期**：2026-05-13
-> **最近更新**：2026-06-05（I-1 Hybrid Retrieval 完成：决策"进程内 BM25 + RRF"（不加 ES、不改 Milvus schema，`HYBRID_RETRIEVAL_DESIGN.md`）；`hybrid_retrieval.py` 纯函数（中英 tokenizer + 自实现 BM25Okapi + rrf_fuse + fuse_hits）；`rag_pipeline` 加 `enable_hybrid` + `RAG_HYBRID_ENABLED` 灰度，knowledge-rag 三 tool 自动透传；`eval/hybrid_eval.py` + `hybrid_queries.jsonl` 用 top-3 命中率对齐验收（不引 RAGAS 重依赖）；`tests/test_hybrid_retrieval.py` 9 case，Python 共 33 全过。Phase I 仅剩 I-5，指针指向 I-5.1）
+> **最近更新**：2026-06-05（I-5 干预反馈闭环完成：`sql/init/05_intervention_feedback.sql` + agent-service `InterventionFeedback` entity/mapper/dto/service/controller（POST 提交 + GET 月报 JSON + GET report.csv 导出，手动校验 score 1-5/outcome 枚举/task 存在）+ 前端 `ReportDetail.vue` "干预效果跟进"评分卡片（el-rate + 结果下拉 + 文字反馈）+ `api/agent.js` 3 个 API；`InterventionFeedbackServiceTest` 7 case，agent-service 共 32 全绿，Vue SFC 编译通过。**Phase G/H/I（I-2 之前）规划项全部完结**，剩余仅储备项 I-2/I-3/I-4/I-6 + 用户侧实跑 smoke）
+> **历史最近更新（I-1）**：2026-06-05（I-1 Hybrid Retrieval 完成：决策"进程内 BM25 + RRF"（不加 ES、不改 Milvus schema，`HYBRID_RETRIEVAL_DESIGN.md`）；`hybrid_retrieval.py` 纯函数（中英 tokenizer + 自实现 BM25Okapi + rrf_fuse + fuse_hits）；`rag_pipeline` 加 `enable_hybrid` + `RAG_HYBRID_ENABLED` 灰度，knowledge-rag 三 tool 自动透传；`eval/hybrid_eval.py` + `hybrid_queries.jsonl` 用 top-3 命中率对齐验收（不引 RAGAS 重依赖）；`tests/test_hybrid_retrieval.py` 9 case，Python 共 33 全过。Phase I 仅剩 I-5，指针指向 I-5.1）
 > **历史最近更新（H-6）**：2026-06-05（`.github/workflows/eval-gate.yml` 两段式 eval gate —— validate-dataset（无条件 stdlib 体检 50 例）+ eval-threshold（`EVAL_LLM_ENABLED=true` 才跑，`--threshold 0.85` + 可选 baseline 回退检测）；`run_eval.py` 加 `validate_cases()` + `--validate-only/--threshold/--baseline/--baseline-tolerance`；`eval/README §5` 重写。**Phase H 全部完结（H-1~H-6）**，进入 Phase I，指针指向 I-1 Hybrid Retrieval）
 > **历史最近更新（H-5）**：2026-06-05（自实现轻量记忆层（决策放弃 Mem0/Letta SDK，`MEMORY_DESIGN.md` §1）；`memory_store.py` 四层 Redis（Working/Episodic/Semantic/Procedural）+ `app/mcp/memory_{adapter,tools,server}.py` memory-server MCP（FastMCP，端口 8096，Streamable HTTP `/mcp`，3 工具 recall/save/summarize）；`redis_client` 改延迟 import；`tests/test_memory_store.py` 13 case，Python 共 25 全过。不强接 AgentLoop（接线留灰度）。H-1~H-5 完结，指针推进至 H-6 eval gate CI）
 > **历史最近更新（H-4）**：2026-06-05（双 ChatClient（本地 `@Primary` + `cloudChatClient`）+ `router/ModelRouter`（敏感/原始画像→本地、方案/审核→云端、云端未就绪 fail-safe 回落本地）+ 审计 logger `MODEL_ROUTER_AUDIT` + `educare.model.routed{tier,stage}` 计数器；`SpringAiConfig` 本地保留 cache_prompt+metrics 拦截器、云端只挂 metrics；`RiskAnalyzeService` 改经 router 强制本地；`application.yml` 加 `educare.model.{local.base-url,cloud.*}`（云端 key 走 env/Nacos 加密）；`ModelRouterTest` 7 case，agent-service 共 25 全绿。H-1~H-4 完结，指针推进至 H-5 记忆层）
@@ -35,9 +36,11 @@
 
 ## 1. 下一步指针（Next Action）
 
-**当前阶段**：Phase I（最小版）—— I-1 完结，下一步 I-5
-**下一步**：→ §4 I-5 干预反馈闭环。I-5.1 DB 表 `intervention_feedback`（task_id/counselor_id/score 1-5/outcome/created_at）→ I-5.2 后端 `POST /agent/api/v1/intervention/feedback` → I-5.3 前端干预方案页加"1 个月后跟进"评分组件 → I-5.4 月度报表 CSV。建议在 agent-service 落表+接口（与 AgentTask 同库），前端在干预方案展示页加评分弹窗
+**当前阶段**：Phase I（最小版）—— **I-1 + I-5 全部完结**。Phase G/H/I 规划项（I-2 之前）已全部落地
+**下一步**：仅剩**储备项**（不在本季度排期、本轮目标外）：I-2 GraphRAG/Neo4j、I-3 三个 Subagent、I-4 合规框架、I-6 学生时间线。另有**用户侧实跑 smoke** 待执行（见下方"待实跑"清单）。如需继续，建议从 I-2（等 I-1 RAG 评测结果再决定）或把已完成功能做一次端到端联调
+- **I-5 完结**：`intervention_feedback` 表 + agent-service 反馈提交/月报/CSV 接口 + `ReportDetail.vue` 评分组件
 - **I-1 完结**：进程内 BM25 + RRF（不加 ES/不改 Milvus schema）`hybrid_retrieval.py` + `RAG_HYBRID_ENABLED` 灰度 + `eval/hybrid_eval.py` top-3 命中率评测 + `HYBRID_RETRIEVAL_DESIGN.md`
+- **待实跑（用户侧）**：① 灰度切流 `agent_loop_canary.sh`（需 MCP server + llama.cpp + Nacos）② memory-server 8096 mcp-inspector 验 3 tool ③ hybrid `RAG_HYBRID_ENABLED=true` 跑 `eval/hybrid_eval.py`（需 Milvus 已灌库）④ 加载 `05_intervention_feedback.sql` 后验证反馈提交/CSV ⑤ G-2.3/G-3.4 既有待实跑项
 - **H-6 完结**：`.github/workflows/eval-gate.yml` 两段式（validate-dataset 无条件 + eval-threshold 条件）；`run_eval.py` 加 `--validate-only/--threshold/--baseline`
 - **H-5 完结**：自实现轻量记忆层（`memory_store` 四层 Redis）+ memory-server MCP（8096，3 工具）+ `MEMORY_DESIGN.md`；不强接 AgentLoop，接线留灰度
 - **H-4 完结**：双 ChatClient（本地 `@Primary` + `cloudChatClient`）+ `ModelRouter`（敏感→本地、方案/审核→云端、未就绪 fail-safe 回落）+ 审计 logger `MODEL_ROUTER_AUDIT` + `educare.model.routed` 计数器；`RiskAnalyzeService` 经 router 取本地
@@ -312,10 +315,14 @@
 
 ### I-5 干预反馈闭环
 
-- [ ] **I-5.1** DB 表 `intervention_feedback`（task_id / counselor_id / score 1-5 / outcome / created_at）
-- [ ] **I-5.2** 后端 `POST /agent/api/v1/intervention/feedback`
-- [ ] **I-5.3** 前端：干预方案页加 "1 个月后跟进" 评分组件
-- [ ] **I-5.4** 月度报表：把反馈数据回流给 H-5 的 procedural memory（如果 H-5 已上线）
+- [x] **I-5.1** DB 表 `intervention_feedback`（task_id / counselor_id / score 1-5 / outcome / created_at）
+  - 完成于 2026-06-05：`sql/init/05_intervention_feedback.sql`（task_id/student_id/counselor_id/score/outcome/comment/created_at/updated_at/deleted + 3 索引），与 agent_task 同库
+- [x] **I-5.2** 后端 `POST /agent/api/v1/intervention/feedback`
+  - 完成于 2026-06-05：agent-service 加 `InterventionFeedback` entity + mapper + `FeedbackRequest` dto + `InterventionFeedbackService(Impl)` + `InterventionFeedbackController`。POST 提交（手动校验 score 1-5 / outcome 枚举 / task 存在，studentId 从 task 回填，counselor_id 取 JWT subject）；另含 GET `/feedback/report?month=yyyy-MM`（JSON 明细）。`InterventionFeedbackServiceTest` 7 case（校验 + happy + CSV 转义）全绿
+- [x] **I-5.3** 前端：干预方案页加 "1 个月后跟进" 评分组件
+  - 完成于 2026-06-05：`ReportDetail.vue` 加"干预效果跟进"卡片（COMPLETED/REJECTED 时显示）—— `el-rate` 1-5 分 + 结果下拉（improved/unchanged/worsened/escalated）+ 文字反馈，提交走 `submitInterventionFeedback`；`api/agent.js` 加 3 个 API（submit/report/csv）。`@vue/compiler-sfc` 解析 + script 编译通过
+- [x] **I-5.4** 月度报表：导出反馈数据 CSV
+  - 完成于 2026-06-05：GET `/agent/api/v1/intervention/feedback/report.csv?month=yyyy-MM` 导出（UTF-8 BOM 防 Excel 乱码 + CSV 字段转义），`exportCsv` service 实现；前端 `downloadFeedbackCsv` API 备用。**注**：原计划"回流给 H-5 procedural memory"调整为先交付 CSV 月报（H-5 memory-server 未强接 AgentLoop，回流留后续灰度接线时一并做，见 §6）
 
 ### 储备项（不在本季度排期）
 
@@ -362,6 +369,7 @@ H-4 (ModelRouter) ──► H-2 (Loop 选模型)
 | 2026-05-21 | H-1.4 落地 `scripts/mcp_smoke_test.sh`：纯 `curl + jq` 一键回归两个 MCP server 的 `initialize → notifications/initialized → tools/list → 7×tools/call`，session id 自动接力；H-1 子阶段全部完结，指针推进至 H-2.1 AgentLoop | 取代手动 `mcp-inspector` 点点点的 H-1.2/H-1.3 smoke 流程；脚本即基线，后续 Spring AI / FastMCP / Milvus 升级跑一次即可回归。无 npm 依赖（保留 macOS 默认 toolchain），但需要 bash≥4（`declare -A` 双 session id 接力），脚本头自检 + 提示 |
 | 2026-05-21 | H-2.1 落地：新建 `com.edu.agent.core.AgentLoop` + 4 个 record/enum + 3-case 单元测试，think→tool→observe 循环走 ReAct JSON 协议 | 选 ReAct 而非 Spring AI 1.1.6 native tool calling 的理由：1.1.6 `ChatClient.tools(...)` 默认内部隐式循环，thought/action/observation 三类事件个体不可见，无法 trace、无法 inject early-stop、无法限 max_iterations；`internalToolExecutionEnabled=false` 路径未实测稳定。ReAct JSON 把控制流封装在 AgentLoop 内部，外部只需 `ToolCallback` 列表，H-2.2 接 MCP 时调用方零改动；后续模型升 32B+ 想换 native tool calling 也只改 AgentLoop 内部。本步不动旧 4 阶段，feature flag 留 H-2.3 |
 | 2026-05-21 | H-2.2 落地：agent-service 接 MCP client 1.1.6（`spring-ai-starter-mcp-client` + `streamable-http.connections.{student-data,knowledge-rag}`，启动产出合并 `ToolCallbackProvider` 7 个工具）+ `AgentLoop` 接 Langfuse 顶层 `agent.loop` trace（`finishRun()` 收口 5 个 return 路径）+ 新增 `/agent/api/v1/_internal/loop/dry-run` admin 手测端点；不切旧 4 阶段、不接嵌套 trace、不加 feature flag、dry-run 端点零 auth | 把 H-1 落地的 7 个 MCP tool 通过 1.1.6 `ToolCallbackProvider` auto-config 红利接入 `AgentLoop`，最小代码。artifactId 实测校准（**非** plan 草案的 `-webmvc`，1.1.6 BOM 只有 `spring-ai-starter-mcp-client`（默认 JDK HttpClient）与 `-webflux`）。trace 颗粒选顶层一次而非嵌套是有意收敛侵入面：嵌套要改 `LangfuseClient` + `LlmMetricsInterceptor` + 引入 ThreadLocal context 3 处，回归面碰已 GA 的 G-5.3 路径，嵌套优化留 H-2.4 eval 调优时再做。G-1 prompt caching 通过 `SpringAiConfig` RestClient 拦截器链零接线继承，AgentLoop 用同一 `ChatClient` @Bean 自动得到 `cache_prompt=true` 与 cache_hit_rate 指标 |
+| 2026-06-05 | I-5 落地：`intervention_feedback` 表 + agent-service 提交/月报/CSV 接口 + 前端评分卡片；I-5.4 由"回流 procedural memory"调整为"CSV 月报" | 反馈表与 agent_task 同库（agent-service 自治），校验手动做（该模块未引 validation starter，避免为一处加全局依赖）。I-5.4 原计划回流 H-5 procedural memory，但 H-5 memory-server 本轮决定不强接 AgentLoop（独立进程、接线留灰度），故先交付 CSV 月报满足"后台可导出"验收，回流留 memory-server 接线时一并做。CSV 加 UTF-8 BOM 解决 Excel 中文乱码 |
 | 2026-06-05 | I-1 落地：决策"进程内 BM25 + RRF over dense 池"（弃 ES、弃 Milvus schema 改造）；`hybrid_retrieval.py` 纯函数 + `rag_pipeline` 灰度接入 + top-3 命中率评测代替 RAGAS | ES 是重容器、Milvus 原生 BM25 要 2.5+（现 2.4.1 要改 schema 重灌），均违背"复用既有栈"。I-1 验收点是专有名词 top-3 命中，dense 放大候选池 + 池内 BM25 重排即可命中，零基建。RAGAS 需额外 LLM 评审 + 重依赖，对该具体验收点过度工程，用 top-3 命中率直接对齐（≥ dense +15%）。升级到 Milvus 2.5 原生 BM25/ES 时 `fuse_hits` 调用点不变 |
 | 2026-06-05 | H-6 落地：`.github/workflows/eval-gate.yml` 两段式 eval gate；`run_eval.py` 参数化阈值 + validate-only + baseline 对比 | CI 无真实 LLM 会让全集 eval 全走 fallback（medium）误红，故拆两段：数据集体检无条件硬门（纯 stdlib、确定性），真实跑分门用仓库变量 `EVAL_LLM_ENABLED` 开关 + secret 端点，未配置环境只跑体检不阻塞。阈值 0.85 经 CLI 参数化（默认仍 0.6，演进可调），faithfulness 用 phrase_hit_rate 代理（与 G-6.3 既有指标一致，不引 RAGAS 重依赖） |
 | 2026-06-05 | H-5 落地：自实现轻量记忆层（放弃 Mem0/Letta），`memory_store` 四层 Redis + memory-server MCP（8096，3 工具）+ `MEMORY_DESIGN.md`；不强接 AgentLoop | Mem0/Letta SDK 不稳定且与既有 Milvus+llama.cpp 栈重叠（与 G-5/G-6/H-1.3"复用既有栈"决策一致）。接口比实现重要：先 Redis 跑通 recall/save/summarize 闭环，未来换 Mem0 只替换 memory_store 实现层。Semantic 层留 Milvus 向量化升级路径。不强接 AgentLoop 是为避免每个任务都硬依赖 memory-server 在线（与 H-1.3 knowledge-rag 独立进程同理），接线走灰度。附带把 redis_client 的 redis import 改延迟，让纯逻辑单测无需安装 redis 包 |
