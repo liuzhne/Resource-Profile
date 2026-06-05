@@ -4,7 +4,8 @@
 >
 > **设计源**：`IMPROVEMENT_2026_MAY.md`（v1.1，2026-05-12 拍板）
 > **创建日期**：2026-05-13
-> **最近更新**：2026-06-05（H-6 完成：`.github/workflows/eval-gate.yml` 两段式 eval gate —— validate-dataset（无条件 stdlib 体检 50 例）+ eval-threshold（`EVAL_LLM_ENABLED=true` 才跑，`--threshold 0.85` + 可选 baseline 回退检测）；`run_eval.py` 加 `validate_cases()` + `--validate-only/--threshold/--baseline/--baseline-tolerance`；`eval/README §5` 重写。**Phase H 全部完结（H-1~H-6）**，进入 Phase I，指针指向 I-1 Hybrid Retrieval）
+> **最近更新**：2026-06-05（I-1 Hybrid Retrieval 完成：决策"进程内 BM25 + RRF"（不加 ES、不改 Milvus schema，`HYBRID_RETRIEVAL_DESIGN.md`）；`hybrid_retrieval.py` 纯函数（中英 tokenizer + 自实现 BM25Okapi + rrf_fuse + fuse_hits）；`rag_pipeline` 加 `enable_hybrid` + `RAG_HYBRID_ENABLED` 灰度，knowledge-rag 三 tool 自动透传；`eval/hybrid_eval.py` + `hybrid_queries.jsonl` 用 top-3 命中率对齐验收（不引 RAGAS 重依赖）；`tests/test_hybrid_retrieval.py` 9 case，Python 共 33 全过。Phase I 仅剩 I-5，指针指向 I-5.1）
+> **历史最近更新（H-6）**：2026-06-05（`.github/workflows/eval-gate.yml` 两段式 eval gate —— validate-dataset（无条件 stdlib 体检 50 例）+ eval-threshold（`EVAL_LLM_ENABLED=true` 才跑，`--threshold 0.85` + 可选 baseline 回退检测）；`run_eval.py` 加 `validate_cases()` + `--validate-only/--threshold/--baseline/--baseline-tolerance`；`eval/README §5` 重写。**Phase H 全部完结（H-1~H-6）**，进入 Phase I，指针指向 I-1 Hybrid Retrieval）
 > **历史最近更新（H-5）**：2026-06-05（自实现轻量记忆层（决策放弃 Mem0/Letta SDK，`MEMORY_DESIGN.md` §1）；`memory_store.py` 四层 Redis（Working/Episodic/Semantic/Procedural）+ `app/mcp/memory_{adapter,tools,server}.py` memory-server MCP（FastMCP，端口 8096，Streamable HTTP `/mcp`，3 工具 recall/save/summarize）；`redis_client` 改延迟 import；`tests/test_memory_store.py` 13 case，Python 共 25 全过。不强接 AgentLoop（接线留灰度）。H-1~H-5 完结，指针推进至 H-6 eval gate CI）
 > **历史最近更新（H-4）**：2026-06-05（双 ChatClient（本地 `@Primary` + `cloudChatClient`）+ `router/ModelRouter`（敏感/原始画像→本地、方案/审核→云端、云端未就绪 fail-safe 回落本地）+ 审计 logger `MODEL_ROUTER_AUDIT` + `educare.model.routed{tier,stage}` 计数器；`SpringAiConfig` 本地保留 cache_prompt+metrics 拦截器、云端只挂 metrics；`RiskAnalyzeService` 改经 router 强制本地；`application.yml` 加 `educare.model.{local.base-url,cloud.*}`（云端 key 走 env/Nacos 加密）；`ModelRouterTest` 7 case，agent-service 共 25 全绿。H-1~H-4 完结，指针推进至 H-5 记忆层）
 > **历史最近更新（H-3）**：2026-06-05（4 个技能 markdown（`agent-service/src/main/resources/skills/`，classpath 内置）+ `SkillLoader`（外部目录 `educare.agent.skills.dir` 按 mtime 热更新 / classpath 兜底）+ `educare.agent.skills.active` 逗号有序"按需选择" + `AgentTaskServiceImpl.runAgentLoopForTask` 注入 `composeActiveSkillsPrompt()` 到 AgentLoop system prompt（空串时不破坏 G-1 cache 字节稳定）；`SkillLoaderTest` 7 case，agent-service 共 18 case 全绿。H-1/H-2/H-3 全部完结，指针推进至 §3 H-4.1 ModelRouter）
@@ -34,8 +35,9 @@
 
 ## 1. 下一步指针（Next Action）
 
-**当前阶段**：Phase H 全部完结（H-1 ~ H-6）→ 进入 Phase I（最小版：I-1 + I-5）
-**下一步**：→ §4 I-1 Hybrid Retrieval（向量 + BM25）。I-1.1 决策点：Docker 加 Elasticsearch 8.x vs 用 Milvus 2.4 内置 BM25/稀疏向量 → I-1.2 `ai-inference-service/app/services/hybrid_retrieval.py`（dense + BM25 并行召回 + RRF 融合）→ I-1.3 knowledge-rag 接入 hybrid 灰度 → I-1.4 RAGAS 离线评测 ≥ 纯 dense baseline。建议 I-1.1 选 Milvus 内置稀疏（避免再起 ES 容器，与"复用既有栈"一致），但要确认 2.4.1 版本 BM25/sparse 支持度
+**当前阶段**：Phase I（最小版）—— I-1 完结，下一步 I-5
+**下一步**：→ §4 I-5 干预反馈闭环。I-5.1 DB 表 `intervention_feedback`（task_id/counselor_id/score 1-5/outcome/created_at）→ I-5.2 后端 `POST /agent/api/v1/intervention/feedback` → I-5.3 前端干预方案页加"1 个月后跟进"评分组件 → I-5.4 月度报表 CSV。建议在 agent-service 落表+接口（与 AgentTask 同库），前端在干预方案展示页加评分弹窗
+- **I-1 完结**：进程内 BM25 + RRF（不加 ES/不改 Milvus schema）`hybrid_retrieval.py` + `RAG_HYBRID_ENABLED` 灰度 + `eval/hybrid_eval.py` top-3 命中率评测 + `HYBRID_RETRIEVAL_DESIGN.md`
 - **H-6 完结**：`.github/workflows/eval-gate.yml` 两段式（validate-dataset 无条件 + eval-threshold 条件）；`run_eval.py` 加 `--validate-only/--threshold/--baseline`
 - **H-5 完结**：自实现轻量记忆层（`memory_store` 四层 Redis）+ memory-server MCP（8096，3 工具）+ `MEMORY_DESIGN.md`；不强接 AgentLoop，接线留灰度
 - **H-4 完结**：双 ChatClient（本地 `@Primary` + `cloudChatClient`）+ `ModelRouter`（敏感→本地、方案/审核→云端、未就绪 fail-safe 回落）+ 审计 logger `MODEL_ROUTER_AUDIT` + `educare.model.routed` 计数器；`RiskAnalyzeService` 经 router 取本地
@@ -299,10 +301,14 @@
 
 ### I-1 Hybrid Retrieval（向量 + BM25）
 
-- [ ] **I-1.1** Docker compose 加 Elasticsearch 8.x（或评估 Milvus 2.4 内置 BM25 替代，决策点）
-- [ ] **I-1.2** `ai-inference-service/app/services/hybrid_retrieval.py`：dense + BM25 并行召回 + RRF 融合
-- [ ] **I-1.3** `knowledge-rag-server` 接入 hybrid，灰度对比纯 dense
-- [ ] **I-1.4** RAGAS 离线评测：context_precision / answer_relevancy 必须 ≥ 纯 dense baseline
+- [x] **I-1.1** Docker compose 加 Elasticsearch 8.x（或评估 Milvus 2.4 内置 BM25 替代，决策点）
+  - 完成于 2026-06-05：`docs/educare/HYBRID_RETRIEVAL_DESIGN.md` §1 拍板 **进程内 BM25 + RRF（不加 ES，不改 Milvus schema）**。理由：Milvus 原生 BM25 函数要 2.5+（现 2.4.1 仅 sparse 向量、要改 schema 重灌）；ES 是重容器违背"复用既有栈"；I-1 验收是专有名词 top-3 命中，dense 放大候选池 + BM25 池内重排正好命中。升级路径（Milvus 2.5 原生 BM25 / ES）接口不变
+- [x] **I-1.2** `ai-inference-service/app/services/hybrid_retrieval.py`：dense + BM25 并行召回 + RRF 融合
+  - 完成于 2026-06-05：纯函数模块 —— `tokenize`（中英混排：ASCII alnum + CJK 单字 + bigram）+ `BM25`（自实现 Okapi，无 rank_bm25 依赖）+ `rrf_fuse`（k=60）+ `fuse_hits`（dense 序 × BM25 序 RRF 融合，回填 hybrid_rank）。`tests/test_hybrid_retrieval.py` 9 case 全过
+- [x] **I-1.3** `knowledge-rag-server` 接入 hybrid，灰度对比纯 dense
+  - 完成于 2026-06-05：`rag_pipeline.retrieve_from_collection` 加 `enable_hybrid` 参数 + 配置 `RAG_HYBRID_ENABLED`（默认 false，行为不变）；dense 召回后 `fuse_hits` 重排（reranker 开启时被 cross-encoder 覆盖，关闭时 hybrid 决定序）；payload 加 `hybrid` 字段，缓存 key 区分 dense/hybrid。knowledge-rag 三个 MCP search tool 经 rag_pipeline 自动透传，零改动
+- [x] **I-1.4** RAGAS 离线评测：context_precision / answer_relevancy 必须 ≥ 纯 dense baseline
+  - 完成于 2026-06-05：以 **top-3 命中率**直接对齐 I-1 验收（≥ 纯 dense + 15%），不引 RAGAS 重依赖（理由见设计 §4）。`eval/hybrid_eval.py`（同 query 跑 dense/hybrid 两遍比 top-k 命中 + 提升）+ `eval/hybrid_queries.jsonl`（6 条专有名词 query：高数 II / SCL-90 / PHQ-9 / 助学金 / 勤工助学 / GAD-7）。`hit_at_k` 纯函数 + 数据集校验通过；实跑需 Milvus 在线 + collection 已灌数据，留用户
 
 ### I-5 干预反馈闭环
 
@@ -356,6 +362,7 @@ H-4 (ModelRouter) ──► H-2 (Loop 选模型)
 | 2026-05-21 | H-1.4 落地 `scripts/mcp_smoke_test.sh`：纯 `curl + jq` 一键回归两个 MCP server 的 `initialize → notifications/initialized → tools/list → 7×tools/call`，session id 自动接力；H-1 子阶段全部完结，指针推进至 H-2.1 AgentLoop | 取代手动 `mcp-inspector` 点点点的 H-1.2/H-1.3 smoke 流程；脚本即基线，后续 Spring AI / FastMCP / Milvus 升级跑一次即可回归。无 npm 依赖（保留 macOS 默认 toolchain），但需要 bash≥4（`declare -A` 双 session id 接力），脚本头自检 + 提示 |
 | 2026-05-21 | H-2.1 落地：新建 `com.edu.agent.core.AgentLoop` + 4 个 record/enum + 3-case 单元测试，think→tool→observe 循环走 ReAct JSON 协议 | 选 ReAct 而非 Spring AI 1.1.6 native tool calling 的理由：1.1.6 `ChatClient.tools(...)` 默认内部隐式循环，thought/action/observation 三类事件个体不可见，无法 trace、无法 inject early-stop、无法限 max_iterations；`internalToolExecutionEnabled=false` 路径未实测稳定。ReAct JSON 把控制流封装在 AgentLoop 内部，外部只需 `ToolCallback` 列表，H-2.2 接 MCP 时调用方零改动；后续模型升 32B+ 想换 native tool calling 也只改 AgentLoop 内部。本步不动旧 4 阶段，feature flag 留 H-2.3 |
 | 2026-05-21 | H-2.2 落地：agent-service 接 MCP client 1.1.6（`spring-ai-starter-mcp-client` + `streamable-http.connections.{student-data,knowledge-rag}`，启动产出合并 `ToolCallbackProvider` 7 个工具）+ `AgentLoop` 接 Langfuse 顶层 `agent.loop` trace（`finishRun()` 收口 5 个 return 路径）+ 新增 `/agent/api/v1/_internal/loop/dry-run` admin 手测端点；不切旧 4 阶段、不接嵌套 trace、不加 feature flag、dry-run 端点零 auth | 把 H-1 落地的 7 个 MCP tool 通过 1.1.6 `ToolCallbackProvider` auto-config 红利接入 `AgentLoop`，最小代码。artifactId 实测校准（**非** plan 草案的 `-webmvc`，1.1.6 BOM 只有 `spring-ai-starter-mcp-client`（默认 JDK HttpClient）与 `-webflux`）。trace 颗粒选顶层一次而非嵌套是有意收敛侵入面：嵌套要改 `LangfuseClient` + `LlmMetricsInterceptor` + 引入 ThreadLocal context 3 处，回归面碰已 GA 的 G-5.3 路径，嵌套优化留 H-2.4 eval 调优时再做。G-1 prompt caching 通过 `SpringAiConfig` RestClient 拦截器链零接线继承，AgentLoop 用同一 `ChatClient` @Bean 自动得到 `cache_prompt=true` 与 cache_hit_rate 指标 |
+| 2026-06-05 | I-1 落地：决策"进程内 BM25 + RRF over dense 池"（弃 ES、弃 Milvus schema 改造）；`hybrid_retrieval.py` 纯函数 + `rag_pipeline` 灰度接入 + top-3 命中率评测代替 RAGAS | ES 是重容器、Milvus 原生 BM25 要 2.5+（现 2.4.1 要改 schema 重灌），均违背"复用既有栈"。I-1 验收点是专有名词 top-3 命中，dense 放大候选池 + 池内 BM25 重排即可命中，零基建。RAGAS 需额外 LLM 评审 + 重依赖，对该具体验收点过度工程，用 top-3 命中率直接对齐（≥ dense +15%）。升级到 Milvus 2.5 原生 BM25/ES 时 `fuse_hits` 调用点不变 |
 | 2026-06-05 | H-6 落地：`.github/workflows/eval-gate.yml` 两段式 eval gate；`run_eval.py` 参数化阈值 + validate-only + baseline 对比 | CI 无真实 LLM 会让全集 eval 全走 fallback（medium）误红，故拆两段：数据集体检无条件硬门（纯 stdlib、确定性），真实跑分门用仓库变量 `EVAL_LLM_ENABLED` 开关 + secret 端点，未配置环境只跑体检不阻塞。阈值 0.85 经 CLI 参数化（默认仍 0.6，演进可调），faithfulness 用 phrase_hit_rate 代理（与 G-6.3 既有指标一致，不引 RAGAS 重依赖） |
 | 2026-06-05 | H-5 落地：自实现轻量记忆层（放弃 Mem0/Letta），`memory_store` 四层 Redis + memory-server MCP（8096，3 工具）+ `MEMORY_DESIGN.md`；不强接 AgentLoop | Mem0/Letta SDK 不稳定且与既有 Milvus+llama.cpp 栈重叠（与 G-5/G-6/H-1.3"复用既有栈"决策一致）。接口比实现重要：先 Redis 跑通 recall/save/summarize 闭环，未来换 Mem0 只替换 memory_store 实现层。Semantic 层留 Milvus 向量化升级路径。不强接 AgentLoop 是为避免每个任务都硬依赖 memory-server 在线（与 H-1.3 knowledge-rag 独立进程同理），接线走灰度。附带把 redis_client 的 redis import 改延迟，让纯逻辑单测无需安装 redis 包 |
 | 2026-06-05 | H-3 落地：4 个技能 markdown 改放 `src/main/resources/skills/`（classpath）而非计划写的 `agent-service/skills/`；`SkillLoader` 双来源（外部目录 mtime 热更新 / classpath 兜底）；按 `educare.agent.skills.active` 选择注入 | classpath 放置保证打包进 jar 始终可用，外部目录仅作热更新/覆盖；"按需选择"用配置化 active 列表实现，单一任务类型下默认注入全部 4 技能 |

@@ -39,6 +39,9 @@ class Settings:
     # RAG
     RAG_TOP_K: int = int(os.getenv("RAG_TOP_K", "5"))
     RAG_RECALL_EXPAND: int = int(os.getenv("RAG_RECALL_EXPAND", "3"))  # 候选 = top_k * expand
+    # I-1.3：hybrid（dense + BM25 + RRF）灰度开关。默认关 → 纯 dense（与上线前行为一致）。
+    # 开启后在 dense 召回候选池上做 BM25 重排并 RRF 融合，对专有名词 query 更鲁棒。
+    RAG_HYBRID_ENABLED: bool = os.getenv("RAG_HYBRID_ENABLED", "false").lower() in ("1", "true", "yes")
 
     # Redis 缓存（与 Java 服务共用同一实例；连接失败时调用方走无缓存路径）
     REDIS_HOST: str = os.getenv("REDIS_HOST", "localhost")
