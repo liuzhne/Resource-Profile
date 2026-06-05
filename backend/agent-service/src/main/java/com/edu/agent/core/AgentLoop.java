@@ -197,31 +197,8 @@ public class AgentLoop {
     }
 
     private String composeUserPromptWithHistory(AgentLoopRequest req, List<AgentTrace> traces) {
-        if (traces.isEmpty()) {
-            return req.userPrompt();
-        }
-        StringBuilder sb = new StringBuilder();
-        sb.append(req.userPrompt()).append("\n\n# 历史\n");
-        for (AgentTrace t : traces) {
-            if (t.thought() != null) {
-                sb.append("Thought: ").append(t.thought()).append('\n');
-            }
-            if (t.toolName() != null) {
-                sb.append("Action: ").append(t.toolName());
-                if (t.toolArgs() != null) {
-                    sb.append(" args=").append(t.toolArgs());
-                }
-                sb.append('\n');
-            }
-            if (t.toolResult() != null) {
-                sb.append("Observation: ").append(t.toolResult()).append('\n');
-            }
-            if (t.parseError() != null) {
-                sb.append("（上一轮输出解析失败：").append(t.parseError())
-                        .append("，请严格按 JSON 协议输出）\n");
-            }
-        }
-        return sb.toString();
+        // J-1.1：委托 HistoryCompactor 做窗口压缩，避免每轮重放全量历史导致 prompt 无界增长。
+        return HistoryCompactor.compose(req.userPrompt(), traces);
     }
 
     // -------- 解析 + 工具调度 --------
