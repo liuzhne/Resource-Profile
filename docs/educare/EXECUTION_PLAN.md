@@ -4,9 +4,10 @@
 >
 > **设计源**：`IMPROVEMENT_2026_MAY.md`（v1.1，2026-05-12 拍板）
 > **创建日期**：2026-05-13
-> **最近更新**：2026-06-05（H-2.4 完成：布尔开关升级为按 taskId 确定性分桶的百分比灰度 —— 新增 `AgentLoopCanaryGate`（`@RefreshScope`，Nacos 热生效，Fibonacci-hash 分桶 + 单调放量 + `educare.agent.loop.routed` 路由计数器）；`AgentTaskServiceImpl.doExecute` 改由 `canaryGate.shouldUseAgentLoop` 决策；`application.yml` 加 `canary-percent` + `agent-canary.yml` 专用 Nacos dataId import；`scripts/agent_loop_canary.sh`（curl+jq 逐档 0→10→50→100：推 Nacos → 触发真实任务轮询 → 读 Prometheus 路由增量 → FAILED 即回滚）；`AgentLoopCanaryGateTest` 7 case + 既有 AgentLoopTest 4 case 共 11 全绿。H-2 全部完结，指针推进至 §3 H-3.1 Skill markdown。原计划"翻 flag + 跑 run_eval.py"作废：run_eval.py 打 Python 8090 不经 Java flag，eval 回归改为切流脚本驱动 agent-service 真实流水线 + 路由计数观测，详见 §6）
+> **最近更新**：2026-06-05（H-3 完成：4 个技能 markdown（`agent-service/src/main/resources/skills/`，classpath 内置）+ `SkillLoader`（外部目录 `educare.agent.skills.dir` 按 mtime 热更新 / classpath 兜底）+ `educare.agent.skills.active` 逗号有序"按需选择" + `AgentTaskServiceImpl.runAgentLoopForTask` 注入 `composeActiveSkillsPrompt()` 到 AgentLoop system prompt（空串时不破坏 G-1 cache 字节稳定）；`SkillLoaderTest` 7 case，agent-service 共 18 case 全绿。H-1/H-2/H-3 全部完结，指针推进至 §3 H-4.1 ModelRouter）
 
-> **历史最近更新**：2026-05-22（H-2.3 完成：`application.yml` 加 `educare.agent.loop.enabled`（默认 false，env `EDUCARE_AGENT_LOOP_ENABLED`）；新增 `classpath:prompts/agent-loop.system.md` AgentLoop system prompt（字节稳定，命中 G-1 cache，规约 `final_answer` schema = `{risk_analysis, intervention_plan}`）；`AgentTaskServiceImpl` 注入 `AgentLoop` + `ObjectProvider<ToolCallbackProvider>` + `@Value` 开关 + `@PostConstruct` 加载 prompt；`doExecute` 入口加 feature flag 分支：开关开 → `doExecuteAgentLoop`（AgentLoop 一次性出风险+方案，状态机仍流转 PENDING→RISK_ANALYZING→KNOWLEDGE_RETRIEVING→PLAN_GENERATING→COMPLIANCE_CHECKING→COMPLETED/REJECTED，低/无风险短路保留，P4 合规审核仍走旧 audit），开关关 → `doExecuteLegacy` 旧 4 阶段；`AgentLoopParsed` 内部 record 解析 final_answer 拆 risk/plan/level 写库，解析失败 FAILED；`mvn -pl agent-service compile` 通过，`AgentLoopTest` 4 case 全绿。指针推进至 H-2.4 灰度切流脚本 + eval 回归）
+> **历史最近更新（H-2.4）**：2026-06-05（布尔升级为按 taskId 分桶的百分比灰度 + `AgentLoopCanaryGate` + `agent_loop_canary.sh`）
+> **历史最近更新（H-2.3）**：2026-05-22（H-2.3 完成：`application.yml` 加 `educare.agent.loop.enabled`（默认 false，env `EDUCARE_AGENT_LOOP_ENABLED`）；新增 `classpath:prompts/agent-loop.system.md` AgentLoop system prompt（字节稳定，命中 G-1 cache，规约 `final_answer` schema = `{risk_analysis, intervention_plan}`）；`AgentTaskServiceImpl` 注入 `AgentLoop` + `ObjectProvider<ToolCallbackProvider>` + `@Value` 开关 + `@PostConstruct` 加载 prompt；`doExecute` 入口加 feature flag 分支：开关开 → `doExecuteAgentLoop`（AgentLoop 一次性出风险+方案，状态机仍流转 PENDING→RISK_ANALYZING→KNOWLEDGE_RETRIEVING→PLAN_GENERATING→COMPLIANCE_CHECKING→COMPLETED/REJECTED，低/无风险短路保留，P4 合规审核仍走旧 audit），开关关 → `doExecuteLegacy` 旧 4 阶段；`AgentLoopParsed` 内部 record 解析 final_answer 拆 risk/plan/level 写库，解析失败 FAILED；`mvn -pl agent-service compile` 通过，`AgentLoopTest` 4 case 全绿。指针推进至 H-2.4 灰度切流脚本 + eval 回归）
 
 ---
 
@@ -30,8 +31,9 @@
 
 ## 1. 下一步指针（Next Action）
 
-**当前阶段**：Phase H（MCP 化 + Agent Loop 重构）—— H-1 / H-2 全部完结
-**下一步**：→ §3 H-3.1 Skill markdown（`backend/agent-service/skills/risk-assessment.md`），并配套 H-3.5 Skill 加载器（按需读 markdown 注入 system prompt + 热更新）；建议先做 H-3.5 的加载器骨架再逐个补 4 个 skill 文件，4 个文件粒度小可一次 PR
+**当前阶段**：Phase H（MCP 化 + Agent Loop 重构）—— H-1 / H-2 / H-3 全部完结
+**下一步**：→ §3 H-4.1 ModelRouter 双路由（本地 14B 8092 + 云端 API）；建议步骤：(a) `application.yml` 加 `educare.model.{local,cloud}` 两套 OpenAI-compatible 配置（云端 key 走 Nacos/env）；(b) `router/ModelRouter.java` 按数据敏感级选模型（敏感/原始画像 → 本地，方案/审核可 → 云端）；(c) H-4.3 路由审计日志（task_id + 模型 + 敏感级）。注意与 G-1 cache 拦截器链、H-2 ChatClient 单例的关系——可能需要双 ChatClient bean 或在调用点切 base-url
+- **H-3 完结**：4 个技能 markdown（classpath `skills/`）+ `SkillLoader`（外部目录 mtime 热更新 / classpath 兜底）+ `educare.agent.skills.active` 按需选择 + 注入 AgentLoop system prompt
 - **H-2.4 完结**：灰度切流从布尔升级为**按 taskId 确定性分桶的 `canary-percent`（0-100）** —— `AgentLoopCanaryGate`（`@RefreshScope`，Nacos `agent-canary.yml` 热生效）+ `scripts/agent_loop_canary.sh`（逐档 0→10→50→100，触发真实任务 + 读 `educare_agent_loop_routed_total` 路由增量 + FAILED 即回滚）。⚠ 原计划"跑 run_eval.py 对比 baseline"作废：`run_eval.py` 打 Python 8090 不经 Java flag，无法验证 AgentLoop 路径
 - **H-2.3 完结**：`AgentTaskServiceImpl.doExecute` 入口挂切流分支 —— 命中 AgentLoop 路径即一次性出 risk+plan（含 MCP 7 工具 + final_answer 双 JSON 解析 + 状态机完整流转 + P4 合规审核保留）；未命中走 legacy 4 阶段。`classpath:prompts/agent-loop.system.md` 字节稳定 prompt
 - **遗留待办**：`/agent/api/v1/_internal/loop/dry-run` 仍零 auth，灰度 100% 稳定后再删除或挂 admin role（H-3/H-4 期间顺手处理）
@@ -239,11 +241,18 @@
 
 ### H-3 Skill markdown 文件（4 个）
 
-- [ ] **H-3.1** `backend/agent-service/skills/risk-assessment.md`
-- [ ] **H-3.2** `backend/agent-service/skills/psychological-screening.md`
-- [ ] **H-3.3** `backend/agent-service/skills/intervention-design.md`
-- [ ] **H-3.4** `backend/agent-service/skills/compliance-audit.md`
-- [ ] **H-3.5** Skill 加载器：按需读 markdown 注入 system prompt，热更新支持
+- [x] **H-3.1** `risk-assessment.md`
+- [x] **H-3.2** `psychological-screening.md`
+- [x] **H-3.3** `intervention-design.md`
+- [x] **H-3.4** `compliance-audit.md`
+- [x] **H-3.5** Skill 加载器：按需读 markdown 注入 system prompt，热更新支持
+  - 完成于 2026-06-05：5 个文件一次落地 ——
+    1. 4 个技能 markdown 放在 `agent-service/src/main/resources/skills/`（**改放 classpath** 而非计划的 `agent-service/skills/`，保证打包进 jar 始终可用；外部目录覆盖见下）。每个含 frontmatter（name/description/when_to_use）+ 正文（数据采集顺序、判定标准、责任人分工、红线）
+    2. `skill/SkillDefinition.java`（record：name/description/whenToUse/body + `toPromptBlock()`）
+    3. `skill/SkillLoader.java`（`@Component`）：双来源 —— 外部目录 `educare.agent.skills.dir`（配置且存在则优先，按 **mtime 热更新**，编辑 md 不重启）> classpath `skills/`（兜底，加载一次缓存）；`getSkill/listActive/composeActiveSkillsPrompt`；frontmatter 解析为静态纯函数便于单测
+    4. `application.yml` 加 `educare.agent.skills.{enabled,dir,active}`（active 默认 4 个技能、逗号有序、env 可覆盖 → "按需选择"）
+    5. `AgentTaskServiceImpl.runAgentLoopForTask` 注入 `skillLoader.composeActiveSkillsPrompt()` 到 AgentLoop system prompt（关闭/无技能时空串，prompt 字节稳定仍命中 G-1 cache）
+  - `SkillLoaderTest` 7 case（frontmatter 解析/无 frontmatter/classpath 加载/未知技能/compose 含 4 技能/disabled 空/activeNames trim）；`mvn -pl agent-service test` 共 18 case（含 AgentLoop 系列）全绿，全量 compile 通过
 
 ### H-4 Model Router（本地 14B + 云端 API 双路由）
 

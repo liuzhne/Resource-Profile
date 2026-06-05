@@ -21,6 +21,7 @@ import com.edu.agent.mapper.AgentTaskMapper;
 import com.edu.agent.service.AgentTaskService;
 import com.edu.agent.service.RiskAnalyzeService;
 import com.edu.agent.service.StudentPortraitAggregator;
+import com.edu.agent.skill.SkillLoader;
 import com.edu.agent.sse.WarningPublisher;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -63,6 +64,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
     private final AgentLoop agentLoop;                            // H-2.3：AgentLoop 切流目标
     private final ObjectProvider<ToolCallbackProvider> toolCallbackProviders;  // H-2.3：MCP 工具列表（启动期 fail-fast 时 ObjectProvider 让单测能选择不注入）
     private final AgentLoopCanaryGate canaryGate;                 // H-2.4：灰度切流闸门（@RefreshScope，Nacos 热生效）
+    private final SkillLoader skillLoader;                        // H-3.5：技能加载器（按需注入 system prompt + 热更新）
 
     @Qualifier("agentExecutor")
     private final Executor agentExecutor;
@@ -405,13 +407,18 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
 
     private AgentLoopResult runAgentLoopForTask(AgentTask task) {
         List<ToolCallback> tools = resolveMcpTools();
+        // H-3.5：按需把激活技能注入 system prompt（关闭/无技能时返回空串，prompt 字节稳定，仍命中 G-1 cache）
+        String skillsBlock = skillLoader.composeActiveSkillsPrompt();
+        String systemPrompt = skillsBlock.isEmpty()
+                ? agentLoopSystemPrompt
+                : agentLoopSystemPrompt + "\n\n" + skillsBlock;
         String userPrompt = String.format(
                 "请对学生 ID = %d 完成一次风险识别 + 干预方案生成任务。\n"
                         + "请通过可用工具拉取该学生的画像/学业/心理/出勤数据，必要时检索案例、政策、心理学知识，"
                         + "并按 system 中规定的 final_answer JSON schema 给出最终答复。",
                 task.getStudentId());
         AgentLoopRequest req = new AgentLoopRequest(
-                agentLoopSystemPrompt,
+                systemPrompt,
                 userPrompt,
                 tools,
                 AGENT_LOOP_MAX_ITERATIONS,

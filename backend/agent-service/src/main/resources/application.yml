@@ -164,6 +164,13 @@ educare:
     loop:
       enabled: ${EDUCARE_AGENT_LOOP_ENABLED:false}
       canary-percent: ${EDUCARE_AGENT_LOOP_CANARY_PERCENT:100}
+    # H-3.5：Skill 加载器。enabled=true 时把 active 列出的技能 markdown 注入 AgentLoop system prompt。
+    # dir 为空 → 用 classpath skills/（打包进 jar，不热更新）；
+    # dir 指向外部目录 → 优先读该目录并按 mtime 热更新（编辑 md 不需重启，生产可挂载覆盖内置技能）。
+    skills:
+      enabled: ${EDUCARE_AGENT_SKILLS_ENABLED:true}
+      dir: ${EDUCARE_AGENT_SKILLS_DIR:}
+      active: ${EDUCARE_AGENT_SKILLS_ACTIVE:risk-assessment,psychological-screening,intervention-design,compliance-audit}
 
 # G-5.3：Langfuse trace。所有字段空时 LangfuseClient 自动 no-op，主流程零影响。
 # self-hosted v2：host 用 docker 内网名 langfuse-server:3000；本地裸跑用 http://localhost:3001
