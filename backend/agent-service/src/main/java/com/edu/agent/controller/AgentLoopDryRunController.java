@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.ToolCallbackProvider;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -34,11 +35,13 @@ public class AgentLoopDryRunController {
     private static final int DEFAULT_MAX_ITERATIONS = 5;
 
     private final AgentLoop agentLoop;
-    private final ToolCallbackProvider toolCallbackProvider;
+    // ObjectProvider：MCP client 关闭/未就绪时 ToolCallbackProvider 缺失也不阻断启动（与 AgentTaskServiceImpl 一致）
+    private final ObjectProvider<ToolCallbackProvider> toolCallbackProviders;
 
     @PostMapping("/dry-run")
     public Result<AgentLoopResult> dryRun(@RequestBody DryRunRequest req) {
-        ToolCallback[] callbacks = toolCallbackProvider.getToolCallbacks();
+        ToolCallbackProvider provider = toolCallbackProviders.getIfAvailable();
+        ToolCallback[] callbacks = provider == null ? null : provider.getToolCallbacks();
         List<ToolCallback> tools = callbacks == null ? List.of() : Arrays.asList(callbacks);
         log.info("[AgentLoopDryRun] taskTag={} tools={} userPromptLen={}",
                 req.taskTag(), tools.size(),

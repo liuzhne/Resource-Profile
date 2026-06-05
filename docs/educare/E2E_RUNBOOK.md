@@ -76,6 +76,30 @@ bash eval/agent_vs_legacy.sh           # 同一组学生分别按 legacy / agent
 通过判据：agent 路径对 ground truth 的等级一致率 **≥ legacy**（不回退）。
 
 ---
-## 本环境为何没跑
-本 Runbook 在交付时的开发沙箱中**无法执行**：无 Docker daemon、无 GPU、无 14B 模型权重、无任何 infra 端口在监听。
-故"活模型端到端"留待具备上述条件的机器执行；代码级证据(`AgentLoopE2ECodeTest`)与一键编排(本 compose)已就绪，把执行成本降到"起模型 + 一条 compose"。
+## 附：无 GPU 桩 LLM 真跑（2026-06-05 已实际执行 ✅）
+
+开发沙箱无 Docker daemon / 无 GPU / 无 14B 权重，但仍用 **brew 本地 redis+mysql + 桩 LLM** 把
+**活的 agent-service over HTTP** 真跑了一遍（脚本 `scripts/local_real_run.sh` + `scripts/mock_llm_server.py`）：
+
+- redis（brew）+ mysql 9.6（brew，`edu`/`edu123456`，载入 `03_agent_init.sql` 建 `agent_task`）
+- 桩 LLM `:8091` 返回 OpenAI 格式 + ReAct `final_answer`（双 JSON，risk_level=low 触发短路免 Python）
+- agent-service 真实启动（`EDUCARE_AGENT_LOOP_ENABLED=true`，关 Nacos/MCP，jwt.secret 直配）：
+  `Started AgentServiceApplication in 5.4s`，`/actuator/health = UP`
+- `curl -XPOST /agent/api/v1/task/trigger/1` → 轮询 **status=COMPLETED**
+
+**实测证据**（活服务，非单测）：
+```
+任务 1 状态流转: RISK_ANALYZING -> COMPLETED
+任务 1 AgentLoop 路径风险等级 LOW，直接完成
+DB Row: 1, 1, COMPLETED, LOW, ..., <<BLOB>>(risk), <<BLOB>>(plan), ...   ← risk/plan 真写入 MySQL
+mock-llm /v1/chat/completions hit   ← ChatClient→拦截器→HTTP→解析 全程真实
+```
+即"ReAct 循环跑完 + final_answer 解析落库 + status COMPLETED"在**活的运行服务上验证通过**。
+
+**桩跑覆盖边界**：用桩 LLM 替代 14B（无 GPU），关闭 MCP client（无 MCP server 进程）。
+未覆盖：① 真实 14B 的 ReAct/JSON 守规稳定性；② 经真实 MCP 工具取数；③ Langfuse trace（未配 key）；
+④ 合规审核分支（需 Python ai-inference + 高风险触发）；⑤ agent vs legacy 全量对比（legacy 需 Python+Milvus，Milvus 需 Docker）。
+这些需具备 GPU/Docker 的机器按上文 §1-§7 执行。
+
+> 途中修复真实缺陷：`AgentLoopDryRunController` 由硬依赖 `ToolCallbackProvider` 改为 `ObjectProvider`，
+> 使 MCP client 关闭/未就绪时 agent-service 仍能启动（与 `AgentTaskServiceImpl` 一致）。

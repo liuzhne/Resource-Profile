@@ -404,9 +404,9 @@ H-4 (ModelRouter) ──► H-2 (Loop 选模型)
 针对"是否可运行、合格 Agent"的评估，依次执行 5 项：
 
 1. **修 B-1 → 全量构建绿** ✅ 见 §8。`mvn clean install` 11 模块全过。
-2. **端到端真跑** ⚠ 代码级证据已固化（见第 3 项）；**活模型端到端留 `docs/educare/E2E_RUNBOOK.md`**（本开发沙箱无 Docker daemon / 无 GPU / 无 14B 模型权重，物理不可执行；Runbook 给出逐条命令 + 每步通过判据，把执行成本降到"起模型 + 一条 compose"）。
+2. **端到端真跑** ✅ **已实际执行（桩 LLM 版）2026-06-05**：用 brew 本地 redis+mysql + `scripts/mock_llm_server.py`（桩 LLM 返回 ReAct final_answer）真实启动 agent-service（`EDUCARE_AGENT_LOOP_ENABLED=true`），`curl -XPOST /trigger/1` → **status=COMPLETED**，`risk_analysis_result`/`intervention_plan` 真写入 MySQL，日志 `RISK_ANALYZING -> COMPLETED` + `AgentLoop 路径风险等级 LOW，直接完成`，桩 LLM 经 ChatClient/拦截器链被真实 HTTP 调到。脚本 `scripts/local_real_run.sh`，证据见 `E2E_RUNBOOK.md` 附录。**真实 14B 模型 + MCP 工具 + Langfuse** 那层仍需 GPU/Docker 机器按 Runbook §1-§6 执行。途中修真实 bug：`AgentLoopDryRunController` 硬依赖 `ToolCallbackProvider` → 改 `ObjectProvider`。
 3. **冒烟集成测试** ✅ `AgentLoopE2ECodeTest`：用真实 `AgentLoop` + 真实 `agent-loop.system.md` + 真实 `SkillLoader` + 脚本化假 LLM/工具，跑通 `think→调 get_student_profile→final_answer→解析 risk/plan/level` 全链路（除"活模型生成"外的全部代码路径）；`parseAgentLoopFinalAnswer` 改包级 static 可测。agent-service 共 34 case 全绿。
 4. **docker-compose 编排 agent 全栈** ✅ `docker/Dockerfile.springboot`（按 MODULE 参数化）+ compose 加 `agent-service(8087)` `mcp-student-data(8094)` `knowledge-rag-mcp(8095)` `memory-mcp(8096)` 四服务，带 healthcheck + `depends_on: service_healthy`（agent-service 等两个 MCP 探活后启动）；`docker compose config` 校验通过。
-5. **agent vs legacy eval 对比** ⚠ 工具就绪：`eval/agent_vs_legacy.sh` + `eval/agent_vs_legacy_cohort.jsonl`（同组学生分别按 legacy/agent 跑、读回 riskLevel、比对 ground truth 一致率，agent≥legacy 才 exit 0）；需活栈执行（见 Runbook §7）。
+5. **agent vs legacy eval 对比** ⚠ 工具就绪 + agent 侧已活跑：`eval/agent_vs_legacy.sh` + `eval/agent_vs_legacy_cohort.jsonl`。**agent 路径已在第 2 项活跑验证**；**legacy 路径需 Python ai-inference + Milvus**（legacy 4 阶段的知识检索/方案/审核走 Feign 到 Python，Python RAG 依赖 Milvus，而 **Milvus 需 Docker daemon，本沙箱不可用**），故全量 legacy-vs-agent 对比受 Milvus 阻塞，待 Docker 机器按 Runbook §7 执行。
 
-> 结论：构建/测试/编排三项已是硬证据；真跑与 eval 对比受限于无 LLM/无容器运行时，已交付一键可跑路径 + 通过判据，待具备模型的机器执行。
+> 结论：第 1/3/4 项硬证据完成；**第 2 项已用桩 LLM 在活服务上真跑通过**（ReAct 循环跑完 + final_answer 解析落库 + COMPLETED），仅"真实 14B 质量 + MCP 工具 + Langfuse + legacy 全栈对比"受 GPU/Docker 限制待外部机器。可运行性已从"完全缺失证据"推进到"活服务跑通 + 一键可复现"。
