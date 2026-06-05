@@ -103,3 +103,20 @@ mock-llm /v1/chat/completions hit   ← ChatClient→拦截器→HTTP→解析 �
 
 > 途中修复真实缺陷：`AgentLoopDryRunController` 由硬依赖 `ToolCallbackProvider` 改为 `ObjectProvider`，
 > 使 MCP client 关闭/未就绪时 agent-service 仍能启动（与 `AgentTaskServiceImpl` 一致）。
+
+### 附 2：agent vs legacy 活对比（2026-06-05 已实际执行 ✅）
+
+`scripts/mock_llm_server.py` 升级为**双模**（请求 system prompt 含 `final_answer` → 返回 ReAct；否则返回
+legacy 风险识别期望的普通 risk JSON）。同一桩 LLM 下，分别以 `EDUCARE_AGENT_LOOP_ENABLED=false/true`
+重启 agent-service、各触发真实任务，实测：
+
+```
+>> legacy 模式 (enabled=false)  student=11 -> COMPLETED | LOW   （doExecuteLegacy → RiskAnalyzeService → 低风险短路）
+>> agent  模式 (enabled=true)   student=12 -> COMPLETED | LOW   （doExecuteAgentLoop → AgentLoop → final_answer → 低风险短路）
+```
+
+**两条路径都在活服务上跑通、都 COMPLETED、风险等级一致（LOW）→ agent 路径不比 legacy 差。**
+
+边界（诚实标注）：桩 LLM 对两路均返回 low，二者在风险阶段短路，故本对比证明的是**两条代码路径均能活跑且终态一致**，
+**不是**对多样 ground truth 的判别性准确率对比——后者需真实 14B（区分不同风险）+ legacy 的完整 plan/audit 链路
+（Python ai-inference + Milvus，Milvus 需 Docker）。判别性全量对比用 `eval/agent_vs_legacy.sh` 在具备 GPU/Docker 的机器执行。

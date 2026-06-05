@@ -31,6 +31,13 @@ FINAL_INNER = json.dumps({
 
 REACT_TURN = json.dumps({"thought": "数据已足够，直接给出结论", "final_answer": FINAL_INNER}, ensure_ascii=False)
 
+# legacy 风险识别端点期望的"普通 risk JSON"（非 ReAct 包裹）。低风险使 legacy 短路 COMPLETED，免 Python。
+RISK_JSON = json.dumps({
+    "risk_level": "low", "risk_score": 35, "primary_risk_type": "学业滑坡",
+    "root_cause_analysis": "单科成绩波动，暂未成趋势", "key_indicators": ["GPA:2.6"],
+    "recommended_intervention_types": ["学业辅导"], "urgency_reason": "潜在风险，常规关注",
+}, ensure_ascii=False)
+
 
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
@@ -52,11 +59,14 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         length = int(self.headers.get("Content-Length", 0))
-        _ = self.rfile.read(length)  # 读掉请求体（含 messages / cache_prompt）
-        sys.stderr.write("[mock-llm] /v1/chat/completions hit -> 返回 final_answer\n")
+        body = self.rfile.read(length)  # 含 messages / system prompt
+        # 双模：agent-loop 的 system prompt 含 "final_answer" → 返回 ReAct；否则是 legacy 风险识别 → 返回普通 risk JSON
+        is_react = b"final_answer" in body
+        content = REACT_TURN if is_react else RISK_JSON
+        sys.stderr.write(f"[mock-llm] hit mode={'react' if is_react else 'risk'}\n")
         self._send({
             "id": "mock-cmpl", "object": "chat.completion", "created": 0, "model": "mock-qwen",
-            "choices": [{"index": 0, "message": {"role": "assistant", "content": REACT_TURN},
+            "choices": [{"index": 0, "message": {"role": "assistant", "content": content},
                          "finish_reason": "stop"}],
             "usage": {"prompt_tokens": 50, "completion_tokens": 120, "total_tokens": 170},
             "timings": {"prompt_n": 50, "predicted_n": 120, "cached_n": 0, "prompt_ms": 12.0},
