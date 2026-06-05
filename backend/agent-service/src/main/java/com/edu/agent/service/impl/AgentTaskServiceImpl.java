@@ -9,6 +9,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.edu.agent.core.AgentLoop;
+import com.edu.agent.core.AgentLoopCanaryGate;
 import com.edu.agent.core.AgentLoopRequest;
 import com.edu.agent.core.AgentLoopResult;
 import com.edu.agent.core.AgentLoopStatus;
@@ -61,15 +62,13 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
     private final WarningPublisher warningPublisher;              // F-2：终态事件发布
     private final AgentLoop agentLoop;                            // H-2.3：AgentLoop 切流目标
     private final ObjectProvider<ToolCallbackProvider> toolCallbackProviders;  // H-2.3：MCP 工具列表（启动期 fail-fast 时 ObjectProvider 让单测能选择不注入）
+    private final AgentLoopCanaryGate canaryGate;                 // H-2.4：灰度切流闸门（@RefreshScope，Nacos 热生效）
 
     @Qualifier("agentExecutor")
     private final Executor agentExecutor;
 
     @Value("${educare.idempotency.trigger-window-seconds:30}")
     private long triggerIdempotencyWindowSeconds;
-
-    @Value("${educare.agent.loop.enabled:false}")
-    private boolean agentLoopEnabled;
 
     /** H-2.3：AgentLoop system prompt，启动时一次性加载，保证字节稳定以命中 G-1 prompt cache。 */
     @Value("classpath:prompts/agent-loop.system.md")
@@ -93,8 +92,9 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
     @PostConstruct
     public void initAgentLoopPrompt() throws IOException {
         agentLoopSystemPrompt = agentLoopSystemPromptResource.getContentAsString(StandardCharsets.UTF_8);
-        log.info("H-2.3：AgentLoop 切流开关 enabled={}，system prompt 加载 {} bytes",
-                agentLoopEnabled,
+        log.info("H-2.3/H-2.4：AgentLoop 切流 enabled={} canary-percent={}，system prompt 加载 {} bytes",
+                canaryGate.isEnabled(),
+                canaryGate.getCanaryPercent(),
                 agentLoopSystemPrompt.getBytes(StandardCharsets.UTF_8).length);
     }
 
@@ -200,9 +200,10 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
     // ==================== 3. 4 阶段状态机 ====================
 
     private void doExecute(Long taskId) {
-        // H-2.3：feature flag 切流 —— 开关开时 AgentLoop 一次性替换 P1+P3（风险识别 + 计划生成），
+        // H-2.3/H-2.4：灰度切流 —— 命中 AgentLoop 路径时一次性替换 P1+P3（风险识别 + 计划生成），
         // RAG 检索由 knowledge-rag MCP tool 自然完成；P4 合规审核仍走原 audit 端点。
-        if (agentLoopEnabled) {
+        // 路由由 AgentLoopCanaryGate 按 taskId 确定性分桶 + canary-percent 决定（@RefreshScope 热生效）。
+        if (canaryGate.shouldUseAgentLoop(taskId)) {
             doExecuteAgentLoop(taskId);
             return;
         }
