@@ -151,6 +151,14 @@ educare:
   llm:
     # G-1.4：透传给 llama.cpp 的扩展开关。新版本 llama.cpp 默认 true，显式声明兼容旧版。
     cache-prompt: ${EDUCARE_LLM_CACHE_PROMPT:true}
+  # H-2.3：AgentLoop 切流开关。
+  # false（默认）→ AgentTaskServiceImpl.doExecute 走旧 4 阶段流水线（risk → rag → plan → audit）。
+  # true → 入口分支到 AgentLoop，一次性 think→tool→observe 替换 "风险识别 + 计划生成" 两阶段，
+  # RAG 检索由 knowledge-rag MCP tool 自然完成；合规审核 P4 仍走原 audit 端点保留。
+  # 灰度切流见 EXECUTION_PLAN H-2.4。
+  agent:
+    loop:
+      enabled: ${EDUCARE_AGENT_LOOP_ENABLED:false}
 
 # G-5.3：Langfuse trace。所有字段空时 LangfuseClient 自动 no-op，主流程零影响。
 # self-hosted v2：host 用 docker 内网名 langfuse-server:3000；本地裸跑用 http://localhost:3001

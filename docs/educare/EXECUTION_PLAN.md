@@ -4,7 +4,7 @@
 >
 > **设计源**：`IMPROVEMENT_2026_MAY.md`（v1.1，2026-05-12 拍板）
 > **创建日期**：2026-05-13
-> **最近更新**：2026-05-21（H-2.2 完成：agent-service `pom.xml` 加 `spring-ai-starter-mcp-client` 依赖（默认 JDK HttpClient transport），`application.yml` 加 `spring.ai.mcp.client.streamable-http.connections.{student-data,knowledge-rag}` 双连接配置，启动 Spring AI 1.1.6 auto-config 产出合并 `ToolCallbackProvider`（7 个工具）；`AgentLoop` 构造改签注入 `LangfuseClient`，所有终止路径汇集 `finishRun()` 上报顶层 `agent.loop` trace（metadata 含 iterations/status/task_tag/traces_summary）；新增 admin 端点 `/agent/api/v1/_internal/loop/dry-run` POST，注入 `ToolCallbackProvider` + `AgentLoop`，返回完整 `AgentLoopResult`；`AgentLoopTest` 4 case 全绿（旧 3 改签 + 新增 `shouldFireLangfuseTraceOnRunComplete`）；G-1 prompt caching 通过 `SpringAiConfig` RestClient 拦截器链零接线继承。指针推进至 H-2.3 feature flag `educare.agent.loop.enabled` + `AgentTaskServiceImpl` 切流）
+> **最近更新**：2026-05-22（H-2.3 完成：`application.yml` 加 `educare.agent.loop.enabled`（默认 false，env `EDUCARE_AGENT_LOOP_ENABLED`）；新增 `classpath:prompts/agent-loop.system.md` AgentLoop system prompt（字节稳定，命中 G-1 cache，规约 `final_answer` schema = `{risk_analysis, intervention_plan}`）；`AgentTaskServiceImpl` 注入 `AgentLoop` + `ObjectProvider<ToolCallbackProvider>` + `@Value` 开关 + `@PostConstruct` 加载 prompt；`doExecute` 入口加 feature flag 分支：开关开 → `doExecuteAgentLoop`（AgentLoop 一次性出风险+方案，状态机仍流转 PENDING→RISK_ANALYZING→KNOWLEDGE_RETRIEVING→PLAN_GENERATING→COMPLIANCE_CHECKING→COMPLETED/REJECTED，低/无风险短路保留，P4 合规审核仍走旧 audit），开关关 → `doExecuteLegacy` 旧 4 阶段；`AgentLoopParsed` 内部 record 解析 final_answer 拆 risk/plan/level 写库，解析失败 FAILED；`mvn -pl agent-service compile` 通过，`AgentLoopTest` 4 case 全绿。指针推进至 H-2.4 灰度切流脚本 + eval 回归）
 
 ---
 
@@ -29,12 +29,13 @@
 ## 1. 下一步指针（Next Action）
 
 **当前阶段**：Phase H（MCP 化 + Agent Loop 重构）
-**下一步**：→ §3 H-2.3 加 feature flag `educare.agent.loop.enabled`（默认 false），在 `AgentTaskServiceImpl.doExecute` 入口分支：开关开时走 `AgentLoop`（替换 P1+P2 风险识别 + 计划生成两阶段），关时走旧 4 阶段 fallback；保留 `/agent/api/v1/_internal/loop/dry-run` 端点作 admin diag 或评估后删除
+**下一步**：→ §3 H-2.4 灰度切流脚本（10% → 50% → 100%），观察 eval 集回归；建议步骤：(a) 写 `scripts/agent_loop_canary.sh` 通过 Nacos 动态把 `EDUCARE_AGENT_LOOP_ENABLED` 配到本机 + 跑 `eval/run_eval.py` 对比 baseline；(b) `EXECUTION_PLAN H-2.3` 已为后续切流提供单一入口（`doExecute` 分支），无需再改 service；(c) eval 回归阈值参 G-6.4（等级一致率 ≥ 0.6 起步）；(d) 通过后删除或挂 admin role 的 `/agent/api/v1/_internal/loop/dry-run`
+- **H-2.3 完结**：`AgentTaskServiceImpl.doExecute` 入口已挂 feature flag 分支 —— 开 `EDUCARE_AGENT_LOOP_ENABLED=true` 即切 AgentLoop 路径（含 MCP 7 工具 + final_answer 双 JSON 解析 + 状态机完整流转 + P4 合规审核保留）；不开则继续走 legacy 4 阶段。新增 `classpath:prompts/agent-loop.system.md` 字节稳定 prompt
 - **H-1 子阶段全部完结**：H-1.1（选型）+ H-1.1.5（Spring AI 1.0.0 GA）+ H-1.2（student-data MCP server，8094）+ H-1.1.6（Spring AI 1.1.6 GA + MCP transport 全栈 Streamable HTTP）+ H-1.3（FastMCP knowledge-rag MCP server，8095）+ H-1.4（`mcp_smoke_test.sh` 一键回归脚本）均已合入
-- **H-2.1 完结**：`backend/agent-service/src/main/java/com/edu/agent/core/` 5 个 Java 源（`AgentLoop` + `AgentLoopRequest/Result/Status/AgentTrace`）+ `AgentLoopTest` 3 case 全绿；ReAct JSON 协议跑通，控制流可单测、可 trace、可早停
+- **H-2.1/H-2.2 完结**：`com.edu.agent.core.AgentLoop` ReAct JSON 协议；接 Langfuse 顶层 trace + MCP `ToolCallbackProvider` 7 工具自动注入；`AgentLoopTest` 4 case 全绿
 - **H-1.2 / H-1.3 用户侧 smoke 一键化**：两个 server 起好后执行 `bash scripts/mcp_smoke_test.sh`（依赖 bash≥4 / curl / jq）即可完成 7 个 tool 的 happy path 回归，取代手动 mcp-inspector 流程
 - **Phase G 全部完成**（代码侧）；只剩用户侧 `FIELD_PERMISSION_VERIFY.md`（G-2.3）实跑回写
-- **smoke 剩余 3 项待用户实跑**：本地 llama.cpp 起后跑一次 `/agent/api/v1/task/trigger/{id}`，验证 `LlamaCppCachePromptInterceptor` + `LlmMetricsInterceptor` + Langfuse trace 推送（见 `MCP_DESIGN.md §2` 项 2-4）
+- **smoke 剩余 3 项待用户实跑**：本地 llama.cpp 起后跑一次 `/agent/api/v1/task/trigger/{id}`，验证 `LlamaCppCachePromptInterceptor` + `LlmMetricsInterceptor` + Langfuse trace 推送（见 `MCP_DESIGN.md §2` 项 2-4）；H-2.3 切流后还需对 `EDUCARE_AGENT_LOOP_ENABLED=true` 跑一次 e2e（要求两个 MCP server + 本地 llama.cpp 全部在线）
 
 ---
 
@@ -215,7 +216,14 @@
   - G-1 prompt caching **零接线** —— `SpringAiConfig.java:46-58` 拦截器链已挂 `LlamaCppCachePromptInterceptor` 在 `OpenAiApi` 的 `RestClient.Builder` 层，`AgentLoop` 用同一 `ChatClient` @Bean 自动继承 `cache_prompt=true` 与 Micrometer prompt/cached/predicted/prefill_ms 指标
   - `AgentLoopTest` 旧 3 case 改签兼容（`setUp` 多 mock 1 个 `LangfuseClient`，构造 `new AgentLoop(chatClient, langfuseClient)`），新增 `shouldFireLangfuseTraceOnRunComplete` 用 `verify(langfuseClient, atLeastOnce()).traceGeneration(eq("agent.loop"), ...)` 验证 trace 至少调用 1 次；`mvn -pl agent-service test -Dtest=AgentLoopTest` 4 case 全绿
   - 不动 `AgentTaskServiceImpl.doExecute` 旧 4 阶段（feature flag 留 H-2.3）；不接 Langfuse 嵌套 trace（留 H-2.4）；dry-run 端点零 auth 仅供本地 curl
-- [ ] **H-2.3** Feature flag：`educare.agent.loop.enabled`，默认 false；旧 4 阶段保留作 fallback
+- [x] **H-2.3** Feature flag：`educare.agent.loop.enabled`，默认 false；旧 4 阶段保留作 fallback
+  - 完成于 2026-05-22：4 处改动 ——
+    1. `agent-service/application.yml` 加 `educare.agent.loop.enabled`（env `EDUCARE_AGENT_LOOP_ENABLED`，默认 false）
+    2. 新增 `agent-service/src/main/resources/prompts/agent-loop.system.md` —— AgentLoop system prompt，规约 `final_answer` 为合法 JSON 字符串 `{risk_analysis: {...}, intervention_plan: {...}}`，字节稳定以命中 G-1 prompt cache；列明 7 个 MCP 工具的语义指导（数据先取后判 + 必要时检索知识 + 轮次预算 + 安全声明）
+    3. `AgentTaskServiceImpl` 注入 `AgentLoop` + `ObjectProvider<ToolCallbackProvider>` + `@Value` 开关 + `@PostConstruct` 加载 prompt；`doExecute` 入口加 if/else 分支：开 → `doExecuteAgentLoop(taskId)`；关 → `doExecuteLegacy(taskId)`（原方法重命名）
+    4. 新方法 `doExecuteAgentLoop`：状态机仍流转 PENDING→RISK_ANALYZING→KNOWLEDGE_RETRIEVING→PLAN_GENERATING→COMPLIANCE_CHECKING→COMPLETED/REJECTED（中间 KNOWLEDGE_RETRIEVING/PLAN_GENERATING 仅打卡，AgentLoop 内部已通过 MCP knowledge-rag 完成 RAG）；`AgentLoopParsed` 内部 record 拆 `risk_analysis` + `intervention_plan` 两份 JSON 落 `riskAnalysisResult` + `interventionPlan` + `riskLevel`；解析失败或 status≠COMPLETED → FAILED；低/无风险保留短路；P4 合规审核仍走旧 `executeComplianceAudit`
+  - `mvn -pl agent-service -am compile` 通过；`AgentLoopTest` 4 case 全绿（H-2.3 改动未触及 AgentLoop 公共接口，旧测试零回归）
+  - 不删 `/agent/api/v1/_internal/loop/dry-run`（仍可独立 curl 验证 ToolCallbackProvider + AgentLoop 链路），H-2.4 灰度切流通过后再视情况删除或挂 admin role
 - [ ] **H-2.4** 灰度切流脚本（10% → 50% → 100%），观察 eval 集回归
 
 ### H-3 Skill markdown 文件（4 个）
@@ -314,6 +322,7 @@ H-4 (ModelRouter) ──► H-2 (Loop 选模型)
 | 2026-05-21 | H-1.4 落地 `scripts/mcp_smoke_test.sh`：纯 `curl + jq` 一键回归两个 MCP server 的 `initialize → notifications/initialized → tools/list → 7×tools/call`，session id 自动接力；H-1 子阶段全部完结，指针推进至 H-2.1 AgentLoop | 取代手动 `mcp-inspector` 点点点的 H-1.2/H-1.3 smoke 流程；脚本即基线，后续 Spring AI / FastMCP / Milvus 升级跑一次即可回归。无 npm 依赖（保留 macOS 默认 toolchain），但需要 bash≥4（`declare -A` 双 session id 接力），脚本头自检 + 提示 |
 | 2026-05-21 | H-2.1 落地：新建 `com.edu.agent.core.AgentLoop` + 4 个 record/enum + 3-case 单元测试，think→tool→observe 循环走 ReAct JSON 协议 | 选 ReAct 而非 Spring AI 1.1.6 native tool calling 的理由：1.1.6 `ChatClient.tools(...)` 默认内部隐式循环，thought/action/observation 三类事件个体不可见，无法 trace、无法 inject early-stop、无法限 max_iterations；`internalToolExecutionEnabled=false` 路径未实测稳定。ReAct JSON 把控制流封装在 AgentLoop 内部，外部只需 `ToolCallback` 列表，H-2.2 接 MCP 时调用方零改动；后续模型升 32B+ 想换 native tool calling 也只改 AgentLoop 内部。本步不动旧 4 阶段，feature flag 留 H-2.3 |
 | 2026-05-21 | H-2.2 落地：agent-service 接 MCP client 1.1.6（`spring-ai-starter-mcp-client` + `streamable-http.connections.{student-data,knowledge-rag}`，启动产出合并 `ToolCallbackProvider` 7 个工具）+ `AgentLoop` 接 Langfuse 顶层 `agent.loop` trace（`finishRun()` 收口 5 个 return 路径）+ 新增 `/agent/api/v1/_internal/loop/dry-run` admin 手测端点；不切旧 4 阶段、不接嵌套 trace、不加 feature flag、dry-run 端点零 auth | 把 H-1 落地的 7 个 MCP tool 通过 1.1.6 `ToolCallbackProvider` auto-config 红利接入 `AgentLoop`，最小代码。artifactId 实测校准（**非** plan 草案的 `-webmvc`，1.1.6 BOM 只有 `spring-ai-starter-mcp-client`（默认 JDK HttpClient）与 `-webflux`）。trace 颗粒选顶层一次而非嵌套是有意收敛侵入面：嵌套要改 `LangfuseClient` + `LlmMetricsInterceptor` + 引入 ThreadLocal context 3 处，回归面碰已 GA 的 G-5.3 路径，嵌套优化留 H-2.4 eval 调优时再做。G-1 prompt caching 通过 `SpringAiConfig` RestClient 拦截器链零接线继承，AgentLoop 用同一 `ChatClient` @Bean 自动得到 `cache_prompt=true` 与 cache_hit_rate 指标 |
+| 2026-05-22 | H-2.3 落地：`AgentTaskServiceImpl.doExecute` 入口加 `educare.agent.loop.enabled` 分支 —— 开 → `doExecuteAgentLoop`（AgentLoop 一次性出 risk+plan、状态机完整流转、P4 合规审核保留）；关 → `doExecuteLegacy`（原 4 阶段）；新增 `prompts/agent-loop.system.md` 字节稳定 prompt，规约 final_answer 双 JSON schema | 切流方式选"入口分支 + 状态机完整流转"而非"AgentLoop 完全替换状态机"：前端 PollingTask + SSE 已基于 5 个中间态做 UI 渲染，完全替换会回归前端展示；同时 P4 合规审核（教育合规相关）暂不进 AgentLoop —— audit 端点已有 Python prompt + Langfuse trace + RAG 引用规范，AgentLoop 把它当工具调反而绕远。AgentLoop final_answer 用"双 JSON 拼装"而非"单 JSON 扁平"：(a) 兼容旧 `riskAnalysisResult` / `interventionPlan` 两个 DB 字段，前端展示零改；(b) 让 LLM 自由组织字段顺序时不混淆两个语义域。`ObjectProvider<ToolCallbackProvider>` 注入而非直接 `ToolCallbackProvider`：MCP starter 启动期 fail-fast 已由 application.yml 强制，但单测/未来内嵌运行时仍想要 graceful degrade 到零工具运行 |
 
 ---
 
