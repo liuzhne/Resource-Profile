@@ -4,7 +4,8 @@
 >
 > **设计源**：`IMPROVEMENT_2026_MAY.md`（v1.1，2026-05-12 拍板）
 > **创建日期**：2026-05-13
-> **最近更新**：2026-06-05（H-5 完成：自实现轻量记忆层（决策放弃 Mem0/Letta SDK，`MEMORY_DESIGN.md` §1）；`memory_store.py` 四层 Redis（Working/Episodic/Semantic/Procedural）+ `app/mcp/memory_{adapter,tools,server}.py` memory-server MCP（FastMCP，端口 8096，Streamable HTTP `/mcp`，3 工具 recall/save/summarize）；`redis_client` 改延迟 import；`tests/test_memory_store.py` 13 case，Python 共 25 全过。不强接 AgentLoop（接线留灰度）。H-1~H-5 完结，指针推进至 H-6 eval gate CI）
+> **最近更新**：2026-06-05（H-6 完成：`.github/workflows/eval-gate.yml` 两段式 eval gate —— validate-dataset（无条件 stdlib 体检 50 例）+ eval-threshold（`EVAL_LLM_ENABLED=true` 才跑，`--threshold 0.85` + 可选 baseline 回退检测）；`run_eval.py` 加 `validate_cases()` + `--validate-only/--threshold/--baseline/--baseline-tolerance`；`eval/README §5` 重写。**Phase H 全部完结（H-1~H-6）**，进入 Phase I，指针指向 I-1 Hybrid Retrieval）
+> **历史最近更新（H-5）**：2026-06-05（自实现轻量记忆层（决策放弃 Mem0/Letta SDK，`MEMORY_DESIGN.md` §1）；`memory_store.py` 四层 Redis（Working/Episodic/Semantic/Procedural）+ `app/mcp/memory_{adapter,tools,server}.py` memory-server MCP（FastMCP，端口 8096，Streamable HTTP `/mcp`，3 工具 recall/save/summarize）；`redis_client` 改延迟 import；`tests/test_memory_store.py` 13 case，Python 共 25 全过。不强接 AgentLoop（接线留灰度）。H-1~H-5 完结，指针推进至 H-6 eval gate CI）
 > **历史最近更新（H-4）**：2026-06-05（双 ChatClient（本地 `@Primary` + `cloudChatClient`）+ `router/ModelRouter`（敏感/原始画像→本地、方案/审核→云端、云端未就绪 fail-safe 回落本地）+ 审计 logger `MODEL_ROUTER_AUDIT` + `educare.model.routed{tier,stage}` 计数器；`SpringAiConfig` 本地保留 cache_prompt+metrics 拦截器、云端只挂 metrics；`RiskAnalyzeService` 改经 router 强制本地；`application.yml` 加 `educare.model.{local.base-url,cloud.*}`（云端 key 走 env/Nacos 加密）；`ModelRouterTest` 7 case，agent-service 共 25 全绿。H-1~H-4 完结，指针推进至 H-5 记忆层）
 > **历史最近更新（H-3）**：2026-06-05（4 个技能 markdown（`agent-service/src/main/resources/skills/`，classpath 内置）+ `SkillLoader`（外部目录 `educare.agent.skills.dir` 按 mtime 热更新 / classpath 兜底）+ `educare.agent.skills.active` 逗号有序"按需选择" + `AgentTaskServiceImpl.runAgentLoopForTask` 注入 `composeActiveSkillsPrompt()` 到 AgentLoop system prompt（空串时不破坏 G-1 cache 字节稳定）；`SkillLoaderTest` 7 case，agent-service 共 18 case 全绿。H-1/H-2/H-3 全部完结，指针推进至 §3 H-4.1 ModelRouter）
 
@@ -33,8 +34,9 @@
 
 ## 1. 下一步指针（Next Action）
 
-**当前阶段**：Phase H（MCP 化 + Agent Loop 重构）—— H-1 ~ H-5 全部完结
-**下一步**：→ §3 H-6 eval gate 接入 CI（视进度项）。H-6.1 GitHub Actions/CI workflow：PR 触发 `eval/run_eval.py` 全集 → H-6.2 阈值门控（等级一致率 ≥ 0.85，不达标阻塞合并）。建议：workflow 起 ai-inference-service（或 mock LLM）跑 eval，解析 `run_results.json` 的 `level_accuracy_exact` 卡阈值；阈值演进参 eval/README §CI 草案（0.6 起步 → 0.85）
+**当前阶段**：Phase H 全部完结（H-1 ~ H-6）→ 进入 Phase I（最小版：I-1 + I-5）
+**下一步**：→ §4 I-1 Hybrid Retrieval（向量 + BM25）。I-1.1 决策点：Docker 加 Elasticsearch 8.x vs 用 Milvus 2.4 内置 BM25/稀疏向量 → I-1.2 `ai-inference-service/app/services/hybrid_retrieval.py`（dense + BM25 并行召回 + RRF 融合）→ I-1.3 knowledge-rag 接入 hybrid 灰度 → I-1.4 RAGAS 离线评测 ≥ 纯 dense baseline。建议 I-1.1 选 Milvus 内置稀疏（避免再起 ES 容器，与"复用既有栈"一致），但要确认 2.4.1 版本 BM25/sparse 支持度
+- **H-6 完结**：`.github/workflows/eval-gate.yml` 两段式（validate-dataset 无条件 + eval-threshold 条件）；`run_eval.py` 加 `--validate-only/--threshold/--baseline`
 - **H-5 完结**：自实现轻量记忆层（`memory_store` 四层 Redis）+ memory-server MCP（8096，3 工具）+ `MEMORY_DESIGN.md`；不强接 AgentLoop，接线留灰度
 - **H-4 完结**：双 ChatClient（本地 `@Primary` + `cloudChatClient`）+ `ModelRouter`（敏感→本地、方案/审核→云端、未就绪 fail-safe 回落）+ 审计 logger `MODEL_ROUTER_AUDIT` + `educare.model.routed` 计数器；`RiskAnalyzeService` 经 router 取本地
 - **H-3 完结**：4 个技能 markdown（classpath `skills/`）+ `SkillLoader`（外部目录 mtime 热更新 / classpath 兜底）+ `educare.agent.skills.active` 按需选择 + 注入 AgentLoop system prompt
@@ -278,8 +280,10 @@
 
 ### H-6 Braintrust eval gate 接入 CI（视进度）
 
-- [ ] **H-6.1** GitHub Actions / 内部 CI workflow：PR 触发 eval 跑全集
-- [ ] **H-6.2** 阈值：faithfulness ≥ baseline、等级一致率 ≥ 0.85，不达标阻塞合并
+- [x] **H-6.1** GitHub Actions / 内部 CI workflow：PR 触发 eval 跑全集
+  - 完成于 2026-06-05：`.github/workflows/eval-gate.yml` 两段式 —— `validate-dataset`（无条件，`run_eval.py --validate-only` 纯 stdlib 体检 50 例：id 唯一/input 非空/risk_level 合法，秒级零依赖）+ `eval-threshold`（条件：仓库变量 `EVAL_LLM_ENABLED=true` 才跑，需可达推理端点 `EVAL_LLM_BASE_URL` secret）。PR paths 命中 `eval/` `ai-inference-service/` `agent-service/` 触发；未配端点的 fork 只跑第 1 段不误红。`run_eval.py` 加 `--validate-only`/`--threshold`/`--baseline`/`--baseline-tolerance` 四参 + `validate_cases()` 体检函数
+- [x] **H-6.2** 阈值：faithfulness ≥ baseline、等级一致率 ≥ 0.85，不达标阻塞合并
+  - 完成于 2026-06-05：workflow eval-threshold 段 `--threshold 0.85` 卡等级一致率；`--baseline eval/baseline.json`（存在时）经 `_check_baseline` 检查相比 baseline 回退超 `--baseline-tolerance`（默认 0.05）即 exit 1。退出码 1 阻塞合并。`eval/README.md §5` 重写为已落地的两段式 + 启用步骤（仓库 Variables/Secrets/baseline）+ 阈值 0.6→0.85 演进路径。faithfulness 以 `phrase_hit_rate` 为代理报告（硬门是 level_accuracy，与 G-6.3 一致）
 
 **Phase H 验收总标准**：
 - 旧 `AgentTaskServiceImpl.doExecute()` 4 阶段 if-else 删除（fallback 保留通过 feature flag）
@@ -352,6 +356,7 @@ H-4 (ModelRouter) ──► H-2 (Loop 选模型)
 | 2026-05-21 | H-1.4 落地 `scripts/mcp_smoke_test.sh`：纯 `curl + jq` 一键回归两个 MCP server 的 `initialize → notifications/initialized → tools/list → 7×tools/call`，session id 自动接力；H-1 子阶段全部完结，指针推进至 H-2.1 AgentLoop | 取代手动 `mcp-inspector` 点点点的 H-1.2/H-1.3 smoke 流程；脚本即基线，后续 Spring AI / FastMCP / Milvus 升级跑一次即可回归。无 npm 依赖（保留 macOS 默认 toolchain），但需要 bash≥4（`declare -A` 双 session id 接力），脚本头自检 + 提示 |
 | 2026-05-21 | H-2.1 落地：新建 `com.edu.agent.core.AgentLoop` + 4 个 record/enum + 3-case 单元测试，think→tool→observe 循环走 ReAct JSON 协议 | 选 ReAct 而非 Spring AI 1.1.6 native tool calling 的理由：1.1.6 `ChatClient.tools(...)` 默认内部隐式循环，thought/action/observation 三类事件个体不可见，无法 trace、无法 inject early-stop、无法限 max_iterations；`internalToolExecutionEnabled=false` 路径未实测稳定。ReAct JSON 把控制流封装在 AgentLoop 内部，外部只需 `ToolCallback` 列表，H-2.2 接 MCP 时调用方零改动；后续模型升 32B+ 想换 native tool calling 也只改 AgentLoop 内部。本步不动旧 4 阶段，feature flag 留 H-2.3 |
 | 2026-05-21 | H-2.2 落地：agent-service 接 MCP client 1.1.6（`spring-ai-starter-mcp-client` + `streamable-http.connections.{student-data,knowledge-rag}`，启动产出合并 `ToolCallbackProvider` 7 个工具）+ `AgentLoop` 接 Langfuse 顶层 `agent.loop` trace（`finishRun()` 收口 5 个 return 路径）+ 新增 `/agent/api/v1/_internal/loop/dry-run` admin 手测端点；不切旧 4 阶段、不接嵌套 trace、不加 feature flag、dry-run 端点零 auth | 把 H-1 落地的 7 个 MCP tool 通过 1.1.6 `ToolCallbackProvider` auto-config 红利接入 `AgentLoop`，最小代码。artifactId 实测校准（**非** plan 草案的 `-webmvc`，1.1.6 BOM 只有 `spring-ai-starter-mcp-client`（默认 JDK HttpClient）与 `-webflux`）。trace 颗粒选顶层一次而非嵌套是有意收敛侵入面：嵌套要改 `LangfuseClient` + `LlmMetricsInterceptor` + 引入 ThreadLocal context 3 处，回归面碰已 GA 的 G-5.3 路径，嵌套优化留 H-2.4 eval 调优时再做。G-1 prompt caching 通过 `SpringAiConfig` RestClient 拦截器链零接线继承，AgentLoop 用同一 `ChatClient` @Bean 自动得到 `cache_prompt=true` 与 cache_hit_rate 指标 |
+| 2026-06-05 | H-6 落地：`.github/workflows/eval-gate.yml` 两段式 eval gate；`run_eval.py` 参数化阈值 + validate-only + baseline 对比 | CI 无真实 LLM 会让全集 eval 全走 fallback（medium）误红，故拆两段：数据集体检无条件硬门（纯 stdlib、确定性），真实跑分门用仓库变量 `EVAL_LLM_ENABLED` 开关 + secret 端点，未配置环境只跑体检不阻塞。阈值 0.85 经 CLI 参数化（默认仍 0.6，演进可调），faithfulness 用 phrase_hit_rate 代理（与 G-6.3 既有指标一致，不引 RAGAS 重依赖） |
 | 2026-06-05 | H-5 落地：自实现轻量记忆层（放弃 Mem0/Letta），`memory_store` 四层 Redis + memory-server MCP（8096，3 工具）+ `MEMORY_DESIGN.md`；不强接 AgentLoop | Mem0/Letta SDK 不稳定且与既有 Milvus+llama.cpp 栈重叠（与 G-5/G-6/H-1.3"复用既有栈"决策一致）。接口比实现重要：先 Redis 跑通 recall/save/summarize 闭环，未来换 Mem0 只替换 memory_store 实现层。Semantic 层留 Milvus 向量化升级路径。不强接 AgentLoop 是为避免每个任务都硬依赖 memory-server 在线（与 H-1.3 knowledge-rag 独立进程同理），接线走灰度。附带把 redis_client 的 redis import 改延迟，让纯逻辑单测无需安装 redis 包 |
 | 2026-06-05 | H-3 落地：4 个技能 markdown 改放 `src/main/resources/skills/`（classpath）而非计划写的 `agent-service/skills/`；`SkillLoader` 双来源（外部目录 mtime 热更新 / classpath 兜底）；按 `educare.agent.skills.active` 选择注入 | classpath 放置保证打包进 jar 始终可用，外部目录仅作热更新/覆盖；"按需选择"用配置化 active 列表实现，单一任务类型下默认注入全部 4 技能 |
 | 2026-06-05 | H-4 落地：双 ChatClient（本地 `@Primary` + `cloudChatClient`）+ `ModelRouter`（敏感→本地、方案/审核→云端、未就绪 fail-safe 回落）+ 审计 logger + 计数器；`RiskAnalyzeService` 经 router 取本地；AgentLoop 仍用本地 `@Primary` | 双 ChatClient 比"单 client 调用点切 base-url"干净：本地保留 llama.cpp 私有 `cache_prompt` 拦截器、云端不注（标准 OpenAI 端点不识别）。本地标 `@Primary` 让既有裸 `ChatClient` 注入零改动。AgentLoop 不接 router：它整段处理原始敏感画像，本地是正确 tier，强行按阶段切云端会让原始数据出本地，违背 H-4.2 敏感→本地原则；云端 tier 留给未来"已脱敏方案精修"类调用。云端默认关闭 + key 空即回落，保证未配置环境零行为变化 |

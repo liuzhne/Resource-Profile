@@ -78,20 +78,29 @@ python eval/run_eval.py \
 | **by_level** | 上述三指标按 ground truth 等级分桶 | 排查偏倚：是不是某档系统性预测错（比如总把 high 预成 medium） |
 | **confusion** | `(expected, predicted)` 计数 | 直接看错配方向 |
 
-## 5. CI 接入约定（H-6 实施）
+## 5. CI 接入（H-6 已落地）
 
-`run_eval.py` 退出码：
-- `0` —— `level_accuracy_exact ≥ 0.6`
-- `1` —— 低于阈值
+workflow：`.github/workflows/eval-gate.yml`，PR 触发（paths 命中 `eval/` `ai-inference-service/` `agent-service/`）。两段式：
 
-CI 挂在 PR：
-```yaml
-- run: python eval/run_eval.py --base-url http://ai-inference:8090 --md eval/run_results.md
-- uses: actions/upload-artifact@v4
-  with: { name: eval-report, path: eval/run_results.md }
-```
+1. **validate-dataset（无条件跑）**：`python eval/run_eval.py --validate-only` —— 纯 stdlib 体检 50 例
+   数据集完整性（id 唯一 / input 非空 / `risk_level` 合法），秒级零依赖，永远作为硬门。
+2. **eval-threshold（条件跑）**：仅当仓库变量 `EVAL_LLM_ENABLED=true` 时启用（需要一个可达推理端点）。
+   跑全集后按阈值门控：`--threshold 0.85`（H-6.2），可选 `--baseline eval/baseline.json` 检查回退。
+   未配置端点的 fork / 默认环境只跑第 1 段，**不会因缺 LLM 误红**。
 
-阈值演进路径：先 0.6（baseline），跑稳后逐月上调；不要一次拉到 0.9 否则易绿失实。
+`run_eval.py` 退出码：`0`=达标且未回退；`1`=等级一致率 < `--threshold` 或相比 baseline 回退超容差。
+
+新增 CLI 参数：
+- `--validate-only`：只体检数据集，不调 LLM
+- `--threshold`（默认 0.6，CI 用 0.85）：等级一致率门槛
+- `--baseline <json>` + `--baseline-tolerance`（默认 0.05）：与历史 run_results 对比是否回退
+
+启用真实门控（仓库 Settings）：
+- Variables：`EVAL_LLM_ENABLED=true`
+- Secrets：`EVAL_LLM_BASE_URL=<可达的 ai-inference 端点>`
+- 可选：把一次可信的 `run_results.json` 复制为 `eval/baseline.json` 提交，开启回退检测
+
+阈值演进路径：先 0.6（baseline），跑稳后逐月上调到 0.85；不要一次拉到 0.9 否则易绿失实。
 
 ## 6. 增量与维护
 

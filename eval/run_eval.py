@@ -44,6 +44,34 @@ def _require_httpx():
 LEVEL_ORDER = ["none", "low", "medium", "high"]
 
 
+def validate_cases(cases: List[Dict[str, Any]]) -> tuple[bool, List[str], Dict[str, int]]:
+    """H-6.1：离线数据集体检（不调 LLM，CI 可无条件跑）。
+
+    校验每条用例含 id / input / expected.risk_level，且 risk_level 在合法集合内。
+    返回 (是否全部通过, 问题列表, 按等级计数)。
+    """
+    problems: List[str] = []
+    by_level: Dict[str, int] = {lvl: 0 for lvl in LEVEL_ORDER}
+    seen_ids = set()
+    for i, c in enumerate(cases):
+        cid = c.get("id")
+        if not cid:
+            problems.append(f"#{i} 缺少 id")
+        elif cid in seen_ids:
+            problems.append(f"{cid} id 重复")
+        else:
+            seen_ids.add(cid)
+        if not c.get("input"):
+            problems.append(f"{cid or i} 缺少 input")
+        expected = c.get("expected") or {}
+        lvl = str(expected.get("risk_level") or "").lower()
+        if lvl not in LEVEL_ORDER:
+            problems.append(f"{cid or i} expected.risk_level 非法: '{lvl}'")
+        else:
+            by_level[lvl] += 1
+    return (not problems), problems, by_level
+
+
 def _level_score(predicted: str, expected: str) -> float:
     """完全匹配 1.0；相邻 0.5；其他 0.0。未知 label 0.0。"""
     if predicted not in LEVEL_ORDER or expected not in LEVEL_ORDER:
@@ -239,6 +267,43 @@ def _write_md(summary: Dict[str, Any], path: Path) -> None:
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
+def _load_cases(path: str) -> List[Dict[str, Any]]:
+    return [json.loads(line) for line in Path(path).read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def _run_validate_only(args: argparse.Namespace) -> int:
+    """H-6.1：仅体检数据集，不调 LLM（CI 无条件门）。"""
+    cases = _load_cases(args.input)
+    ok, problems, by_level = validate_cases(cases)
+    print(f"数据集体检：{len(cases)} 条用例，{args.input}")
+    print("等级分布：" + "  ".join(f"{lvl}={by_level[lvl]}" for lvl in LEVEL_ORDER))
+    if ok:
+        print("✓ 数据集体检通过")
+        return 0
+    print(f"✗ 数据集体检发现 {len(problems)} 个问题：")
+    for pb in problems:
+        print(f"  - {pb}")
+    return 1
+
+
+def _check_baseline(summary: Dict[str, Any], baseline_path: str, tolerance: float) -> int:
+    """H-6.2：与 baseline 对比，等级一致率回退超过 tolerance 视为回归。"""
+    try:
+        base = json.loads(Path(baseline_path).read_text(encoding="utf-8"))
+    except Exception as exc:
+        print(f"⚠ 无法读取 baseline {baseline_path}（跳过对比）：{exc}")
+        return 0
+    base_acc = float(base.get("level_accuracy_exact", 0.0))
+    cur_acc = float(summary["level_accuracy_exact"])
+    delta = cur_acc - base_acc
+    print(f"\nbaseline 对比：当前 {cur_acc:.2%} vs baseline {base_acc:.2%}（Δ={delta:+.2%}，容差 {tolerance:.0%}）")
+    if delta < -tolerance:
+        print("✗ 相比 baseline 显著回退")
+        return 1
+    print("✓ 未相比 baseline 回退")
+    return 0
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description="EduCare risk eval runner")
     p.add_argument("--input", default="eval/risk_assessment.jsonl")
@@ -247,7 +312,18 @@ def main() -> int:
     p.add_argument("--timeout", type=float, default=90.0)
     p.add_argument("--out", default="eval/run_results.json")
     p.add_argument("--md", default=None, help="可选 markdown 报告输出路径")
+    p.add_argument("--threshold", type=float, default=0.6,
+                   help="等级一致率门槛，低于则退出码 1（CI 用；H-6.2 演进到 0.85）")
+    p.add_argument("--baseline", default=None,
+                   help="可选 baseline run_results.json，对比等级一致率是否回退")
+    p.add_argument("--baseline-tolerance", type=float, default=0.05,
+                   help="相比 baseline 允许的回退容差")
+    p.add_argument("--validate-only", action="store_true",
+                   help="只体检数据集（不调 LLM），CI 无条件门")
     args = p.parse_args()
+
+    if args.validate_only:
+        return _run_validate_only(args)
 
     summary = asyncio.run(_run(args))
     _print_report(summary)
@@ -258,13 +334,18 @@ def main() -> int:
         _write_md(summary, Path(args.md))
         print(f"MD  报告 -> {args.md}")
 
-    # 退出码：等级一致率 < 0.6 视为失败（CI 可用）
-    threshold = 0.6
-    if summary["level_accuracy_exact"] < threshold:
-        print(f"\n✗ 等级一致率 {summary['level_accuracy_exact']:.2%} 低于阈值 {threshold:.0%}")
-        return 1
-    print(f"\n✓ 等级一致率 {summary['level_accuracy_exact']:.2%} ≥ 阈值 {threshold:.0%}")
-    return 0
+    exit_code = 0
+    if summary["level_accuracy_exact"] < args.threshold:
+        print(f"\n✗ 等级一致率 {summary['level_accuracy_exact']:.2%} 低于阈值 {args.threshold:.0%}")
+        exit_code = 1
+    else:
+        print(f"\n✓ 等级一致率 {summary['level_accuracy_exact']:.2%} ≥ 阈值 {args.threshold:.0%}")
+
+    if args.baseline:
+        if _check_baseline(summary, args.baseline, args.baseline_tolerance) != 0:
+            exit_code = 1
+
+    return exit_code
 
 
 if __name__ == "__main__":
