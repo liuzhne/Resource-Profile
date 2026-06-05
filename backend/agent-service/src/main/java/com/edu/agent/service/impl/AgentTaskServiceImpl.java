@@ -16,6 +16,7 @@ import com.edu.agent.mapper.AgentTaskMapper;
 import com.edu.agent.service.AgentTaskService;
 import com.edu.agent.service.RiskAnalyzeService;
 import com.edu.agent.service.StudentPortraitAggregator;
+import com.edu.agent.sse.WarningPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -45,6 +46,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
     private final StudentPortraitAggregator portraitAggregator;   // P2-5：基于真实端点的画像聚合
     private final RiskAnalyzeService riskAnalyzeService;          // P2-5：真实 LLM 风险识别
     private final StringRedisTemplate redisTemplate;
+    private final WarningPublisher warningPublisher;              // F-2：终态事件发布
 
     @Qualifier("agentExecutor")
     private final Executor agentExecutor;
@@ -133,7 +135,13 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
         );
     }
 
-    // ==================== 2. 异步执行入口 ====================
+    /**
+     * Attempts to execute the agent task identified by taskId while holding a distributed lock.
+     *
+     * Acquires a Redis-based lock for the given task id; if the lock is obtained, runs the task execution flow and always releases the lock. On execution failure the task is marked failed and a terminal event is published.
+     *
+     * @param taskId the id of the AgentTask to execute
+     */
 
     @Override
     @Async("agentExecutor")
@@ -154,6 +162,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
         } catch (Exception e) {
             log.error("任务 {} 执行异常", taskId, e);
             failTask(taskId);
+            publishTerminal(taskId);
         } finally {
             log.info("释放锁！");
             String script = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
@@ -162,7 +171,22 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
         }
     }
 
-    // ==================== 3. 4 阶段状态机 ====================
+    /**
+     * Execute the task state machine for the given task id, advancing the task through risk analysis,
+     * knowledge retrieval, plan generation, compliance checking, and finalization as appropriate.
+     *
+     * The method loads the task, validates it, and performs stage transitions with persisted updates:
+     * - PENDING → RISK_ANALYZING: run risk analysis; short-circuit to COMPLETED if risk is NONE or LOW.
+     * - RISK_ANALYZING → KNOWLEDGE_RETRIEVING: perform knowledge retrieval.
+     * - KNOWLEDGE_RETRIEVING → PLAN_GENERATING: generate an intervention plan.
+     * - PLAN_GENERATING → COMPLIANCE_CHECKING: perform compliance audit and transition to REJECTED if audit fails.
+     * - COMPLIANCE_CHECKING → COMPLETED: finalize the task when all checks pass.
+     *
+     * Side effects: updates task fields in the database, performs state transitions via `transition(...)`,
+     * writes completion/failure timestamps via `completeTask(...)`, and publishes terminal events via `publishTerminal(...)`.
+     *
+     * @param taskId the primary key of the AgentTask to execute
+     */
 
     private void doExecute(Long taskId) {
         AgentTask task = agentTaskMapper.selectById(taskId);
@@ -196,6 +220,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
             if (level == RiskLevel.NONE || level == RiskLevel.LOW) {
                 transition(taskId, TaskStatus.RISK_ANALYZING, TaskStatus.COMPLETED);
                 completeTask(taskId);
+                publishTerminal(taskId);
                 log.info("任务 {} 风险等级 {}，直接完成", taskId, level);
                 return;
             }
@@ -239,6 +264,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
             boolean passed = parseAuditPassed(audit);
             if (!passed) {
                 transition(taskId, TaskStatus.COMPLIANCE_CHECKING, TaskStatus.REJECTED);
+                publishTerminal(taskId);
                 log.warn("任务 {} 合规审核未通过，转人工", taskId);
                 return;
             }
@@ -248,6 +274,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
         if (task.getStatus() == TaskStatus.COMPLIANCE_CHECKING) {
             transition(taskId, TaskStatus.COMPLIANCE_CHECKING, TaskStatus.COMPLETED);
             completeTask(taskId);
+            publishTerminal(taskId);
             log.info("任务 {} 全部完成", taskId);
         }
     }
@@ -297,12 +324,14 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
     }
 
     /**
-     * 阶段 3：方案生成
-     * 入参 = 脱敏画像 + 风险分析 + 召回知识 chunks
+     * Generate an intervention plan for the given task using the masked student profile, risk analysis, and retrieved knowledge.
+     *
+     * @param task the AgentTask containing the studentId, riskAnalysisResult, and retrievedKnowledge used to build the request
+     * @return a JSON-formatted intervention plan as a String; returns a predefined fallback plan JSON when generation fails or no result is produced
      */
     private String executePlanGenerate(AgentTask task) {
         try {
-            String maskedProfile = portraitAggregator.buildMaskedProfile(task.getStudentId());
+            String maskedProfile = portraitAggregator.buildMaskedProfile(String.valueOf(task.getStudentId()));
 
             Map<String, Object> req = new HashMap<>();
             req.put("student_profile", JSON.parseObject(maskedProfile));
@@ -322,12 +351,16 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
     }
 
     /**
-     * 阶段 4：合规审核
-     * 失败时强制 audit_passed=false → 任务转 REJECTED 进入人工兜底。
+     * Perform a compliance audit for the task's intervention plan.
+     *
+     * Uses the task's student profile (masked) and intervention plan to call the compliance audit service.
+     *
+     * @param task the task whose student profile and intervention plan are audited
+     * @return a JSON string containing the audit result; on error returns a fallback audit JSON that has `audit_passed=false` and `manual_review_required=true`
      */
     private String executeComplianceAudit(AgentTask task) {
         try {
-            String maskedProfile = portraitAggregator.buildMaskedProfile(task.getStudentId());
+            String maskedProfile = portraitAggregator.buildMaskedProfile(String.valueOf(task.getStudentId()));
 
             Map<String, Object> req = new HashMap<>();
             req.put("student_profile", JSON.parseObject(maskedProfile));
@@ -376,6 +409,13 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
         agentTaskMapper.updateById(update);
     }
 
+    /**
+     * Mark the task identified by the given id as failed in persistent storage.
+     *
+     * Sets the task's status to `FAILED` and writes the change to the database.
+     *
+     * @param taskId the id of the task to mark as failed
+     */
     private void failTask(Long taskId) {
         AgentTask update = new AgentTask();
         update.setId(taskId);
@@ -383,7 +423,33 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
         agentTaskMapper.updateById(update);
     }
 
-    // ==================== 6. JSON 解析辅助 ====================
+    /**
+     * Publish a terminal task-state event for the given task to subscribed clients.
+     *
+     * Re-queries the task to obtain its latest status and risk level before publishing;
+     * if the task cannot be found the method returns without action. Any publishing errors
+     * are caught and logged.
+     *
+     * @param taskId the identifier of the task whose terminal event should be published
+     */
+    private void publishTerminal(Long taskId) {
+        try {
+            AgentTask t = agentTaskMapper.selectById(taskId);
+            if (t == null) return;
+            String status = t.getStatus() == null ? "UNKNOWN" : t.getStatus().name();
+            String riskLevel = t.getRiskLevel() == null ? null : t.getRiskLevel().name();
+            warningPublisher.publishTerminal(taskId, status, riskLevel, t.getStudentId());
+        } catch (Exception e) {
+            log.warn("F-2：发布终态事件失败 taskId={} err={}", taskId, e.getMessage());
+        }
+    }
+
+    /**
+     * Parse the `risk_level` field from a JSON string into a `RiskLevel`.
+     *
+     * @param json the JSON string containing a `risk_level` field (case-insensitive)
+     * @return the `RiskLevel` represented by the `risk_level` field; `RiskLevel.MEDIUM` if the field is missing, unrecognized, or parsing fails
+     */
 
     private RiskLevel parseRiskLevel(String json) {
         try {
@@ -396,6 +462,12 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
         }
     }
 
+    /**
+     * Determine whether a compliance audit result indicates the audit passed.
+     *
+     * @param json JSON string produced by the compliance audit, expected to contain the boolean field `audit_passed`
+     * @return `true` if the `audit_passed` field is `true`, `false` otherwise (including when parsing fails)
+     */
     private boolean parseAuditPassed(String json) {
         try {
             JSONObject map = JSON.parseObject(json);

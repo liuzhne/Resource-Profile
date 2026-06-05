@@ -17,6 +17,7 @@
     "element-plus": "^2.6.3",
     "@element-plus/icons-vue": "^2.3.1",
     "axios": "^1.6.8",
+    "@microsoft/fetch-event-source": "^2.0.1",
     "echarts": "^5.5.0",
     "vue-echarts": "^6.6.9",
     "js-cookie": "^3.0.5",

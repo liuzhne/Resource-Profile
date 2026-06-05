@@ -1,20 +1,80 @@
-import { createApp } from 'vue'
-import { createPinia } from 'pinia'
-import App from './App.vue'
-import router from './router'
-import permissionDirective from './directives/permission'
-import * as ElementPlusIconsVue from '@element-plus/icons-vue'
+import { createApp } from "vue";
+import { createPinia } from "pinia";
+import App from "./App.vue";
+import router from "./router";
+import permissionDirective from "./directives/permission";
+import {
+  ArrowDown,
+  Avatar,
+  Bell,
+  BellFilled,
+  CircleCloseFilled,
+  Close,
+  DataLine,
+  DocumentChecked,
+  DocumentCopy,
+  EditPen,
+  Expand,
+  FirstAidKit,
+  Fold,
+  Loading,
+  Lock,
+  MagicStick,
+  Plus,
+  Reading,
+  Refresh,
+  Setting,
+  CircleCheck,
+  SuccessFilled,
+  SwitchButton,
+  TrendCharts,
+  User,
+  UserFilled,
+  Warning,
+  WarningFilled,
+} from "@element-plus/icons-vue";
 
-import './styles/index.scss'
+import "./styles/index.scss";
 
-const app = createApp(App)
+const app = createApp(App);
 
-for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
-  app.component(key, component)
-}
+const icons = {
+  ArrowDown,
+  Avatar,
+  Bell,
+  BellFilled,
+  CircleCloseFilled,
+  Close,
+  DataLine,
+  DocumentChecked,
+  DocumentCopy,
+  EditPen,
+  Expand,
+  FirstAidKit,
+  Fold,
+  Loading,
+  Lock,
+  MagicStick,
+  Plus,
+  Reading,
+  Refresh,
+  Setting,
+  CircleCheck,
+  SuccessFilled,
+  SwitchButton,
+  TrendCharts,
+  User,
+  UserFilled,
+  Warning,
+  WarningFilled,
+};
 
-app.use(createPinia())
-app.use(router)
-app.use(permissionDirective)
+Object.entries(icons).forEach(([name, component]) => {
+  app.component(name, component);
+});
 
-app.mount('#app')
+app.use(createPinia());
+app.use(router);
+app.use(permissionDirective);
+
+app.mount("#app");

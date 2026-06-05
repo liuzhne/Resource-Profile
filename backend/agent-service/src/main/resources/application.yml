@@ -13,6 +13,9 @@ spring:
     openfeign:
       okhttp:
         enabled: true
+      # F-3：开启 CircuitBreaker SPI 桥接，让 @FeignClient(fallbackFactory=) 通过 Sentinel 触发
+      circuitbreaker:
+        enabled: true
       client:
         config:
           default:
@@ -90,6 +93,16 @@ logging:
     com.edu.agent.mapper: debug
 
 educare:
+  export:
+    # F-1：PDF 导出落盘目录。需可写；启动时若不存在自动创建。
+    storage-path: ${EDUCARE_EXPORT_PATH:/tmp/edu-exports}
+    # 中文字体路径（classpath: 或 file:）。缺失时 PDF 中文将渲染为方块。详见 docs/educare/deploy.md。
+    font-path: ${EDUCARE_FONT_PATH:classpath:/fonts/NotoSansSC-Regular.ttf}
+  sse:
+    # F-2：SSE 单连接最大存活时长（毫秒）。1800000 = 30 分钟，超时后前端会自动重连。
+    timeout-millis: ${EDUCARE_SSE_TIMEOUT_MS:1800000}
+    # F-2：心跳间隔（毫秒）。低于 Nginx/Gateway 的 idle timeout 即可，30s 通用安全值。
+    heartbeat-millis: ${EDUCARE_SSE_HEARTBEAT_MS:30000}
   rate-limit:
     # /trigger 端点全局 QPS 阈值（D 阶段：保护本地 GPU 推理）
     trigger-qps: ${EDUCARE_TRIGGER_QPS:2}
