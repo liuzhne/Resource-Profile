@@ -171,6 +171,18 @@ educare:
       enabled: ${EDUCARE_AGENT_SKILLS_ENABLED:true}
       dir: ${EDUCARE_AGENT_SKILLS_DIR:}
       active: ${EDUCARE_AGENT_SKILLS_ACTIVE:risk-assessment,psychological-screening,intervention-design,compliance-audit}
+  # H-4：Model Router 双路由。敏感/原始画像 → 本地 tier（数据不出本地）；方案/审核（已脱敏、偏推理）→ 云端 tier。
+  # 云端默认关闭；enabled=true 且 api-key 非空才真正启用，否则 ModelRouter 一律回落本地（fail-safe）。
+  # 云端 api-key 建议走 Nacos 加密配置（agent-service.yml）或环境变量，勿明文入库。
+  model:
+    local:
+      # 本地 tier base-url 复用 spring.ai.openai.base-url；如需独立本地 14B 实例（如 8092）改这里。
+      base-url: ${EDUCARE_LOCAL_LLM_BASE_URL:${spring.ai.openai.base-url:http://host.docker.internal:8091}}
+    cloud:
+      enabled: ${EDUCARE_CLOUD_ENABLED:false}
+      base-url: ${EDUCARE_CLOUD_LLM_BASE_URL:https://api.openai.com}
+      api-key: ${EDUCARE_CLOUD_LLM_API_KEY:}
+      model: ${EDUCARE_CLOUD_LLM_MODEL:gpt-4o-mini}
 
 # G-5.3：Langfuse trace。所有字段空时 LangfuseClient 自动 no-op，主流程零影响。
 # self-hosted v2：host 用 docker 内网名 langfuse-server:3000；本地裸跑用 http://localhost:3001
