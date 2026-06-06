@@ -187,6 +187,13 @@ educare:
     #   ② 本开关置 true。未配连接时 MemoryGateway 找不到工具 → 自动 no-op 降级，不影响主流程。
     memory:
       enabled: ${EDUCARE_AGENT_MEMORY_ENABLED:false}
+    # J-3.2：AgentLoop 过程流式（每轮 thought/tool 发 Redis PROGRESS_CHANNEL，前端 SSE 展示）。默认关。
+    streaming:
+      enabled: ${EDUCARE_AGENT_STREAMING_ENABLED:false}
+    # J-3.3：检查点（每轮轨迹 RPUSH Redis，崩溃可 post-mortem/续跑基础）。默认关。
+    checkpoint:
+      enabled: ${EDUCARE_AGENT_CHECKPOINT_ENABLED:false}
+      ttl-seconds: ${EDUCARE_AGENT_CHECKPOINT_TTL:3600}
   # H-4：Model Router 双路由。敏感/原始画像 → 本地 tier（数据不出本地）；方案/审核（已脱敏、偏推理）→ 云端 tier。
   # 云端默认关闭；enabled=true 且 api-key 非空才真正启用，否则 ModelRouter 一律回落本地（fail-safe）。
   # 云端 api-key 建议走 Nacos 加密配置（agent-service.yml）或环境变量，勿明文入库。

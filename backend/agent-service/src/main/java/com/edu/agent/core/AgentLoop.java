@@ -54,6 +54,28 @@ public class AgentLoop {
     @org.springframework.beans.factory.annotation.Qualifier("agentExecutor")
     private java.util.concurrent.Executor parallelToolExecutor;
 
+    /** J-3.1：生命周期钩子（流式/检查点/审计）。无注册 bean → null。 */
+    @Autowired(required = false)
+    private List<AgentLoopHook> hooks;
+
+    private void recordTrace(AgentLoopRequest req, List<AgentTrace> traces, AgentTrace t) {
+        traces.add(t);
+        fireHooks(h -> h.onIteration(req.taskTag(), t));
+    }
+
+    private void fireHooks(java.util.function.Consumer<AgentLoopHook> action) {
+        if (hooks == null) {
+            return;
+        }
+        for (AgentLoopHook h : hooks) {
+            try {
+                action.accept(h);
+            } catch (Exception e) {
+                log.debug("AgentLoopHook 异常（已忽略）: {}", e.getMessage());
+            }
+        }
+    }
+
     public AgentLoopResult run(AgentLoopRequest rawReq) {
         return run(rawReq, null);
     }
@@ -71,6 +93,7 @@ public class AgentLoop {
         int repairsLeft = MAX_FINAL_ANSWER_REPAIRS;
         String lastThought = null;
         String agentPlan = null;  // J-2.3：首轮规划
+        fireHooks(h -> h.onStart(req.taskTag(), req));  // J-3.1
 
         for (int i = 1; i <= req.maxIterations(); i++) {
             long t0 = System.currentTimeMillis();
@@ -81,7 +104,7 @@ public class AgentLoop {
                 raw = chatClient.prompt().system(systemPrompt).user(userPrompt).call().content();
             } catch (Exception e) {
                 log.error("[AgentLoop][{}] LLM 调用异常 iter={}", req.taskTag(), i, e);
-                traces.add(new AgentTrace(i, "", null, null, null, null,
+                recordTrace(req, traces, new AgentTrace(i, "", null, null, null, null,
                         System.currentTimeMillis() - t0, "llm-call-failed: " + e.getMessage()));
                 return finishRun(req, new AgentLoopResult(AgentLoopStatus.TOOL_ERROR, null, traces, i), runStart);
             }
@@ -100,7 +123,7 @@ public class AgentLoop {
                     FinalAnswerValidator.Result vr = validator.validate(parsed.finalAnswer);
                     if (!vr.valid()) {
                         repairsLeft--;
-                        traces.add(new AgentTrace(i, raw, parsed.thought, null, null,
+                        recordTrace(req, traces, new AgentTrace(i, raw, parsed.thought, null, null,
                                 "FINAL_ANSWER_INVALID: " + vr.correction(),
                                 System.currentTimeMillis() - t0, "final-answer-invalid"));
                         log.warn("[AgentLoop][{}] iter={} final_answer 不合格，触发修复轮（剩余 {}）：{}",
@@ -109,7 +132,7 @@ public class AgentLoop {
                         continue;
                     }
                 }
-                traces.add(new AgentTrace(i, raw, parsed.thought, null, null, null,
+                recordTrace(req, traces, new AgentTrace(i, raw, parsed.thought, null, null, null,
                         System.currentTimeMillis() - t0, null));
                 log.info("[AgentLoop][{}] iter={} COMPLETED finalAnswer={}",
                         req.taskTag(), i, abbreviate(parsed.finalAnswer));
@@ -118,7 +141,7 @@ public class AgentLoop {
 
             if (parsed.parseError != null) {
                 consecutiveParseError++;
-                traces.add(new AgentTrace(i, raw, null, null, null, null,
+                recordTrace(req, traces, new AgentTrace(i, raw, null, null, null, null,
                         System.currentTimeMillis() - t0, parsed.parseError));
                 if (consecutiveParseError >= CONSECUTIVE_PARSE_ERROR_LIMIT) {
                     log.warn("[AgentLoop][{}] iter={} 连续 {} 轮 parse error，退出",
@@ -132,7 +155,7 @@ public class AgentLoop {
             // J-2.4：并行多工具批 —— 守卫 + 调用各工具，合并 observation。
             if (parsed.parallelCalls != null && !parsed.parallelCalls.isEmpty()) {
                 String merged = executeParallel(req, parsed.parallelCalls);
-                traces.add(new AgentTrace(i, raw, parsed.thought,
+                recordTrace(req, traces, new AgentTrace(i, raw, parsed.thought,
                         "[parallel:" + parsed.parallelCalls.size() + "]", null,
                         truncate(merged), System.currentTimeMillis() - t0, null));
                 log.info("[AgentLoop][{}] iter={} 并行 {} 工具完成",
@@ -147,7 +170,7 @@ public class AgentLoop {
                     ToolGuard.GuardDecision decision = toolGuard.check(parsed.toolName, parsed.toolArgs);
                     if (!decision.allowed()) {
                         String denied = "TOOL_DENIED: " + decision.reason();
-                        traces.add(new AgentTrace(i, raw, parsed.thought, parsed.toolName, parsed.toolArgs,
+                        recordTrace(req, traces, new AgentTrace(i, raw, parsed.thought, parsed.toolName, parsed.toolArgs,
                                 denied, System.currentTimeMillis() - t0, "tool-denied"));
                         log.warn("[AgentLoop][{}] iter={} tool={} 被守卫拒绝: {}",
                                 req.taskTag(), i, parsed.toolName, decision.reason());
@@ -164,7 +187,7 @@ public class AgentLoop {
                     try {
                         observation = invokeTool(req.tools(), parsed.toolName, parsed.toolArgs);
                     } catch (Exception second) {
-                        traces.add(new AgentTrace(i, raw, parsed.thought, parsed.toolName, parsed.toolArgs,
+                        recordTrace(req, traces, new AgentTrace(i, raw, parsed.thought, parsed.toolName, parsed.toolArgs,
                                 "ERROR: " + second.getMessage(),
                                 System.currentTimeMillis() - t0,
                                 "tool-failed-after-retry"));
@@ -174,7 +197,7 @@ public class AgentLoop {
                     }
                 }
                 String truncated = truncate(observation);
-                traces.add(new AgentTrace(i, raw, parsed.thought, parsed.toolName, parsed.toolArgs,
+                recordTrace(req, traces, new AgentTrace(i, raw, parsed.thought, parsed.toolName, parsed.toolArgs,
                         truncated, System.currentTimeMillis() - t0, null));
                 log.info("[AgentLoop][{}] iter={} tool={} → {} bytes",
                         req.taskTag(), i, parsed.toolName,
@@ -185,7 +208,7 @@ public class AgentLoop {
 
             // 既无 action 也无 final_answer：合法但循环不推进，记 thought 后下一轮
             lastThought = parsed.thought;
-            traces.add(new AgentTrace(i, raw, parsed.thought, null, null, null,
+            recordTrace(req, traces, new AgentTrace(i, raw, parsed.thought, null, null, null,
                     System.currentTimeMillis() - t0, null));
             log.info("[AgentLoop][{}] iter={} thought-only，继续", req.taskTag(), i);
         }
@@ -206,6 +229,7 @@ public class AgentLoop {
      */
     private AgentLoopResult finishRun(AgentLoopRequest req, AgentLoopResult result, Instant runStart) {
         Instant runEnd = Instant.now();
+        fireHooks(h -> h.onFinish(req.taskTag(), result));  // J-3.1
         try {
             String tracesSummary = JSON.toJSONString(result.traces());
             if (tracesSummary.length() > 2048) {
