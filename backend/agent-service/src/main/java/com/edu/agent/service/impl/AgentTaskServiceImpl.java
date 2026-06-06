@@ -67,6 +67,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
     private final AgentLoopCanaryGate canaryGate;                 // H-2.4：灰度切流闸门（@RefreshScope，Nacos 热生效）
     private final SkillLoader skillLoader;                        // H-3.5：技能加载器（按需注入 system prompt + 热更新）
     private final com.edu.agent.core.SubAgentRegistry subAgentRegistry;  // J-2.1：子代理 agent-as-tool（默认关）
+    private final com.edu.agent.core.MemoryGateway memoryGateway;        // J-2.2：记忆接线（默认关）
 
     @Qualifier("agentExecutor")
     private final Executor agentExecutor;
@@ -358,6 +359,11 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
                     .set(AgentTask::getRiskLevel, parsed.riskLevel)
                     .set(AgentTask::getInterventionPlan, parsed.planJson));
 
+            // J-2.2：把本次研判存为情景记忆（关闭/无 memory-server 时 no-op）
+            memoryGateway.save(task.getStudentId(),
+                    "AgentLoop 研判：风险等级=" + parsed.riskLevel,
+                    "{\"task_id\":" + taskId + ",\"risk_level\":\"" + parsed.riskLevel + "\"}");
+
             // 低/无风险短路（与 legacy 一致）
             if (parsed.riskLevel == RiskLevel.NONE || parsed.riskLevel == RiskLevel.LOW) {
                 transition(taskId, TaskStatus.RISK_ANALYZING, TaskStatus.COMPLETED);
@@ -416,7 +422,10 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
         String systemPrompt = skillsBlock.isEmpty()
                 ? agentLoopSystemPrompt
                 : agentLoopSystemPrompt + "\n\n" + skillsBlock;
-        String userPrompt = String.format(
+        // J-2.2：loop 前召回该生历史记忆，注入背景（关闭/无记忆时为空串）
+        String memoryBlock = memoryGateway.recall(task.getStudentId());
+        String memoryPrefix = memoryBlock.isEmpty() ? "" : "# 该生历史记忆（只读背景）\n" + memoryBlock + "\n\n";
+        String userPrompt = memoryPrefix + String.format(
                 "请对学生 ID = %d 完成一次风险识别 + 干预方案生成任务。\n"
                         + "请通过可用工具拉取该学生的画像/学业/心理/出勤数据，必要时检索案例、政策、心理学知识，"
                         + "并按 system 中规定的 final_answer JSON schema 给出最终答复。",
