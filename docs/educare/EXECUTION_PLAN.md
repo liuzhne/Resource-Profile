@@ -428,10 +428,15 @@ H-4 (ModelRouter) ──► H-2 (Loop 选模型)
   - **J-1 关口**：`mvn clean install` 11 模块 SUCCESS，agent-service **51 测试**全绿（J-1 新增 17），Python 33 全过
 
 ### J-2 能力对齐
-- [ ] **J-2.1 子代理编排（agent-as-tool，= I-3）**
-- [ ] **J-2.2 记忆接线（接 H-5 memory-server）**
-- [ ] **J-2.3 规划/Todo 显式步**
-- [ ] **J-2.4 并行工具执行**
+- [x] **J-2.1 子代理编排（agent-as-tool，= I-3）**
+  - 完成于 2026-06-06：`SubAgent` + `SubAgentToolCallback`（受限 AgentLoop 包成工具，独立 context + 工具子集，无递归）+ `SubAgentRegistry`（班主任/心理咨询师/学业导师，技能正文做 prompt，默认关 `educare.agent.subagents.enabled`）；`AgentTaskServiceImpl` 主工具 = MCP + 子代理工具。`SubAgentToolCallbackTest` 5 case
+- [x] **J-2.2 记忆接线（接 H-5 memory-server）**
+  - 完成于 2026-06-06：`MemoryGateway`（从 MCP provider 按名解析 recall/save，默认关 + 降级）；loop 前 recall 注入背景、研判落库后 save_episode；memory MCP 连接 opt-in。`MemoryGatewayTest` 6 case
+- [x] **J-2.3 规划/Todo 显式步**
+  - 完成于 2026-06-06：ReAct 协议加可选 `plan` 字段，`parseLlmJson` 抽取、run() 捕获首个 plan 记日志（随 rawLlmOutput 进 trace）。`AgentLoopPlanTest` 4 case
+- [x] **J-2.4 并行工具执行**
+  - 完成于 2026-06-06：`action` 支持数组 → `parallelCalls`；`executeParallel`（有 `agentExecutor` 则 CompletableFuture 并发、无则顺序；逐个守卫+重试，单个失败/被拒不影响其它，合并 Observation）。`AgentLoopParallelTest` 4 case
+  - **J-2 关口**：`mvn clean install` SUCCESS，agent-service **70 测试**全绿（J-2 新增 19），Python 全过
 
 ### J-3 生产化 / DX
 - [ ] **J-3.1 Hooks 生命周期**
