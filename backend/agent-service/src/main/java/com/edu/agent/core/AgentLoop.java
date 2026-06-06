@@ -58,6 +58,10 @@ public class AgentLoop {
     @Autowired(required = false)
     private List<AgentLoopHook> hooks;
 
+    /** J-3.4：工具协议。react（默认，可见 thought/observation 细粒度）或 native（Spring AI 原生 tool-calling）。 */
+    @org.springframework.beans.factory.annotation.Value("${educare.agent.loop.protocol:react}")
+    private String protocol;
+
     private void recordTrace(AgentLoopRequest req, List<AgentTrace> traces, AgentTrace t) {
         traces.add(t);
         fireHooks(h -> h.onIteration(req.taskTag(), t));
@@ -87,6 +91,10 @@ public class AgentLoop {
     public AgentLoopResult run(AgentLoopRequest rawReq, FinalAnswerValidator validator) {
         AgentLoopRequest req = rawReq.normalized();
         Instant runStart = Instant.now();
+        // J-3.4：双轨 —— native 走 Spring AI 原生 tool-calling 的隐式内部循环
+        if ("native".equalsIgnoreCase(protocol)) {
+            return runNative(req, validator, runStart);
+        }
         String systemPrompt = composeSystemPrompt(req);
         List<AgentTrace> traces = new ArrayList<>(req.maxIterations());
         int consecutiveParseError = 0;
@@ -255,6 +263,42 @@ public class AgentLoop {
                     req.taskTag(), e.getMessage());
         }
         return result;
+    }
+
+    /**
+     * J-3.4：native 协议 —— 交给 Spring AI 原生 tool-calling，模型内部完成 tool 调用循环，返回最终文本。
+     * 失去 thought/observation 细粒度（单条 trace），但对大模型/云端更省协议开销。system prompt 直接用
+     * req.systemPrompt()（不追加 ReAct 协议）；validator 仅做一次校验记日志（native 不做修复轮）。
+     */
+    private AgentLoopResult runNative(AgentLoopRequest req, FinalAnswerValidator validator, Instant runStart) {
+        fireHooks(h -> h.onStart(req.taskTag(), req));
+        long t0 = System.currentTimeMillis();
+        List<AgentTrace> traces = new ArrayList<>(1);
+        String content;
+        try {
+            content = chatClient.prompt()
+                    .system(req.systemPrompt() == null ? "" : req.systemPrompt())
+                    .user(req.userPrompt())
+                    .toolCallbacks(req.tools())
+                    .call()
+                    .content();
+        } catch (Exception e) {
+            log.error("[AgentLoop][{}] native 调用异常", req.taskTag(), e);
+            recordTrace(req, traces, new AgentTrace(1, "", null, null, null, null,
+                    System.currentTimeMillis() - t0, "native-call-failed: " + e.getMessage()));
+            return finishRun(req, new AgentLoopResult(AgentLoopStatus.TOOL_ERROR, null, traces, 1), runStart);
+        }
+        if (validator != null) {
+            FinalAnswerValidator.Result vr = validator.validate(content);
+            if (!vr.valid()) {
+                log.warn("[AgentLoop][{}] native final_answer 不合格（native 不做修复轮）：{}",
+                        req.taskTag(), vr.correction());
+            }
+        }
+        recordTrace(req, traces, new AgentTrace(1, content, null, null, null, null,
+                System.currentTimeMillis() - t0, null));
+        log.info("[AgentLoop][{}] native COMPLETED finalAnswer={}", req.taskTag(), abbreviate(content));
+        return finishRun(req, new AgentLoopResult(AgentLoopStatus.COMPLETED, content, traces, 1), runStart);
     }
 
     // -------- 拼接 prompt --------

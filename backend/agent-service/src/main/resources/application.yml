@@ -164,6 +164,9 @@ educare:
     loop:
       enabled: ${EDUCARE_AGENT_LOOP_ENABLED:false}
       canary-percent: ${EDUCARE_AGENT_LOOP_CANARY_PERCENT:100}
+      # J-3.4：工具协议。react（默认，thought/observation 细粒度可观测）或 native（Spring AI 原生
+      # tool-calling 隐式内部循环，省协议开销，适合云端/大模型；失去 thought/observation 细粒度）。
+      protocol: ${EDUCARE_AGENT_LOOP_PROTOCOL:react}
     # H-3.5：Skill 加载器。enabled=true 时把 active 列出的技能 markdown 注入 AgentLoop system prompt。
     # dir 为空 → 用 classpath skills/（打包进 jar，不热更新）；
     # dir 指向外部目录 → 优先读该目录并按 mtime 热更新（编辑 md 不需重启，生产可挂载覆盖内置技能）。
