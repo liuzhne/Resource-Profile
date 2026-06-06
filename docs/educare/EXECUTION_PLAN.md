@@ -410,3 +410,31 @@ H-4 (ModelRouter) ──► H-2 (Loop 选模型)
 5. **agent vs legacy eval 对比** ✅ **已实际执行（活对比）2026-06-05**：桩 LLM 升级双模（按 system prompt 含 `final_answer` 分流 ReAct/risk JSON），同栈下以 `enabled=false/true` 重启 agent-service 各触发真实任务，实测 **legacy student=11 → COMPLETED|LOW**、**agent student=12 → COMPLETED|LOW**，两路均活跑通且终态一致 → agent 不比 legacy 差。边界：桩对两路均返回 low（风险阶段短路），证明的是"两条代码路径均能活跑且一致"，**非**判别性准确率对比（后者需真实 14B + legacy 完整 plan/audit 链路 = Python+Milvus，Milvus 需 Docker）；判别性全量对比留 `eval/agent_vs_legacy.sh` 在 GPU/Docker 机器执行。
 
 > 结论：**5 件全部实际执行**。第 1/3/4 硬证据完成；第 2 项用桩 LLM 在**活服务**上真跑通过（ReAct 循环跑完 + final_answer 解析落库 MySQL + COMPLETED）；第 5 项**两条路径活对比一致**。仅"真实 14B 判别质量 + 经真实 MCP 工具取数 + Langfuse trace + legacy 深链路 plan/audit"受 GPU/Docker（Milvus）物理限制，留具备条件的机器按 Runbook 执行。可运行性已从"完全缺失证据"跃升到"活服务跑通 + 双路径活对比 + 一键可复现"。
+> **注（沙箱测试边界）**：第 2/5 项真跑用 brew 本地 redis+mysql(9.6) + 桩 LLM **仅为沙箱取证**（本沙箱无 Docker daemon）；**生产/部署方案不变**，仍走 `docker-compose.yml`（mysql:8.0 + redis:7-alpine + nacos + 第 4 件新增的 agent 全栈），brew 替身与设计无关。
+
+---
+
+## 10. Phase J —— Agent Harness 补全（计划：`~/.claude/plans/whimsical-twirling-coral.md`）
+
+> 目标：把能活跑的 ReAct AgentLoop 升级为现代 Agent Harness —— 补齐"会在真实多轮/多工具/敏感数据负载下出问题"的核心原语。范围全量 J-1+J-2+J-3，工具协议双轨（ReAct 默认 + native 选项）。
+
+### J-1 关键：让 loop 在真实负载下不崩
+- [x] **J-1.1 上下文/历史压缩**
+  - 完成于 2026-06-06：新 `core/HistoryCompactor`（纯函数）—— 最近 `KEEP_RECENT_TURNS=3` 轮 observation 原文（截断 2048），更早轮压成单行（observation 截断 256），总长被窗口上界框住不随轮数线性爆；`AgentLoop.composeUserPromptWithHistory` 委托之。`HistoryCompactorTest` 6 case
+- [x] **J-1.2 工具守卫层**
+  - 完成于 2026-06-06：`core/ToolGuard` 接口 + `GuardDecision` + `DefaultToolGuard`（总开关 + 工具白名单 + 参数体量上限 + 敏感工具按角色门控，async 无上下文默认放行；DENY 计数 `educare.agent.tool_guard.denied{tool}`）；`AgentLoop` `@Autowired(required=false) ToolGuard`，`invokeTool` 前 check，DENY → `TOOL_DENIED` observation 喂回 LLM 循环继续不崩（null guard=全放行，旧测试零改动）；`application.yml` 加 `educare.agent.tool-guard.*`。`DefaultToolGuardTest` 7 + `AgentLoopGuardTest` 1
+- [x] **J-1.3 输出验证 + 自纠错**
+  - 完成于 2026-06-06：`core/FinalAnswerValidator` 函数式接口；`AgentLoop.run(req, validator)` 重载（`run(req)` 委托，零 churn）—— final_answer 不合格且有修复预算（`MAX_FINAL_ANSWER_REPAIRS=2`）→ `FINAL_ANSWER_INVALID` observation 触发修复轮，预算耗尽接受当前答案；`AgentTaskServiceImpl` 传 `validateFinalAnswer`（复用 `parseAgentLoopFinalAnswer` 校验双 JSON）。`AgentLoopValidationTest` 3 case
+  - **J-1 关口**：`mvn clean install` 11 模块 SUCCESS，agent-service **51 测试**全绿（J-1 新增 17），Python 33 全过
+
+### J-2 能力对齐
+- [ ] **J-2.1 子代理编排（agent-as-tool，= I-3）**
+- [ ] **J-2.2 记忆接线（接 H-5 memory-server）**
+- [ ] **J-2.3 规划/Todo 显式步**
+- [ ] **J-2.4 并行工具执行**
+
+### J-3 生产化 / DX
+- [ ] **J-3.1 Hooks 生命周期**
+- [ ] **J-3.2 过程流式（接既有 SSE）**
+- [ ] **J-3.3 检查点 / 续跑**
+- [ ] **J-3.4 工具协议双轨（ReAct + native 选项 flag）**
