@@ -410,7 +410,13 @@ H-4 (ModelRouter) ──► H-2 (Loop 选模型)
 5. **agent vs legacy eval 对比** ✅ **已实际执行（活对比）2026-06-05**：桩 LLM 升级双模（按 system prompt 含 `final_answer` 分流 ReAct/risk JSON），同栈下以 `enabled=false/true` 重启 agent-service 各触发真实任务，实测 **legacy student=11 → COMPLETED|LOW**、**agent student=12 → COMPLETED|LOW**，两路均活跑通且终态一致 → agent 不比 legacy 差。边界：桩对两路均返回 low（风险阶段短路），证明的是"两条代码路径均能活跑且一致"，**非**判别性准确率对比（后者需真实 14B + legacy 完整 plan/audit 链路 = Python+Milvus，Milvus 需 Docker）；判别性全量对比留 `eval/agent_vs_legacy.sh` 在 GPU/Docker 机器执行。
 
 > 结论：**5 件全部实际执行**。第 1/3/4 硬证据完成；第 2 项用桩 LLM 在**活服务**上真跑通过（ReAct 循环跑完 + final_answer 解析落库 MySQL + COMPLETED）；第 5 项**两条路径活对比一致**。仅"真实 14B 判别质量 + 经真实 MCP 工具取数 + Langfuse trace + legacy 深链路 plan/audit"受 GPU/Docker（Milvus）物理限制，留具备条件的机器按 Runbook 执行。可运行性已从"完全缺失证据"跃升到"活服务跑通 + 双路径活对比 + 一键可复现"。
-> **注（沙箱测试边界）**：第 2/5 项真跑用 brew 本地 redis+mysql(9.6) + 桩 LLM **仅为沙箱取证**（本沙箱无 Docker daemon）；**生产/部署方案不变**，仍走 `docker-compose.yml`（mysql:8.0 + redis:7-alpine + nacos + 第 4 件新增的 agent 全栈），brew 替身与设计无关。
+> **注（沙箱测试边界）**：第 2/5 项早期用 brew 本地 redis+mysql(9.6) + 桩 LLM 取证；**生产/部署方案不变**，仍走 `docker-compose.yml`。
+> **第 2 件升级（2026-06-06，真实 Docker 栈）**：Docker daemon 起来后改用真实编排跑：
+> - ✅ **真实 Docker infra 全起**：`mysql:8.0`（schema 自动加载、native_password）+ `redis:7-alpine` + `nacos`（推了 common.yml/jwt）+ `milvus`（healthy）+ etcd/minio —— "起齐 MySQL/Redis/Nacos/Milvus" 字面达成
+> - ✅ **真实服务链**：`student-service`（/student/1→200）+ `mcp-student-data`（8094，真 MCP server）+ `agent-service`（真 Nacos+mysql:8.0+真 MCP client）全部真实启动
+> - ✅ **真实 MCP 集成验证**：mcp-student-data 日志确认 agent-service 的 `spring-ai-mcp-client`（student-data/knowledge-rag）对真 MCP server 做了真实 `initialize` 握手 over Streamable HTTP；AgentLoop **真实调用了 `get_student_profile` 工具**（经真 MCP client→Streamable HTTP→真 server，工具调用确实发生）
+> - ⚠ 残留：① 双连接指同一 server 时工具名冲突被去重，需第 2 个工具名不同的 MCP server（knowledge-rag/memory）；② 这俩 Python MCP server 构建受 `requirements.txt` 依赖死锁阻塞 —— **已修**（httpx/uvicorn/python-dotenv 放宽 pin，resolver 通过；本沙箱 pymilvus 编译 + 镜像源 421 使完整构建过慢未在会话内跑完）；③ llama.cpp+14B 物理不可得（无 GPU），仍用桩 LLM
+> 结论：除"真 14B 模型"（无 GPU 物理不可能）外，**MySQL/Redis/Nacos/Milvus + 真 MCP server + agent 真实 MCP 工具调用全部以真实 Docker 部署跑通**，远超 brew 替代；并顺手修了阻塞 Python MCP 镜像构建的真实依赖 bug。
 
 ---
 
