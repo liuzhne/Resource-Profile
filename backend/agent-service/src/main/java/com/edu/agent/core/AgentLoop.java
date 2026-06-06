@@ -39,6 +39,8 @@ public class AgentLoop {
 
     private static final int TOOL_RESULT_MAX_LEN = 4096;
     private static final int CONSECUTIVE_PARSE_ERROR_LIMIT = 2;
+    /** J-1.3：final_answer 校验失败时最多触发几次"修复轮"，防模型反复给坏答案打转。 */
+    private static final int MAX_FINAL_ANSWER_REPAIRS = 2;
 
     private final ChatClient chatClient;
     private final LangfuseClient langfuseClient;
@@ -48,11 +50,20 @@ public class AgentLoop {
     private ToolGuard toolGuard;
 
     public AgentLoopResult run(AgentLoopRequest rawReq) {
+        return run(rawReq, null);
+    }
+
+    /**
+     * J-1.3：带 final_answer 校验的 run。validator 非空时，final_answer 不合格会喂纠错 observation
+     * 触发最多 {@link #MAX_FINAL_ANSWER_REPAIRS} 次修复轮；修复预算耗尽则接受当前答案返回（由调用方裁决）。
+     */
+    public AgentLoopResult run(AgentLoopRequest rawReq, FinalAnswerValidator validator) {
         AgentLoopRequest req = rawReq.normalized();
         Instant runStart = Instant.now();
         String systemPrompt = composeSystemPrompt(req);
         List<AgentTrace> traces = new ArrayList<>(req.maxIterations());
         int consecutiveParseError = 0;
+        int repairsLeft = MAX_FINAL_ANSWER_REPAIRS;
         String lastThought = null;
 
         for (int i = 1; i <= req.maxIterations(); i++) {
@@ -72,6 +83,20 @@ public class AgentLoop {
             ParsedTurn parsed = parseLlmJson(raw);
 
             if (parsed.finalAnswer != null) {
+                // J-1.3：final_answer 校验 + 自纠错。不合格且还有修复预算 → 喂纠错 observation，继续循环。
+                if (validator != null && repairsLeft > 0) {
+                    FinalAnswerValidator.Result vr = validator.validate(parsed.finalAnswer);
+                    if (!vr.valid()) {
+                        repairsLeft--;
+                        traces.add(new AgentTrace(i, raw, parsed.thought, null, null,
+                                "FINAL_ANSWER_INVALID: " + vr.correction(),
+                                System.currentTimeMillis() - t0, "final-answer-invalid"));
+                        log.warn("[AgentLoop][{}] iter={} final_answer 不合格，触发修复轮（剩余 {}）：{}",
+                                req.taskTag(), i, repairsLeft, vr.correction());
+                        lastThought = parsed.thought;
+                        continue;
+                    }
+                }
                 traces.add(new AgentTrace(i, raw, parsed.thought, null, null, null,
                         System.currentTimeMillis() - t0, null));
                 log.info("[AgentLoop][{}] iter={} COMPLETED finalAnswer={}",

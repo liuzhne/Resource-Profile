@@ -13,6 +13,7 @@ import com.edu.agent.core.AgentLoopCanaryGate;
 import com.edu.agent.core.AgentLoopRequest;
 import com.edu.agent.core.AgentLoopResult;
 import com.edu.agent.core.AgentLoopStatus;
+import com.edu.agent.core.FinalAnswerValidator;
 import com.edu.agent.entity.AgentTask;
 import com.edu.agent.enums.RiskLevel;
 import com.edu.agent.enums.TaskStatus;
@@ -425,7 +426,17 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
                 "task-" + task.getId());
         log.info("任务 {} 启动 AgentLoop，tools={}, maxIter={}",
                 task.getId(), tools.size(), AGENT_LOOP_MAX_ITERATIONS);
-        return agentLoop.run(req);
+        // J-1.3：传入 final_answer 校验器 —— 双 JSON schema 不合格则触发修复轮，而非直接 FAILED。
+        return agentLoop.run(req, AgentTaskServiceImpl::validateFinalAnswer);
+    }
+
+    /** J-1.3：final_answer 必须能解析为 risk_analysis + intervention_plan 双 JSON，否则给纠错指引。 */
+    static FinalAnswerValidator.Result validateFinalAnswer(String finalAnswer) {
+        return parseAgentLoopFinalAnswer(finalAnswer) != null
+                ? FinalAnswerValidator.Result.ok()
+                : FinalAnswerValidator.Result.invalid(
+                "final_answer 必须是合法 JSON 字符串，且含 risk_analysis 与 intervention_plan 两个对象，"
+                        + "risk_analysis.risk_level ∈ {high,medium,low,none}。请只输出该 JSON，勿加多余文字。");
     }
 
     private List<ToolCallback> resolveMcpTools() {
