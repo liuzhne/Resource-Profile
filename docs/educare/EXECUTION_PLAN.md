@@ -439,7 +439,16 @@ H-4 (ModelRouter) ──► H-2 (Loop 选模型)
   - **J-2 关口**：`mvn clean install` SUCCESS，agent-service **70 测试**全绿（J-2 新增 19），Python 全过
 
 ### J-3 生产化 / DX
-- [ ] **J-3.1 Hooks 生命周期**
-- [ ] **J-3.2 过程流式（接既有 SSE）**
-- [ ] **J-3.3 检查点 / 续跑**
-- [ ] **J-3.4 工具协议双轨（ReAct + native 选项 flag）**
+- [x] **J-3.1 Hooks 生命周期**
+  - 完成于 2026-06-06：`AgentLoopHook` 接口（onStart/onIteration/onFinish）；AgentLoop `@Autowired(required=false) List<AgentLoopHook>`，9 处 traces.add 统一走 `recordTrace` 触发 onIteration，钩子异常被吞不影响主循环。`AgentLoopHookTest` 2 case
+- [x] **J-3.2 过程流式（接既有 SSE）**
+  - 完成于 2026-06-06：`StreamingHook` 每轮发 `WarningPublisher.publishProgress`（新频道 `edu:agent:progress`），默认关 `educare.agent.streaming.enabled`
+- [x] **J-3.3 检查点 / 续跑**
+  - 完成于 2026-06-06：`CheckpointHook` 每轮轨迹 RPUSH Redis `edu:agent:loop:ckpt:<taskTag>`（onStart 清旧 + TTL 回收 + onFinish 记终态），零 schema 改动；完整读回续跑留增量。默认关
+  - J-3.2/3.3 共 `StreamingAndCheckpointHookTest` 4 case
+- [x] **J-3.4 工具协议双轨（ReAct + native 选项 flag）**
+  - 完成于 2026-06-06：`educare.agent.loop.protocol=react|native`；native 走 `chatClient...toolCallbacks(tools).call()` 原生 tool-calling（单条 trace），react 默认；两协议共享 ToolGuard/记忆/子代理/hooks。`AgentLoopNativeTest` 2 case
+  - **J-3 关口**：`mvn clean install` SUCCESS，agent-service **78 测试**全绿（Phase J 累计新增 45），Python 全过
+  - **Phase J 活跑验证**：全部 J-1/J-2/J-3 bean 接入后 agent-service 真实启动（3s，health UP，无 DI 冲突）+ 桩 LLM 触发任务 → COMPLETED，risk/plan 落库 MySQL，AgentLoop 正常、无 hook 异常
+
+**Phase J 验收**：✅ Harness 补全全部完成（上下文压缩 / 工具守卫 / 输出验证自纠错 / 子代理 / 记忆接线 / 规划步 / 并行工具 / hooks / 流式 / 检查点 / 协议双轨）。从"能活跑的 ReAct loop"升级为"现代 Agent Harness"，所有原语默认安全（守卫开、其余高级特性默认关，opt-in），既有链路零回归。
