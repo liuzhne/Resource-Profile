@@ -66,6 +66,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
     private final ObjectProvider<ToolCallbackProvider> toolCallbackProviders;  // H-2.3：MCP 工具列表（启动期 fail-fast 时 ObjectProvider 让单测能选择不注入）
     private final AgentLoopCanaryGate canaryGate;                 // H-2.4：灰度切流闸门（@RefreshScope，Nacos 热生效）
     private final SkillLoader skillLoader;                        // H-3.5：技能加载器（按需注入 system prompt + 热更新）
+    private final com.edu.agent.core.SubAgentRegistry subAgentRegistry;  // J-2.1：子代理 agent-as-tool（默认关）
 
     @Qualifier("agentExecutor")
     private final Executor agentExecutor;
@@ -407,7 +408,9 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
     }
 
     private AgentLoopResult runAgentLoopForTask(AgentTask task) {
-        List<ToolCallback> tools = resolveMcpTools();
+        // J-2.1：主 loop 工具 = MCP 工具 + （开启时）3 个专家子代理 agent-as-tool
+        List<ToolCallback> tools = new java.util.ArrayList<>(resolveMcpTools());
+        tools.addAll(subAgentRegistry.subAgentTools(this::resolveMcpTools));
         // H-3.5：按需把激活技能注入 system prompt（关闭/无技能时返回空串，prompt 字节稳定，仍命中 G-1 cache）
         String skillsBlock = skillLoader.composeActiveSkillsPrompt();
         String systemPrompt = skillsBlock.isEmpty()
