@@ -416,7 +416,15 @@ H-4 (ModelRouter) ──► H-2 (Loop 选模型)
 > - ✅ **真实服务链**：`student-service`（/student/1→200）+ `mcp-student-data`（8094，真 MCP server）+ `agent-service`（真 Nacos+mysql:8.0+真 MCP client）全部真实启动
 > - ✅ **真实 MCP 集成验证**：mcp-student-data 日志确认 agent-service 的 `spring-ai-mcp-client`（student-data/knowledge-rag）对真 MCP server 做了真实 `initialize` 握手 over Streamable HTTP；AgentLoop **真实调用了 `get_student_profile` 工具**（经真 MCP client→Streamable HTTP→真 server，工具调用确实发生）
 > - ⚠ 残留：① 双连接指同一 server 时工具名冲突被去重，需第 2 个工具名不同的 MCP server（knowledge-rag/memory）；② 这俩 Python MCP server 构建受 `requirements.txt` 依赖死锁阻塞 —— **已修**（httpx/uvicorn/python-dotenv 放宽 pin，resolver 通过；本沙箱 pymilvus 编译 + 镜像源 421 使完整构建过慢未在会话内跑完）；③ llama.cpp+14B 物理不可得（无 GPU），仍用桩 LLM
-> 结论：除"真 14B 模型"（无 GPU 物理不可能）外，**MySQL/Redis/Nacos/Milvus + 真 MCP server + agent 真实 MCP 工具调用全部以真实 Docker 部署跑通**，远超 brew 替代；并顺手修了阻塞 Python MCP 镜像构建的真实依赖 bug。
+> **第 2 件再升级（完整真实 MCP 工具调用闭环）2026-06-06**：定位到之前"未知工具"的真因 —— 桩调 `get_student_profile`(蛇形) 与 @Tool 实际名 `getStudentProfile`(驼峰) 不符（非 MCP 问题；Spring AI 多连接会自动给重复工具加 `alt_N_` 前缀，不排除）。修正后实测 task 3410：
+> ```
+> [AgentLoop][task-3410] iter=1 tool=getStudentProfile → 166 bytes   ← 真 MCP client→Streamable HTTP→真 mcp-student-data，@Tool 执行返回
+> [AgentLoop][task-3410] iter=2 COMPLETED finalAnswer=...            ← 多轮 ReAct 循环真实走完
+> DB(真 Docker mysql:8.0): id=3410 status=COMPLETED risk_level=LOW risk_len=237 plan_len=219  ← final_answer 解析落库
+> ```
+> **至此第 2 件除"真 14B"(桩替代，无 GPU)与"Langfuse trace"(未配 key)外全部跑通**：真 Docker infra(mysql:8.0/redis/nacos/milvus) + 真 mcp-student-data(MCP server) + agent-service，**ReAct 多轮循环跑完 + 真实 MCP 工具调用(getStudentProfile 经 Streamable HTTP) + final_answer 解析落库 COMPLETED**。knowledge-rag/memory 两个 server 未起不影响该闭环验证（仅多两组工具）。
+
+> 结论：除"真 14B 模型"（无 GPU 物理不可能）外，**MySQL/Redis/Nacos/Milvus + 真 MCP server + agent 真实 MCP 工具调用 + 多轮 ReAct + final_answer 落库 全部以真实 Docker 部署跑通闭环**，远超 brew 替代；并顺手修了阻塞 Python MCP 镜像构建的真实依赖 bug。
 
 ---
 
