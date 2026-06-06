@@ -49,6 +49,11 @@ public class AgentLoop {
     @Autowired(required = false)
     private ToolGuard toolGuard;
 
+    /** J-2.4：并行工具执行器。null（单测）→ 退化为顺序执行（结果一致，仅不并发）。 */
+    @Autowired(required = false)
+    @org.springframework.beans.factory.annotation.Qualifier("agentExecutor")
+    private java.util.concurrent.Executor parallelToolExecutor;
+
     public AgentLoopResult run(AgentLoopRequest rawReq) {
         return run(rawReq, null);
     }
@@ -65,6 +70,7 @@ public class AgentLoop {
         int consecutiveParseError = 0;
         int repairsLeft = MAX_FINAL_ANSWER_REPAIRS;
         String lastThought = null;
+        String agentPlan = null;  // J-2.3：首轮规划
 
         for (int i = 1; i <= req.maxIterations(); i++) {
             long t0 = System.currentTimeMillis();
@@ -81,6 +87,12 @@ public class AgentLoop {
             }
 
             ParsedTurn parsed = parseLlmJson(raw);
+
+            // J-2.3：捕获首个 plan，记日志（也随 rawLlmOutput 进 Langfuse trace），便于长任务可观测/可steer
+            if (parsed.plan != null && agentPlan == null) {
+                agentPlan = parsed.plan;
+                log.info("[AgentLoop][{}] plan: {}", req.taskTag(), abbreviate(agentPlan));
+            }
 
             if (parsed.finalAnswer != null) {
                 // J-1.3：final_answer 校验 + 自纠错。不合格且还有修复预算 → 喂纠错 observation，继续循环。
@@ -116,6 +128,18 @@ public class AgentLoop {
                 continue;
             }
             consecutiveParseError = 0;
+
+            // J-2.4：并行多工具批 —— 守卫 + 调用各工具，合并 observation。
+            if (parsed.parallelCalls != null && !parsed.parallelCalls.isEmpty()) {
+                String merged = executeParallel(req, parsed.parallelCalls);
+                traces.add(new AgentTrace(i, raw, parsed.thought,
+                        "[parallel:" + parsed.parallelCalls.size() + "]", null,
+                        truncate(merged), System.currentTimeMillis() - t0, null));
+                log.info("[AgentLoop][{}] iter={} 并行 {} 工具完成",
+                        req.taskTag(), i, parsed.parallelCalls.size());
+                lastThought = parsed.thought;
+                continue;
+            }
 
             if (parsed.toolName != null) {
                 // J-1.2：工具守卫 —— 被拒不崩，转结构化 TOOL_DENIED observation 喂回 LLM，循环继续。
@@ -236,6 +260,9 @@ public class AgentLoop {
         sb.append("1. 调用工具：{\"thought\":\"<本轮思考>\",\"action\":{\"tool\":\"<工具名>\",\"args\":{<参数对象>}}}\n");
         sb.append("2. 给出最终答案：{\"thought\":\"<本轮思考>\",\"final_answer\":\"<最终答复字符串>\"}\n");
         sb.append("收到 Observation 后必须基于其内容继续推理或直接给出 final_answer，不要重复同一个 action。\n");
+        sb.append("（可选）首轮可在 JSON 里附 \"plan\":[\"步骤1\",\"步骤2\",...] 列出你的计划，便于追踪，但不影响上述两种形态。\n");
+        sb.append("（可选并行）当需要同时取多份**互不依赖**的数据时，\"action\" 可写成数组：");
+        sb.append("\"action\":[{\"tool\":\"t1\",\"args\":{}},{\"tool\":\"t2\",\"args\":{}}]，将并行执行并合并 Observation。\n");
         return sb.toString();
     }
 
@@ -281,21 +308,50 @@ public class AgentLoop {
 
         String thought = obj.getString("thought");
         String finalAnswer = obj.getString("final_answer");
-        JSONObject action = obj.getJSONObject("action");
+        String plan = extractPlan(obj);  // J-2.3：可选规划字段
 
         if (finalAnswer != null) {
-            return new ParsedTurn(thought, finalAnswer, null, null, null);
+            return new ParsedTurn(thought, finalAnswer, null, null, null, plan, null);
         }
-        if (action != null) {
+
+        Object actionRaw = obj.get("action");
+        // J-2.4：action 为数组 → 并行多工具批
+        if (actionRaw instanceof com.alibaba.fastjson2.JSONArray arr) {
+            java.util.List<ToolCall> calls = new java.util.ArrayList<>();
+            for (Object o : arr) {
+                if (o instanceof JSONObject a) {
+                    String tn = a.getString("tool");
+                    if (tn != null && !tn.isBlank()) {
+                        Object ag = a.get("args");
+                        calls.add(new ToolCall(tn, ag == null ? "{}" : JSON.toJSONString(ag)));
+                    }
+                }
+            }
+            if (calls.isEmpty()) {
+                return ParsedTurn.error("action-array-empty");
+            }
+            return new ParsedTurn(thought, null, null, null, null, plan, calls);
+        }
+        // 单工具
+        if (actionRaw instanceof JSONObject action) {
             String toolName = action.getString("tool");
             if (toolName == null || toolName.isBlank()) {
                 return ParsedTurn.error("action-missing-tool");
             }
             Object argsObj = action.get("args");
             String argsJson = argsObj == null ? "{}" : JSON.toJSONString(argsObj);
-            return new ParsedTurn(thought, null, toolName, argsJson, null);
+            return new ParsedTurn(thought, null, toolName, argsJson, null, plan, null);
         }
-        return new ParsedTurn(thought, null, null, null, null);
+        return new ParsedTurn(thought, null, null, null, null, plan, null);
+    }
+
+    /** J-2.3：抽 plan 字段（可为数组/对象/字符串），序列化为字符串；无则 null。 */
+    static String extractPlan(JSONObject obj) {
+        Object p = obj.get("plan");
+        if (p == null) {
+            return null;
+        }
+        return (p instanceof String) ? (String) p : JSON.toJSONString(p);
     }
 
     String invokeTool(List<ToolCallback> tools, String name, String argsJson) {
@@ -305,6 +361,48 @@ public class AgentLoop {
             }
         }
         throw new IllegalArgumentException("未知工具: " + name);
+    }
+
+    /** J-2.4：并行（有 executor）或顺序（无）执行多个工具，合并 observation；单个失败/被拒不影响其它。 */
+    String executeParallel(AgentLoopRequest req, List<ToolCall> calls) {
+        List<java.util.concurrent.CompletableFuture<String>> futures = new ArrayList<>();
+        for (ToolCall c : calls) {
+            java.util.function.Supplier<String> task =
+                    () -> "Observation[" + c.name() + "]: " + invokeOneGuarded(req, c);
+            if (parallelToolExecutor != null) {
+                futures.add(java.util.concurrent.CompletableFuture.supplyAsync(task, parallelToolExecutor));
+            } else {
+                futures.add(java.util.concurrent.CompletableFuture.completedFuture(task.get()));
+            }
+        }
+        StringBuilder sb = new StringBuilder();
+        for (java.util.concurrent.CompletableFuture<String> f : futures) {
+            try {
+                sb.append(f.join()).append('\n');
+            } catch (Exception e) {
+                sb.append("Observation[error]: ").append(e.getMessage()).append('\n');
+            }
+        }
+        return sb.toString().strip();
+    }
+
+    /** 单工具：守卫 + 调用 + 一次重试，异常/拒绝转字符串结果（不抛，供并行批合并）。 */
+    private String invokeOneGuarded(AgentLoopRequest req, ToolCall c) {
+        if (toolGuard != null) {
+            ToolGuard.GuardDecision d = toolGuard.check(c.name(), c.args());
+            if (!d.allowed()) {
+                return "TOOL_DENIED: " + d.reason();
+            }
+        }
+        try {
+            return invokeTool(req.tools(), c.name(), c.args());
+        } catch (Exception first) {
+            try {
+                return invokeTool(req.tools(), c.name(), c.args());
+            } catch (Exception second) {
+                return "ERROR: " + second.getMessage();
+            }
+        }
     }
 
     private static String truncate(String s) {
@@ -324,10 +422,18 @@ public class AgentLoop {
         return s.length() > 200 ? s.substring(0, 200) + "..." : s;
     }
 
-    /** 解析结果：四组互斥字段，{finalAnswer / toolName / 仅 thought / parseError}。 */
-    record ParsedTurn(String thought, String finalAnswer, String toolName, String toolArgs, String parseError) {
+    /** 一次工具调用（名 + JSON 参数）。J-2.4 并行批用。 */
+    record ToolCall(String name, String args) {
+    }
+
+    /**
+     * 解析结果：互斥字段 {finalAnswer / toolName(单工具) / parallelCalls(多工具) / 仅 thought / parseError}
+     * + 可选 plan（J-2.3）。
+     */
+    record ParsedTurn(String thought, String finalAnswer, String toolName, String toolArgs, String parseError,
+                      String plan, java.util.List<ToolCall> parallelCalls) {
         static ParsedTurn error(String err) {
-            return new ParsedTurn(null, null, null, null, err);
+            return new ParsedTurn(null, null, null, null, err, null, null);
         }
     }
 }
