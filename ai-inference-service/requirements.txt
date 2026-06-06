@@ -1,7 +1,9 @@
 fastapi==0.110.0
-uvicorn[standard]==0.27.0
+# 放宽 pin：fastmcp 2.x / langfuse v2 依赖更新的 uvicorn/python-dotenv/httpx，原 ==0.27.0 等死锁导致
+# pip ResolutionImpossible（knowledge-rag/memory MCP 镜像构建失败）。改 >= 让解析器选满足各方的版本。
+uvicorn[standard]>=0.27.0
 pydantic==2.6.0
-python-dotenv==1.0.0
+python-dotenv>=1.0.0
 
 # LangChain 生态
 langchain==0.1.12
@@ -11,7 +13,7 @@ langchain-openai==0.0.8
 pymilvus==2.4.1
 
 # 常用工具
-httpx==0.27.0
+httpx>=0.27.0
 tenacity==8.2.3
 
 # Redis 缓存（embedding / RAG 检索）
