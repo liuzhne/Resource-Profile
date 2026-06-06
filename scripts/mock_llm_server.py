@@ -44,7 +44,7 @@ RISK_JSON = json.dumps({
 # 之后返回 final_answer。用于真实栈演示 ReAct 经 MCP 调真工具。设 MOCK_LLM_CALL_TOOL=0 可关。
 _react_calls = {"n": 0}
 _TOOL_TURN = json.dumps(
-    {"thought": "先取该生画像", "action": {"tool": "get_student_profile", "args": {"studentId": 1}}},
+    {"thought": "先取该生画像", "action": {"tool": "getStudentProfile", "args": {"studentId": 1}}},
     ensure_ascii=False)
 _CALL_TOOL_FIRST = os.getenv("MOCK_LLM_CALL_TOOL", "1") == "1"
 
@@ -72,6 +72,14 @@ class Handler(BaseHTTPRequestHandler):
         body = self.rfile.read(length)  # 含 messages / system prompt
         # 双模：agent-loop 的 system prompt 含 "final_answer" → 返回 ReAct；否则是 legacy 风险识别 → 返回普通 risk JSON
         is_react = b"final_answer" in body
+        # 诊断：把 system prompt 里出现的工具名 dump 出来（composeSystemPrompt 写 "- name: <tool>"）
+        try:
+            import re as _re
+            names = _re.findall(r"- name: ([\w\-]+)", body.decode("utf-8", "ignore"))
+            if names:
+                sys.stderr.write("[mock-llm] 可用工具名: " + ", ".join(dict.fromkeys(names)) + "\n")
+        except Exception:
+            pass
         # 按是否已有 Observation 判断轮次：iter1（无 Observation）→ 调 get_student_profile 驱动真实 MCP；
         # iter2（已有 Observation）→ 给 final_answer。每个任务都会真调一次工具，不受并发干扰。
         has_observation = b"Observation:" in body
