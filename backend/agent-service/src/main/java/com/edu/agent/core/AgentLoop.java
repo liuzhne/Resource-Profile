@@ -5,6 +5,7 @@ import com.alibaba.fastjson2.JSONObject;
 import com.edu.agent.config.LangfuseClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
@@ -41,6 +42,10 @@ public class AgentLoop {
 
     private final ChatClient chatClient;
     private final LangfuseClient langfuseClient;
+
+    /** J-1.2：工具守卫。null（如单测 new AgentLoop(...)）→ 全放行，行为不变。 */
+    @Autowired(required = false)
+    private ToolGuard toolGuard;
 
     public AgentLoopResult run(AgentLoopRequest rawReq) {
         AgentLoopRequest req = rawReq.normalized();
@@ -88,6 +93,19 @@ public class AgentLoop {
             consecutiveParseError = 0;
 
             if (parsed.toolName != null) {
+                // J-1.2：工具守卫 —— 被拒不崩，转结构化 TOOL_DENIED observation 喂回 LLM，循环继续。
+                if (toolGuard != null) {
+                    ToolGuard.GuardDecision decision = toolGuard.check(parsed.toolName, parsed.toolArgs);
+                    if (!decision.allowed()) {
+                        String denied = "TOOL_DENIED: " + decision.reason();
+                        traces.add(new AgentTrace(i, raw, parsed.thought, parsed.toolName, parsed.toolArgs,
+                                denied, System.currentTimeMillis() - t0, "tool-denied"));
+                        log.warn("[AgentLoop][{}] iter={} tool={} 被守卫拒绝: {}",
+                                req.taskTag(), i, parsed.toolName, decision.reason());
+                        lastThought = parsed.thought;
+                        continue;
+                    }
+                }
                 String observation;
                 try {
                     observation = invokeTool(req.tools(), parsed.toolName, parsed.toolArgs);
