@@ -39,7 +39,13 @@ buildNumber.properties
 *.iml
 *.ipr
 
-.claude/
+# Claude Code：共享配置（settings.json / commands / rules / skills / agents）提交到 git；
+# 仅忽略个人/本地文件与 git 工作树。
+.claude/worktrees/
+.claude/settings.local.json
+.claude/*.local.json
+.claude/.DS_Store
+CLAUDE.local.md
 
 # Eclipse
 .apt_generated
