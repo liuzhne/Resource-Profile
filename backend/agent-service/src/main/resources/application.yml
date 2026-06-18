@@ -184,12 +184,6 @@ educare:
     subagents:
       enabled: ${EDUCARE_AGENT_SUBAGENTS_ENABLED:false}
       max-iterations: ${EDUCARE_AGENT_SUBAGENTS_MAX_ITER:4}
-    # J-2.2：记忆接线（loop 前 recall 注入、终态后 save_episode）。默认关。
-    # 启用需两步：① 把 memory-server(8096) 加进 spring.ai.mcp.client.streamable-http.connections
-    #   （加 memory.url=http://localhost:8096，使 recall_student_history/save_episode 工具进 provider）；
-    #   ② 本开关置 true。未配连接时 MemoryGateway 找不到工具 → 自动 no-op 降级，不影响主流程。
-    memory:
-      enabled: ${EDUCARE_AGENT_MEMORY_ENABLED:false}
     # J-3.2：AgentLoop 过程流式（每轮 thought/tool 发 Redis PROGRESS_CHANNEL，前端 SSE 展示）。默认关。
     streaming:
       enabled: ${EDUCARE_AGENT_STREAMING_ENABLED:false}

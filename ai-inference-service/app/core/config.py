@@ -64,16 +64,6 @@ class Settings:
     MCP_KNOWLEDGE_RAG_PORT: int = int(os.getenv("MCP_KNOWLEDGE_RAG_PORT", "8095"))
     MCP_KNOWLEDGE_RAG_PATH: str = os.getenv("MCP_KNOWLEDGE_RAG_PATH", "/mcp")
 
-    # H-5：memory-server MCP（FastMCP，独立进程，端口 8096，与 knowledge-rag(8095) 对称）。
-    # 暴露 recall_student_history / save_episode / summarize_long_term 三个工具。
-    MCP_MEMORY_PORT: int = int(os.getenv("MCP_MEMORY_PORT", "8096"))
-    MCP_MEMORY_PATH: str = os.getenv("MCP_MEMORY_PATH", "/mcp")
-    # 记忆分层 TTL / 容量（Redis 持久化；Semantic 未来可升级到 Milvus 向量召回，见 MEMORY_DESIGN.md）
-    MEMORY_WORKING_TTL: int = int(os.getenv("EDUCARE_MEMORY_WORKING_TTL", str(3600)))            # Working 1h
-    MEMORY_EPISODE_TTL: int = int(os.getenv("EDUCARE_MEMORY_EPISODE_TTL", str(90 * 24 * 3600)))  # Episodic 90d
-    MEMORY_SEMANTIC_TTL: int = int(os.getenv("EDUCARE_MEMORY_SEMANTIC_TTL", str(180 * 24 * 3600)))  # Semantic 180d
-    MEMORY_EPISODE_MAX: int = int(os.getenv("EDUCARE_MEMORY_EPISODE_MAX", "50"))                 # 每生最多保留 N 条 episodic
-
 
 @lru_cache()
 def get_settings() -> Settings:

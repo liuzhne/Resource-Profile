@@ -248,34 +248,6 @@ services:
       - edu-network
     restart: unless-stopped
 
-  # H-5：memory MCP server（Python FastMCP，8096，复用 ai-inference 镜像换 command）
-  memory-mcp:
-    build:
-      context: ../ai-inference-service
-      dockerfile: Dockerfile
-    container_name: edu-portrait-memory-mcp
-    command: ["python", "-m", "app.mcp.memory_server"]
-    environment:
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      LLM_BASE_URL: http://host.docker.internal:8091/v1
-      MCP_MEMORY_PORT: "8096"
-    ports:
-      - "127.0.0.1:8096:8096"   # 仅本机回环（同 8094）
-    depends_on:
-      - redis
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    healthcheck:
-      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 8096), 3)"]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-      start_period: 40s
-    networks:
-      - edu-network
-    restart: unless-stopped
-
   # H-2：agent-service（8087）—— Agent 编排主体，依赖两个 MCP server 就绪
   agent-service:
     build:
