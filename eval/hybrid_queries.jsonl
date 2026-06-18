@@ -1,6 +1,0 @@
-{"id": "HQ-001", "collection": "case", "query": "高数 II 连续挂科 学业预警", "expected_keywords": ["高数", "挂科"]}
-{"id": "HQ-002", "collection": "psychology", "query": "SCL-90 量表 重度区间 解读", "expected_keywords": ["SCL-90", "量表"]}
-{"id": "HQ-003", "collection": "psychology", "query": "PHQ-9 第9题 自伤意念 红色预警", "expected_keywords": ["PHQ-9", "自伤"]}
-{"id": "HQ-004", "collection": "policy", "query": "国家助学金 申请条件 家庭经济困难认定", "expected_keywords": ["助学金", "困难认定"]}
-{"id": "HQ-005", "collection": "policy", "query": "勤工助学 岗位 课时上限 规定", "expected_keywords": ["勤工助学", "课时"]}
-{"id": "HQ-006", "collection": "case", "query": "GAD-7 焦虑 谈心 干预方案", "expected_keywords": ["GAD-7", "焦虑"]}

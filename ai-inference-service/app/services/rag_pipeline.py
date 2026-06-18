@@ -16,7 +16,6 @@ from typing import Any, Dict, List, Optional
 
 from app.core.config import settings
 from app.services.embedding_client import get_embedding_client
-from app.services.hybrid_retrieval import fuse_hits
 from app.services.milvus_client import search as milvus_search
 from app.services.redis_client import cache_get, cache_setex
 from app.services.reranker_client import get_reranker_client
@@ -24,15 +23,13 @@ from app.services.reranker_client import get_reranker_client
 logger = logging.getLogger(__name__)
 
 
-def _pipeline_cache_key(collection_key: str, query: str, top_k: int, hybrid: bool) -> str:
+def _pipeline_cache_key(collection_key: str, query: str, top_k: int) -> str:
     h = hashlib.sha256()
     h.update(collection_key.encode("utf-8"))
     h.update(b"|")
     h.update(query.strip().lower().encode("utf-8"))
     h.update(b"|")
     h.update(str(top_k).encode())
-    h.update(b"|h=")
-    h.update(b"1" if hybrid else b"0")  # dense / hybrid 分开缓存，避免互相污染
     return "edu:rag:pipe:" + h.hexdigest()[:32]
 
 
@@ -41,7 +38,6 @@ async def retrieve_from_collection(
     collection_key: str,
     top_k: int = 5,
     enable_rerank: Optional[bool] = None,
-    enable_hybrid: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """单集合向量检索 + 可选 Cross-Encoder 精排。
 
@@ -76,8 +72,7 @@ async def retrieve_from_collection(
             "error": f"unknown collection_key: {collection_key}",
         }
 
-    do_hybrid = settings.RAG_HYBRID_ENABLED if enable_hybrid is None else enable_hybrid
-    cache_key = _pipeline_cache_key(collection_key, query, top_k, do_hybrid)
+    cache_key = _pipeline_cache_key(collection_key, query, top_k)
     cached = await cache_get(cache_key)
     if cached:
         try:
@@ -113,14 +108,6 @@ async def retrieve_from_collection(
             "fallback": True,
             "chunks": [],
         }
-
-    # I-1.3：hybrid 灰度 —— 在 dense 候选池上做 BM25 + RRF 重排（纯函数，无额外 IO）。
-    # 注意：若下游 reranker 开启，cross-encoder 会再次按相关性排序、覆盖此处顺序；
-    # hybrid 在 reranker 关闭时直接决定最终序，对专有名词 query 提升召回质量。
-    hybrid_applied = False
-    if do_hybrid and len(hits) > 1:
-        hits = fuse_hits(query, hits)
-        hybrid_applied = True
 
     reranked = False
     do_rerank = settings.RERANKER_ENABLED if enable_rerank is None else enable_rerank
@@ -163,7 +150,6 @@ async def retrieve_from_collection(
         "query": query,
         "top_k": top_k,
         "reranked": reranked,
-        "hybrid": hybrid_applied,
         "fallback": False,
         "chunks": chunks,
     }
