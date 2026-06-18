@@ -1,7 +1,6 @@
 package com.edu.agent.service;
 
 import com.alibaba.fastjson2.JSON;
-import com.edu.agent.router.ModelRouter;
 import com.edu.common.util.PromptSanitizer;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -19,8 +18,8 @@ import java.nio.charset.StandardCharsets;
 @RequiredArgsConstructor
 public class RiskAnalyzeService {
 
-    // H-4：风险识别直接吃原始/敏感画像 → 经 ModelRouter 强制走本地 tier（数据不出本地）并落审计。
-    private final ModelRouter modelRouter;
+    // 风险识别直接吃原始/敏感画像 → 走本地 @Primary ChatClient（llama.cpp），数据不出本地。
+    private final ChatClient chatClient;
 
     /**
      * G-1.3：从 classpath:prompts/risk-analyze.system.md 加载 system prompt。
@@ -72,8 +71,6 @@ public class RiskAnalyzeService {
                 + PromptSanitizer.wrap("student_profile", safeJson);
 
         try {
-            // sensitiveRawData=true → 决策必为 LOCAL；stage=risk 仅用于审计标签
-            ChatClient chatClient = modelRouter.route(-1L, "risk", true);
             String response = chatClient.prompt()
                     .system(riskSystemPrompt)
                     .user(userMessage)

@@ -14,7 +14,7 @@ import java.util.List;
  *   <li><b>更早轮</b>：压缩成一行摘要，observation 重截断到 {@link #OLDER_OBS_MAXLEN}。</li>
  * </ul>
  * 这样总长被"最近 K 轮 × RECENT + 更早 M 轮 × OLDER"上界框住，不随轮数线性爆。
- * 未来要更强语义压缩，可在 {@code composeOlder} 处接 ModelRouter 省模型做一次摘要（接口不变）。
+ * 未来要更强语义压缩，可在 {@code composeOlder} 处接一次 LLM 摘要调用（接口不变）。
  */
 public final class HistoryCompactor {
 

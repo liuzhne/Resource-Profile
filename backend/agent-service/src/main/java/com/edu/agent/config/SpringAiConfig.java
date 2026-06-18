@@ -16,9 +16,8 @@ import org.springframework.web.reactive.function.client.WebClient;
 @Configuration
 public class SpringAiConfig {
 
-    // H-4：本地 tier base-url。默认复用 spring.ai.openai.base-url；如需独立本地 14B 实例（如 8092）
-    // 设 educare.model.local.base-url 即可，不影响其它使用 spring.ai.openai.* 的配置。
-    @Value("${educare.model.local.base-url:${spring.ai.openai.base-url:http://host.docker.internal:8091}}")
+    // 本地 LLM base-url（llama.cpp / vLLM）。
+    @Value("${spring.ai.openai.base-url:http://host.docker.internal:8091}")
     private String baseUrl;
 
     @Value("${spring.ai.openai.api-key:dummy}")
@@ -32,16 +31,6 @@ public class SpringAiConfig {
 
     @Value("${spring.ai.openai.chat.options.max-tokens:2048}")
     private Integer maxTokens;
-
-    // ===== H-4：云端模型 tier（本地仍为上面的 @Primary 默认）=====
-    @Value("${educare.model.cloud.base-url:https://api.openai.com}")
-    private String cloudBaseUrl;
-
-    @Value("${educare.model.cloud.api-key:}")
-    private String cloudApiKey;
-
-    @Value("${educare.model.cloud.model:gpt-4o-mini}")
-    private String cloudModel;
 
     /**
      * G-1.4 / G-1.5 Java：自定义 RestClient.Builder，挂两个拦截器
@@ -87,41 +76,13 @@ public class SpringAiConfig {
     }
 
     /**
-     * 本地 tier ChatClient（@Primary）。Fluent API（1.0.0 GA 保留）。
+     * 本地 ChatClient（@Primary）。Fluent API（1.0.0 GA 保留）。
      * Builder 由 spring-ai-starter-model-openai 自动配置提供，基于上面 @Primary 的 OpenAiChatModel。
-     * AgentLoop / RiskAnalyzeService 注入裸 {@code ChatClient} 时拿到本地 tier。
+     * AgentLoop / RiskAnalyzeService 注入裸 {@code ChatClient} 即得本地 llama.cpp。
      */
     @Bean
     @Primary
     public ChatClient chatClient(ChatClient.Builder builder) {
         return builder.build();
-    }
-
-    // ===== H-4：云端 tier ChatClient（非 @Primary，由 ModelRouter 按 @Qualifier 取用）=====
-
-    /**
-     * 云端 tier：只挂 metrics 拦截器（不注 cache_prompt —— 那是 llama.cpp slot-cache 私有字段，
-     * 标准 OpenAI 端点不识别）。base-url/key/model 走 educare.model.cloud.*，key 建议 Nacos 加密。
-     */
-    @Bean("cloudChatClient")
-    public ChatClient cloudChatClient(LlmMetricsInterceptor llmMetricsInterceptor) {
-        RestClient.Builder restBuilder = RestClient.builder()
-                .requestFactory(new BufferingClientHttpRequestFactory(new SimpleClientHttpRequestFactory()))
-                .requestInterceptor(llmMetricsInterceptor);
-        OpenAiApi cloudApi = OpenAiApi.builder()
-                .baseUrl(cloudBaseUrl)
-                .apiKey(cloudApiKey == null || cloudApiKey.isBlank() ? "dummy" : cloudApiKey)
-                .restClientBuilder(restBuilder)
-                .webClientBuilder(WebClient.builder())
-                .build();
-        OpenAiChatModel cloudChatModel = OpenAiChatModel.builder()
-                .openAiApi(cloudApi)
-                .defaultOptions(OpenAiChatOptions.builder()
-                        .model(cloudModel)
-                        .temperature(temperature)
-                        .maxTokens(maxTokens)
-                        .build())
-                .build();
-        return ChatClient.create(cloudChatModel);
     }
 }
