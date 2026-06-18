@@ -121,6 +121,10 @@ logging:
     com.edu.agent.mapper: debug
 
 educare:
+  # MCP 内部预共享 token（纵深防御，A3）。空=仅靠 127.0.0.1 网络隔离（默认）；
+  # 与两个 MCP server 配同一值即开启 X-MCP-Token 互验（McpClientConfig 给出站请求附头）。
+  mcp:
+    token: ${EDUCARE_MCP_TOKEN:}
   export:
     # F-1：PDF 导出落盘目录。需可写；启动时若不存在自动创建。
     storage-path: ${EDUCARE_EXPORT_PATH:/tmp/edu-exports}

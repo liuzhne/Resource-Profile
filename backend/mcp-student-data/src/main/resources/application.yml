@@ -1,6 +1,12 @@
 server:
   port: 8094
 
+# MCP 内部预共享 token（纵深防御，A3）。空=仅靠 127.0.0.1 网络隔离（默认）；
+# 非空时 McpTokenFilter 要求 /mcp 请求带匹配的 X-MCP-Token 头，否则 401。
+educare:
+  mcp:
+    token: ${EDUCARE_MCP_TOKEN:}
+
 spring:
   application:
     name: mcp-student-data
