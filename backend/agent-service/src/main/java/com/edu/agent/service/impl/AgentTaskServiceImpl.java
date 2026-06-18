@@ -63,7 +63,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
     private final WarningPublisher warningPublisher;              // F-2：终态事件发布
     private final AgentLoop agentLoop;                            // H-2.3：AgentLoop 切流目标
     private final ObjectProvider<ToolCallbackProvider> toolCallbackProviders;  // H-2.3：MCP 工具列表（启动期 fail-fast 时 ObjectProvider 让单测能选择不注入）
-    private final SkillLoader skillLoader;                        // H-3.5：技能加载器（按需注入 system prompt + 热更新）
+    private final SkillLoader skillLoader;                        // H-3.5：技能加载器（按需注入 classpath skills 到 system prompt）
     private final com.edu.agent.core.SubAgentRegistry subAgentRegistry;  // J-2.1：子代理 agent-as-tool（默认关）
 
     @Qualifier("agentExecutor")

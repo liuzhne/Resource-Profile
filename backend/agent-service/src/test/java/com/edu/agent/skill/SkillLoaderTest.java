@@ -18,7 +18,6 @@ class SkillLoaderTest {
     private SkillLoader loader(boolean enabled, String active) {
         SkillLoader l = new SkillLoader();
         ReflectionTestUtils.setField(l, "enabled", enabled);
-        ReflectionTestUtils.setField(l, "skillsDir", "");
         ReflectionTestUtils.setField(l, "activeCsv", active);
         return l;
     }

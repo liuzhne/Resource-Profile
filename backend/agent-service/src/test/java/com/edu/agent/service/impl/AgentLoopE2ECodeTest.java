@@ -62,7 +62,6 @@ class AgentLoopE2ECodeTest {
     private SkillLoader realSkillLoader() {
         SkillLoader loader = new SkillLoader();
         ReflectionTestUtils.setField(loader, "enabled", true);
-        ReflectionTestUtils.setField(loader, "skillsDir", "");
         ReflectionTestUtils.setField(loader, "activeCsv",
                 "risk-assessment,psychological-screening,intervention-design,compliance-audit");
         return loader;
