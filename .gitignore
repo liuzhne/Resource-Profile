@@ -114,3 +114,9 @@ backend/agent-service/src/main/resources/fonts/*.ttf
 backend/agent-service/src/main/resources/fonts/*.otf
 
 .traces
+
+# 敏感个人信息：学生心理访谈记录 / 原生家庭访谈录 / 师生画像业务文档等。
+# 本地保留供开发，仅排除出 Git——防止 `git add .` 误提交导致未成年人个人信息泄露。
+师生画像系统/
+# 防御性兜底：知识库原始访谈语料目录（若被移动到别处）
+知识库数据/

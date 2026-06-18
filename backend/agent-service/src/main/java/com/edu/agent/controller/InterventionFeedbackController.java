@@ -4,7 +4,8 @@ import com.edu.agent.dto.FeedbackRequest;
 import com.edu.agent.entity.InterventionFeedback;
 import com.edu.agent.service.InterventionFeedbackService;
 import com.edu.common.result.Result;
-import com.edu.common.util.JwtUtil;
+import com.edu.common.security.AccessGuard;
+import com.edu.common.security.Roles;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
@@ -20,6 +21,9 @@ import java.util.List;
  * - POST /agent/api/v1/intervention/feedback          提交反馈
  * - GET  /agent/api/v1/intervention/feedback/report    月度明细（JSON）
  * - GET  /agent/api/v1/intervention/feedback/report.csv 月度导出（CSV 下载）
+ *
+ * <p><b>越权(IDOR)修复</b>：干预反馈由教职工填写/查看，经 {@link AccessGuard#allowSelfRoleOrInternal}
+ * 限教职工角色或内网直调，否则带 token 的端用户 403。
  */
 @Slf4j
 @RestController
@@ -28,14 +32,18 @@ import java.util.List;
 public class InterventionFeedbackController {
 
     private final InterventionFeedbackService feedbackService;
-    private final JwtUtil jwtUtil;
+    private final AccessGuard accessGuard;
 
     @PostMapping("/feedback")
     public Result<Long> submit(
             @RequestBody FeedbackRequest req,
             @RequestHeader(value = "Authorization", required = false) String authHeader) {
+        if (!accessGuard.allowSelfRoleOrInternal(authHeader, null, Roles.STAFF_VIEW)) {
+            return Result.error(403, "无权提交干预反馈");
+        }
+        Long userId = accessGuard.currentUserId(authHeader);
         try {
-            Long id = feedbackService.submit(req, extractUserId(authHeader));
+            Long id = feedbackService.submit(req, userId == null ? 0L : userId);
             return Result.success(id);
         } catch (IllegalArgumentException e) {
             return Result.error(400, e.getMessage());
@@ -46,7 +54,12 @@ public class InterventionFeedbackController {
     }
 
     @GetMapping("/feedback/report")
-    public Result<List<InterventionFeedback>> report(@RequestParam(required = false) String month) {
+    public Result<List<InterventionFeedback>> report(
+            @RequestParam(required = false) String month,
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
+        if (!accessGuard.allowSelfRoleOrInternal(authHeader, null, Roles.STAFF_VIEW)) {
+            return Result.error(403, "无权查看干预反馈报表");
+        }
         try {
             return Result.success(feedbackService.monthlyReport(month));
         } catch (IllegalArgumentException e) {
@@ -55,7 +68,12 @@ public class InterventionFeedbackController {
     }
 
     @GetMapping("/feedback/report.csv")
-    public ResponseEntity<byte[]> reportCsv(@RequestParam(required = false) String month) {
+    public ResponseEntity<byte[]> reportCsv(
+            @RequestParam(required = false) String month,
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
+        if (!accessGuard.allowSelfRoleOrInternal(authHeader, null, Roles.STAFF_VIEW)) {
+            return ResponseEntity.status(403).build();
+        }
         String csv;
         try {
             csv = feedbackService.exportCsv(month);
@@ -69,19 +87,5 @@ public class InterventionFeedbackController {
                 .contentType(MediaType.parseMediaType("text/csv; charset=UTF-8"))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
                 .body(body);
-    }
-
-    /** 与 ExportController 一致：解析 Bearer subject 作为 userId，失败返回 0L（仅审计填充）。 */
-    private Long extractUserId(String authHeader) {
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            return 0L;
-        }
-        try {
-            String subject = jwtUtil.getSubject(authHeader.substring(7));
-            return subject == null ? 0L : Long.parseLong(subject);
-        } catch (Exception e) {
-            log.debug("解析 Authorization 失败：{}", e.getMessage());
-            return 0L;
-        }
     }
 }

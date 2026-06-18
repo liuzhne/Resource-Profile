@@ -200,7 +200,7 @@ services:
       NACOS_NAMESPACE:
       MYSQL_HOST: mysql
     ports:
-      - "8094:8094"
+      - "127.0.0.1:8094:8094"   # 仅本机回环：student-data MCP 直吐学生画像，禁外网绕过网关
     depends_on:
       - nacos
       - mysql
@@ -232,7 +232,7 @@ services:
       RERANKER_ENABLED: "true"
       MCP_KNOWLEDGE_RAG_PORT: "8095"
     ports:
-      - "8095:8095"
+      - "127.0.0.1:8095:8095"   # 仅本机回环（同 8094）
     depends_on:
       - milvus-standalone
       - redis
@@ -261,7 +261,7 @@ services:
       LLM_BASE_URL: http://host.docker.internal:8091/v1
       MCP_MEMORY_PORT: "8096"
     ports:
-      - "8096:8096"
+      - "127.0.0.1:8096:8096"   # 仅本机回环（同 8094）
     depends_on:
       - redis
     extra_hosts:
@@ -299,7 +299,7 @@ services:
       # AgentLoop 默认关；真跑切流时置 true（或经 Nacos agent-canary.yml 灰度）
       EDUCARE_AGENT_LOOP_ENABLED: "false"
     ports:
-      - "8087:8087"
+      - "127.0.0.1:8087:8087"   # 仅本机回环：禁外网直连 8087 绕过网关鉴权；本机 smoke/actuator 照常
     depends_on:
       nacos:
         condition: service_started

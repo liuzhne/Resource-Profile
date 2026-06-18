@@ -1,6 +1,13 @@
 server:
   port: 8080
 
+# P0 鉴权门：默认开（校验 JWT 签名 + 未过期，拦截未登录直达业务服务）。
+# 本地免登录联调 / 灰度排障可改 false（@Value 非 @RefreshScope，改后重启网关生效）。
+educare:
+  gateway:
+    auth:
+      enabled: true
+
 spring:
   application:
     name: gateway-service
@@ -10,6 +17,15 @@ spring:
 
   profiles:
     active: dev
+
+  # A6 登出撤销：网关读会话白名单（token:{userId}）所在 Redis，与 auth-service 登录写入同实例。
+  # 注：Boot 3.2 正确命名空间为 spring.data.redis.*；默认 localhost:6379 与 auth-service 一致。
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: 0
 
   # Nacos 配置导入
   config:

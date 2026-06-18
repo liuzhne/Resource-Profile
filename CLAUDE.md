@@ -105,7 +105,7 @@ Global CORS is configured on the gateway (`allowedOrigins: "*"`).
 - Secret configured via `jwt.secret` (reads `JWT_SECRET` env var if mapped)
 - On login: tokens generated, access token stored in Redis as `token:{userId}` with 24h TTL
 - Frontend sends `Authorization: Bearer {token}` header
-- Auth endpoints (`/auth/**`) are public; all other requests require authentication (enforced by Spring Security in auth-service)
+- Auth endpoints (`/auth/**`) are public; all other requests require authentication, **enforced at the gateway by `JwtAuthGlobalFilter`** (validates JWT signature + expiry → 401 on failure; accepts `Authorization: Bearer` or `?token=` for SSE; `**/_internal/**` paths → 403; toggle via `educare.gateway.auth.enabled`, default on). `auth-service`'s own Spring Security only protects auth-service itself. **Caveat:** the gateway gate authenticates ("is the caller logged in") but does **not** yet authorize per-resource ownership — horizontal IDOR checks (current user == queried `id`/`userId`) are still TODO, and field-level permission (`educare.field-permission.enabled`) defaults off.
 
 ## agent-service — AI Orchestration
 
