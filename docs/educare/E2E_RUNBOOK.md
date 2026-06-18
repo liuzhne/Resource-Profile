@@ -19,13 +19,13 @@ bash scripts/start-reranker-server.sh    # 8093
 ```
 通过判据：`curl http://localhost:8091/v1/models` 返回模型列表。
 
-## 2. 一键起全栈（含 agent-service + 3 个 MCP server）
+## 2. 一键起全栈（含 agent-service + 2 个 MCP server）
 ```bash
 cd docker
 docker compose up -d                       # 基础设施 + gateway + ai-inference + agent 全栈
-docker compose ps                          # 等 agent-service / mcp-student-data / knowledge-rag-mcp / memory-mcp 变 healthy
+docker compose ps                          # 等 agent-service / mcp-student-data / knowledge-rag-mcp 变 healthy
 ```
-通过判据：`docker compose ps` 中 4 个 agent 相关容器 `STATUS=healthy`。
+通过判据：`docker compose ps` 中 3 个 agent 相关容器 `STATUS=healthy`。
 > agent-service 配了 `depends_on: condition: service_healthy`，会等两个 MCP server 探活通过才启动。
 
 ## 3. 灌库（建表 + 种子）
@@ -34,7 +34,7 @@ docker compose ps                          # 等 agent-service / mcp-student-dat
 docker exec -i edu-portrait-mysql mysql -uroot -proot edu_portrait < ../sql/init/01_init.sql
 docker exec -i edu-portrait-mysql mysql -uroot -proot edu_portrait < ../sql/init/04_student_extras.sql
 docker exec -i edu-portrait-mysql mysql -uroot -proot edu_portrait < ../sql/init/05_intervention_feedback.sql
-# RAG 知识入库（可选，hybrid/检索用）：POST /api/v1/rag/upsert，见 RAG_UPSERT_DESIGN.md
+# RAG 知识入库（亮点链所需，dense 检索用）：POST /api/v1/rag/upsert，见 RAG_UPSERT_DESIGN.md
 ```
 
 ## 4. MCP server 冒烟（7 个 tool happy path）
@@ -44,12 +44,10 @@ bash scripts/mcp_smoke_test.sh             # 需 bash≥4 / curl / jq
 通过判据：脚本对 student-data(8094) + knowledge-rag(8095) 共 7 个 tool 各调一次，末尾 exit 0。
 
 ## 5. 真跑 AgentLoop（核心证据）
-开 AgentLoop（二选一）：
+AgentLoop 现为**默认主路径**（`educare.agent.loop.enabled` 默认 true），起栈即生效，无需额外开关。
+如需回落旧 4 阶段流水线对照，置 `EDUCARE_AGENT_LOOP_ENABLED=false` 重启 agent-service：
 ```bash
-# 方式 A：直接给 agent-service 容器置环境变量并重启
-EDUCARE_AGENT_LOOP_ENABLED=true docker compose up -d agent-service
-# 方式 B：经 Nacos 灰度（@RefreshScope 热生效，无需重启）
-bash scripts/agent_loop_canary.sh STUDENT_IDS="1" STAGES="100"
+EDUCARE_AGENT_LOOP_ENABLED=false docker compose up -d agent-service   # 回落 legacy（对照用）
 ```
 触发并观察：
 ```bash

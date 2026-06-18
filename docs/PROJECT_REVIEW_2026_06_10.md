@@ -90,7 +90,7 @@
 - **建议**：身份一律从已验证 token 的 subject/claims 取；跨人查询走显式角色校验 + 字段权限。
 
 ### A3 MCP server 与 dry-run 端点无鉴权  `P0`  ◐
-- **部分完成 2026-06-19**：dry-run 端点经网关 `/_internal/`→403 挡在公网外，8087/8094-96 端口收紧到 `127.0.0.1`。**未做**：MCP 8094/8095 应用层预共享 token —— 移交 Phase 2（T6，届时按「保留 MCP 作亮点」一并加内部 token）。
+- **部分完成 2026-06-19**：① dry-run 端点经网关 `/_internal/`→403 挡在公网外，8087/8094-96 端口收紧到 `127.0.0.1`；② Phase 2 加内部预共享 token（`educare.mcp.token`，gated，默认空=仅网络隔离）：agent client customizer 附 `X-MCP-Token` + 8094(student-data，PII 主敏感面)`McpTokenFilter` 校验，已编译验证。**未做**：8095(knowledge-rag，Python FastMCP)服务端校验（通用知识非 PII；fastmcp 无法 headless 验证 middleware）+ token 链 e2e 运行验证 —— 待 server 可实跑时补。
 - **位置**：`mcp-student-data/.../StudentDataTools.java`（8094，4 个读敏感数据 tool，端口无鉴权，Feign 调下游不带 token）；`agent-service/.../AgentLoopDryRunController.java`（`/agent/api/v1/_internal/loop/dry-run`，自述"不挂 Security/JWT"，挂在 gateway `/agent/**` 对外可达）。
 - **建议**：MCP 端口加内部预共享 token / 网络隔离；删除 dry-run 端点或挂 admin。（注：B2 若把 MCP 收回内联，A3 的 MCP 部分自然消除。）
 
@@ -141,48 +141,48 @@
 
 > 每条给出**现状（启用度）/ 为何过度 / 处置建议（删·降级·保留条件）/ 影响面**。影响面默认按"删除"评估。
 
-### B1 四层记忆系统 + memory MCP(8096)  `过度`  ☐
+### B1 四层记忆系统 + memory MCP(8096)  `过度`  ☑ 删除于 2026-06-19
 - **现状**：Working/Episodic/Semantic/Procedural over Redis + 独立 Python MCP server(8096) + Java `MemoryGateway` + 13 个单测 + `MEMORY_DESIGN.md`。但 agent-service 的 MCP client **只接了 student-data + knowledge-rag，memory-server 未接入**，`memory.enabled=false`。
 - **为何过度**：直接照搬 MemGPT 认知架构概念，投入完整却零产出；对"学生风险画像"真实需要的记忆可能就是"上次分析结论"一行。
 - **处置**：**删除**（或保留单 key 存"上次结论"的极简版）。
 - **影响面**：删 `app/services/memory_store.py`、`app/mcp/memory_*.py`、`MemoryGateway.java`、`memory-mcp` 容器、相关测试与设计文档。**默认路径未接入 → 删除零影响**。
 
-### B2 三个独立部署的 MCP server  `过度`  ☐
+### B2 三个独立部署的 MCP server  `过度`  ✗ 不采纳（简历取向：保留 student-data/knowledge-rag 2 个 MCP 作亮点；memory MCP 已随 B1 删）
 - **现状**：student-data(8094, Java 独立 Spring Boot) / knowledge-rag(8095, Python) / memory(8096)。工具的唯一消费者是自己的 agent-service。
 - **为何过度**：MCP 的价值在于让*外部、跨供应商*客户端复用工具。这里把 student-data 拆成独立服务再 Feign 回调业务服务，比起 agent-service 内一个 `@Tool` 直连下游，凭空多一个微服务+一层网络跳转+一层协议序列化。
 - **处置**：**收回内联**——student-data 4 个 tool 改为 agent-service 内 `@Tool`（直接 Feign 调 student/mental）；knowledge-rag 改为 agent 直调 ai-inference 的 RAG 端点。
 - **影响面**：删 `mcp-student-data` 模块 + 容器 + compose 段；agent 改用本地 `ToolCallback`。**保留条件**：确有外部 MCP 客户端（如 Claude Desktop）要消费这些工具，才保留独立 server。同时消解 A3 的 MCP 鉴权问题。
 
-### B3 双 ChatClient + ModelRouter（云端路由）  `过度`  ☐
+### B3 双 ChatClient + ModelRouter（云端路由）  `过度`  ☑ 删除于 2026-06-19
 - **现状**：本地 `@Primary` + `cloudChatClient` + `ModelRouter`（敏感→本地、方案/审核→云端、未就绪回落）+ 审计 logger + 计数器。`EDUCARE_CLOUD_ENABLED=false`，api-key 空 → 一律回落本地。
 - **为何过度**：99% 情况只有一个本地模型，却维护整套路由/审计/fail-safe，为"未来可能的多模型"预留抽象，YAGNI。
 - **处置**：**删除** router 层，`RiskAnalyzeService` 直连本地 ChatClient。
 - **影响面**：删 `router/ModelRouter`、云端 ChatClient bean、`application.yml` 云端配置段及相关测试。**保留条件**：真接入云端模型时再加。
 
-### B4 AgentLoop 百分比灰度切流  `过度`  ☐
+### B4 AgentLoop 百分比灰度切流  `过度`  ☑ 降级为单布尔于 2026-06-19（AgentLoop 设默认路径）
 - **现状**：按 taskId 确定性分桶的 `canary-percent`(0→10→50→100) + `AgentLoopCanaryGate`(@RefreshScope) + Nacos `agent-canary.yml` + `agent_loop_canary.sh` + 回滚。
 - **为何过度**：百分比灰度是生产流量治理，用在单机、单用户手动触发、本地 LLM 的功能上，与场景不匹配；脚本至今"待用户实跑"。
 - **处置**：**降级**为单一布尔开关（AgentLoop 本身按 §5 决策保留与否）。
 - **影响面**：删灰度门控类 + 脚本 + Nacos canary 配置；保留 `EDUCARE_AGENT_LOOP_ENABLED` 单开关。
 
-### B5 Hybrid Retrieval（BM25+RRF）  `过度`  ☐
+### B5 Hybrid Retrieval（BM25+RRF）  `过度`  ☑ 删除于 2026-06-19（RAG 回纯 dense）
 - **现状**：dense 候选池上自实现 BM25Okapi + 中英 tokenizer + RRF 融合 + `eval/hybrid_eval.py`。`RAG_HYBRID_ENABLED=false`。
 - **为何过度**：知识库规模（案例/政策）很小，dense 检索已够；混合检索是"RAG 进阶展示"。
 - **处置**：**删除**或移至 experimental 分支。
 - **影响面**：删 `app/services/hybrid_retrieval.py` + eval + 开关，RAG 回纯 dense。**保留条件**：知识库上千条且检索质量实测不足时再引入。
 
-### B6 重型向量检索栈（Milvus 全家桶 + Reranker）  `过度`  ☐
+### B6 重型向量检索栈（Milvus 全家桶 + Reranker）  `过度`  ✗ 保留（简历取向：RAG 真灌库亮点依赖 Milvus）
 - **现状**：Milvus + etcd + minio + attu（4 容器）+ BGE-reranker 独立 llama.cpp 端口(8093)。
 - **为何过度**：小知识库下 Milvus 的运维成本（etcd/minio 依赖）与收益不成比例；reranker 重排边际收益低。
 - **处置**：**评估降级**——用 pgvector（复用现有库）替换 Milvus 全家桶；reranker 视知识库规模决定去留。
 - **影响面**：较大（需迁移向量存储），列为**评估项**而非立即删；先量化知识库真实规模再决策。
 
-### B7 Skills + SkillLoader 热更新  `过度`  ☐
+### B7 Skills + SkillLoader 热更新  `过度`  ☑ 简化为 classpath 静态于 2026-06-19
 - **现状**：4 个技能 markdown + 外部目录按 mtime 热更新 + classpath 兜底，只在 AgentLoop（默认关）路径注入 system prompt。
 - **处置**：**简化**为 classpath 静态加载（去掉外部目录热更新），或随 B4/AgentLoop 决策一并处理。
 - **影响面**：小，删 `SkillLoader` 的目录监听逻辑。
 
-### B8 「做完默认全关」反模式（横切）  `过度`  ☐
+### B8 「做完默认全关」反模式（横切）  `过度`  ☑ 2026-06-19（记忆/路由/灰度/hybrid 已删；AgentLoop 默认开，收敛默认启用面）
 - **现状**：A/B 表中多达 6 处 feature flag 默认关或未接入，半成品长期留主干。
 - **处置**：对每个 flag 二选一——**「启用并端到端跑通」或「删除」**，不留长期默认关的半成品。这是贯穿 §5 全程的纪律，而非单点修改。
 
@@ -210,13 +210,13 @@
 
 | 任务 | 对应 | 关键动作 | 影响面 | 状态 |
 |------|------|---------|--------|------|
-| T5 | B1 | 删除四层记忆系统 + memory MCP（或留单 key 极简版） | 默认未接入，零影响 | ☐ |
-| T6 | B2·A3 | student-data MCP 收回 agent `@Tool`；knowledge-rag 改直调 | 删 mcp-student-data 模块+容器 | ☐ |
-| T7 | B3 | 删除 ModelRouter/cloudChatClient，直连本地 | 删 router 包+配置+测试 | ☐ |
-| T8 | B4 | AgentLoop 灰度降级为单布尔开关 | 删灰度门控+脚本+Nacos canary | ☐ |
-| T9 | B5·B7 | 删除 Hybrid Retrieval；Skills 简化为 classpath 静态 | RAG 回纯 dense | ☐ |
-| T10 | B6 | 评估 pgvector 替换 Milvus 全家桶（先量化知识库规模） | 评估项，暂不动手 | ☐ |
-| T11 | B8 | 逐一决策剩余 flag："跑通"或"删除" | 主干无默认关半成品 | ☐ |
+| T5 | B1 | 删除四层记忆系统 + memory MCP | 默认未接入，零影响 | ☑ 2026-06-19 |
+| T6 | B2·A3 | ~~student-data MCP 收回 agent `@Tool`~~ | — | ✗ 不采纳（简历取向：保留 2 个 MCP server 作亮点）；A3 改加内部 token：8094+client ☑，8095 待运行验证 |
+| T7 | B3 | 删除 ModelRouter/cloudChatClient，直连本地 | 删 router 包+配置+测试 | ☑ 2026-06-19 |
+| T8 | B4 | AgentLoop 灰度降级为单布尔开关 + 设默认路径 | 删灰度门控+脚本+Nacos canary | ☑ 2026-06-19 |
+| T9 | B5·B7 | 删除 Hybrid Retrieval；Skills 简化为 classpath 静态 | RAG 回纯 dense | ☑ 2026-06-19 |
+| T10 | B6 | 评估 pgvector 替换 Milvus 全家桶 | 评估项 | ✗ 保留 Milvus（简历取向：RAG 真灌库亮点依赖它） |
+| T11 | B8 | 逐一决策剩余 flag："跑通"或"删除" | 主干无默认关半成品 | ☑ 2026-06-19（记忆/路由/灰度/hybrid 删；AgentLoop 默认开） |
 
 ### 5.3 阶段三 — 规范与健壮性（P1，只对保留代码做）
 
