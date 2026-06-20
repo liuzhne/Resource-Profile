@@ -49,11 +49,24 @@ AgentLoop 现为**默认主路径**（`educare.agent.loop.enabled` 默认 true�
 ```bash
 EDUCARE_AGENT_LOOP_ENABLED=false docker compose up -d agent-service   # 回落 legacy（对照用）
 ```
+> ⚠ 网关鉴权默认开（`educare.gateway.auth.enabled`）+ agent-service 自身鉴权默认开
+> （`educare.agent.self-auth.enabled`）：经 :8080 / 直连 :8087 的业务请求都须带 JWT，否则 401。
+> 先登录取 token（需 auth-service 在跑；默认账号密码=用户名，见 `sql/init/01_init.sql`）。
+> 纯本地快验也可临时 `EDUCARE_GATEWAY_AUTH_ENABLED=false EDUCARE_AGENT_SELF_AUTH_ENABLED=false` 起栈跳过鉴权。
+
 触发并观察：
 ```bash
-TASK=$(curl -s -XPOST http://localhost:8080/agent/api/v1/task/trigger/1 | jq -r .data)
-watch -n2 "curl -s http://localhost:8080/agent/api/v1/task/$TASK | jq '{status:.data.status, risk:.data.riskLevel}'"
-curl -s http://localhost:8080/agent/api/v1/task/$TASK | jq '{status:.data.status, riskLevel:.data.riskLevel, risk:.data.riskAnalysisResult, plan:.data.interventionPlan}'
+# 0) 登录取 token（admin 可见全部字段，便于看完整产物）
+TOKEN=$(curl -s -XPOST http://localhost:8080/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"admin"}' | jq -r .data.token)
+
+# 1) 触发 + 轮询（带 Authorization）
+TASK=$(curl -s -XPOST http://localhost:8080/agent/api/v1/task/trigger/1 \
+  -H "Authorization: Bearer $TOKEN" | jq -r .data)
+watch -n2 "curl -s http://localhost:8080/agent/api/v1/task/$TASK -H 'Authorization: Bearer $TOKEN' | jq '{status:.data.status, risk:.data.riskLevel}'"
+curl -s http://localhost:8080/agent/api/v1/task/$TASK -H "Authorization: Bearer $TOKEN" \
+  | jq '{status:.data.status, riskLevel:.data.riskLevel, risk:.data.riskAnalysisResult, plan:.data.interventionPlan}'
 docker compose logs --tail=200 agent-service | grep -E "AgentLoop|iter=|COMPLETED|final_answer"
 ```
 **"可运行"通过判据（全部满足才算真跑通）**：
