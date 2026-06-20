@@ -144,8 +144,11 @@ public class StudentDataTools {
             return MentalIndicatorDto.builder().studentId(studentId).found(false).build();
         }
 
-        // 取最近一次（mental-service 返回顺序未明确；按 createTime/assessTime 倒序取首条）
-        Map<String, Object> latest = list.get(0);
+        // 取最近一次：mental-service 返回顺序未明确，显式按 assessTime（缺则 createTime）倒序取首条
+        // （yyyy-MM-dd HH:mm:ss / ISO 格式下字典序即时间序）。
+        Map<String, Object> latest = list.stream()
+                .max(java.util.Comparator.comparing(StudentDataTools::assessKey))
+                .orElse(list.get(0));
         return MentalIndicatorDto.builder()
                 .studentId(studentId)
                 .found(true)
@@ -226,6 +229,12 @@ public class StudentDataTools {
 
     private static String asStr(Object v) {
         return v == null ? null : v.toString();
+    }
+
+    /** 心理测评排序键：assessTime 优先，缺则 createTime；null→空串（排到最旧）。 */
+    private static String assessKey(Map<String, Object> row) {
+        Object v = row.getOrDefault("assessTime", row.get("createTime"));
+        return v == null ? "" : v.toString();
     }
 
     private static Long asLong(Object v) {
