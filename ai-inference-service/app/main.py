@@ -26,11 +26,12 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json",
     )
 
-    # 跨域
+    # 跨域（A4）：收敛为显式白名单 + 关 credentials（消除 *+credentials 非法组合）。
+    cors_origins = [o.strip() for o in settings.CORS_ALLOW_ORIGINS.split(",") if o.strip()]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
+        allow_origins=cors_origins,
+        allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
     )

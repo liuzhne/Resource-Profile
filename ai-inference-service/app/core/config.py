@@ -8,6 +8,11 @@ class Settings:
     APP_VERSION: str = "1.0.0"
     PORT: int = int(os.environ.get("PORT", "8090"))
 
+    # CORS（A4）：默认白名单（前端 5173 / 网关 8080）。逗号分隔；本服务无 cookie 凭证需求，
+    # allow_credentials 固定 False —— 避免「allow_origins=* + credentials=True」的非法组合。
+    CORS_ALLOW_ORIGINS: str = os.getenv(
+        "CORS_ALLOW_ORIGINS", "http://localhost:5173,http://localhost:8080")
+
     # LLM (llama.cpp OpenAI-compatible)
     LLM_BASE_URL: str = os.getenv("LLM_BASE_URL", "http://host.docker.internal:8091/v1")
     LLM_MODEL: str = os.getenv("LLM_MODEL", "qwen2.5-14b-instruct-q5_k_m")
