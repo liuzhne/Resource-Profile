@@ -68,6 +68,9 @@ class Settings:
     # transport 固定为 Streamable HTTP，单端点 path（spec 2025-03-26 推荐）。
     MCP_KNOWLEDGE_RAG_PORT: int = int(os.getenv("MCP_KNOWLEDGE_RAG_PORT", "8095"))
     MCP_KNOWLEDGE_RAG_PATH: str = os.getenv("MCP_KNOWLEDGE_RAG_PATH", "/mcp")
+    # A3：MCP 内部预共享 token。空=仅 127.0.0.1 网络隔离（默认）；与 agent-service 配同一值
+    # （EDUCARE_MCP_TOKEN）即启用 X-MCP-Token 互验。
+    MCP_TOKEN: str = os.getenv("EDUCARE_MCP_TOKEN", "")
 
 
 @lru_cache()
