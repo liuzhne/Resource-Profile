@@ -43,7 +43,7 @@
 **当前阶段**：Phase G/H/I/J 完结。`docs/PROJECT_REVIEW_2026_06_10.md` 四阶段路线图（目标＝简历/答辩）**代码侧全部收尾**：阶段一安全止血（§5.1）+ 阶段二瘦身（§5.2）+ 阶段三规范健壮性（§5.3）+ 阶段四工程卫生（§5.4）。亮点链定型＝**Agent 风险画像全链**（AgentLoop 默认主路径 + 2 MCP + RAG 真灌库）。`mvn clean install` 11 模块全绿 + Python 14 例全过。
 **下一步（仅剩用户侧 + 2 个 P1 收尾）**：
 - **① 用户侧 e2e 运行验证（亮点链落地，环境受限只能你这边跑）**：起栈（`docs/educare/E2E_RUNBOOK.md`）+ 本地 llama.cpp + Milvus 灌库（`/api/v1/rag/upsert`，`RAG_UPSERT_DESIGN.md`）→ `scripts/mcp_smoke_test.sh` + 真实 `/agent/api/v1/task/trigger/{id}` → 确认「风险画像→ReAct→MCP 取数+RAG→干预方案」端到端 + Langfuse trace；验证 MCP token 链（设 `EDUCARE_MCP_TOKEN` 三进程）+ 字段权限五角色矩阵（`FIELD_PERMISSION_VERIFY.md`）。
-- **② 两个 P1 收尾**：(a) 补 8095(knowledge-rag FastMCP) 服务端 token 校验（需 fastmcp 可跑环境）；(b) agent-service:8087 自身鉴权深防御 + CI 测试覆盖门槛（A8 余项）。
+- **② 两个 P1 收尾**：(a) 补 8095(knowledge-rag FastMCP) 服务端 token 校验（需 fastmcp 可跑环境）；(b) agent-service:8087 自身鉴权深防御（127.0.0.1 已隔离，深防御需设计取舍 + 运行验证）。CI 测试门禁 backend-ci 已加（覆盖率%门待核心单测补齐）。
 - **I-5 完结**：`intervention_feedback` 表 + agent-service 反馈提交/月报/CSV 接口 + `ReportDetail.vue` 评分组件
 - **I-1 完结**：进程内 BM25 + RRF（不加 ES/不改 Milvus schema）`hybrid_retrieval.py` + `RAG_HYBRID_ENABLED` 灰度 + `eval/hybrid_eval.py` top-3 命中率评测 + `HYBRID_RETRIEVAL_DESIGN.md`
 - **待实跑（用户侧）**：① 灰度切流 `agent_loop_canary.sh`（需 MCP server + llama.cpp + Nacos）② memory-server 8096 mcp-inspector 验 3 tool ③ hybrid `RAG_HYBRID_ENABLED=true` 跑 `eval/hybrid_eval.py`（需 Milvus 已灌库）④ 加载 `05_intervention_feedback.sql` 后验证反馈提交/CSV ⑤ G-2.3/G-3.4 既有待实跑项

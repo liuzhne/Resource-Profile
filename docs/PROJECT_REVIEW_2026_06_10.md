@@ -111,7 +111,7 @@
 - **位置**：`GlobalExceptionHandler` 仅 auth-service；`AuthServiceImpl` 全程裸 `RuntimeException`，用户名/密码错误返回 500（应 400/401）。
 - **建议**：`GlobalExceptionHandler` 下沉 `common` 统一装配；业务用带错误码的自定义异常。
 
-### A8 测试覆盖失衡  `P1`  ◐ 单测已补（gateway 10/AccessGuard 12/各 controller/FieldPermission 5）；CI 覆盖门槛未加
+### A8 测试覆盖失衡  `P1`  ☑ 2026-06-20（安全关键单测补齐：gateway 10/AccessGuard 12/各 controller/FieldPermission 5 + CI 测试门禁 backend-ci；覆盖率%门待核心单测补齐后引入）
 - **现状**：agent-service 17 个测试类，其余 8 模块均 0；`JwtUtil`/`FieldPermissionAdvice`/`AuthServiceImpl` 零覆盖。
 - **建议**：优先为鉴权/越权/字段权限补纯 Mockito 单测；CI 加最低覆盖门槛。
 
@@ -225,7 +225,7 @@
 | T12 | A7 | `GlobalExceptionHandler` 下沉 common；业务用带错误码自定义异常 | ☑ 2026-06-20 |
 | T13 | A4 | Python CORS 收敛白名单 / 关 credentials | ☑ 2026-06-20 |
 | T14 | A5 | 密钥改无默认环境变量（缺失 fail-fast） | ☑ 2026-06-20（JWT 密钥 fail-fast；infra/默认账号 see 备注） |
-| T15 | A8 | 为鉴权/越权/字段权限补纯 Mockito 单测；CI 加覆盖门槛 | ◐ 单测已补（gateway/AccessGuard/各 controller/FieldPermission）；CI 覆盖门槛未加 |
+| T15 | A8 | 为鉴权/越权/字段权限补纯 Mockito 单测；CI 加门槛 | ☑ 2026-06-20（单测补齐 + CI 测试门禁 backend-ci；覆盖率%门待核心单测补齐后引入） |
 | T16 | （字段权限） | `educare.field-permission.enabled` 默认开 | ☑ 2026-06-20（默认开 + 内网放行安全前提；运行态矩阵待 e2e） |
 
 > T14 备注：JWT 密钥（鉴权基石）已 fail-fast 无默认。MySQL/MinIO/Nacos 默认口令 + SQL 种子默认账号
