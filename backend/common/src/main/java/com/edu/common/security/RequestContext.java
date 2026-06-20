@@ -17,6 +17,8 @@ import java.util.Set;
 public final class RequestContext {
 
     private static final ThreadLocal<Set<String>> ROLES = new ThreadLocal<>();
+    /** 本请求是否携带 Bearer token（端用户经网关）。false=内网 Feign 匿名直调（可信，不脱敏）。 */
+    private static final ThreadLocal<Boolean> AUTHENTICATED = new ThreadLocal<>();
 
     private RequestContext() {}
 
@@ -29,7 +31,17 @@ public final class RequestContext {
         return roles == null ? Collections.emptySet() : roles;
     }
 
+    public static void setAuthenticated(boolean authenticated) {
+        AUTHENTICATED.set(authenticated);
+    }
+
+    /** 是否端用户请求（带 token）。{@link FieldPermissionAdvice} 据此区分「端用户→按角色脱敏」与「内网→放行」。 */
+    public static boolean isAuthenticated() {
+        return Boolean.TRUE.equals(AUTHENTICATED.get());
+    }
+
     public static void clear() {
         ROLES.remove();
+        AUTHENTICATED.remove();
     }
 }

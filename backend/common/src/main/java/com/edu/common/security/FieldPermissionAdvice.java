@@ -28,9 +28,9 @@ import java.util.stream.Stream;
  * {@link SensitiveField} 注解的字段时，按 {@link RequestContext#getRoles()} 与
  * docs/educare/FIELD_PERMISSION.md §4 的矩阵决定是否置 {@code null}。
  *
- * <p><b>启用方式</b>：在 service 的 application.yml 加
- * {@code educare.field-permission.enabled: true}（默认 false，避免依赖链未补齐
- * 时误伤）。
+ * <p><b>启用</b>：{@code educare.field-permission.enabled} 默认开；置 false 可关。
+ * 仅对<b>带 token 的端用户请求</b>按角色脱敏；内网 Feign 匿名直调（无 token）放行不脱敏
+ * （{@link RequestContext#isAuthenticated()}），故默认开不破坏 AI 取数链路。
  *
  * <p><b>不支持的场景</b>（显式落档）：
  * <ul>
@@ -41,7 +41,7 @@ import java.util.stream.Stream;
  */
 @Slf4j
 @RestControllerAdvice
-@ConditionalOnProperty(value = "educare.field-permission.enabled", havingValue = "true")
+@ConditionalOnProperty(value = "educare.field-permission.enabled", havingValue = "true", matchIfMissing = true)
 public class FieldPermissionAdvice implements ResponseBodyAdvice<Object> {
 
     /** 不进入对象内部递归的"叶子"包前缀，避免反射 JDK / Spring 内部类。 */
@@ -65,10 +65,15 @@ public class FieldPermissionAdvice implements ResponseBodyAdvice<Object> {
                                   Class<? extends HttpMessageConverter<?>> selectedConverterType,
                                   ServerHttpRequest request, ServerHttpResponse response) {
         if (body == null) return null;
+        // 内网 Feign 匿名直调（无 token）→ 可信，不脱敏（与 AccessGuard 内网放行一致），
+        // 保证 mcp-student-data / agent 等 AI 取数链路拿到完整画像。仅对端用户请求按角色脱敏。
+        if (!RequestContext.isAuthenticated()) {
+            return body;
+        }
         Set<String> roles = RequestContext.getRoles();
-        // 没拿到角色：保守起见走最低权限（只 PUBLIC），但不抛错以免破坏链路
+        // 端用户但无角色：保守走最低权限（只 PUBLIC），不抛错以免破坏链路
         if (roles.isEmpty()) {
-            log.debug("FieldPermissionAdvice: empty roles, applying PUBLIC-only filter on {}", body.getClass().getName());
+            log.debug("FieldPermissionAdvice: authenticated but empty roles, applying PUBLIC-only filter on {}", body.getClass().getName());
         }
         try {
             walk(body, roles, Collections.newSetFromMap(new IdentityHashMap<>()));

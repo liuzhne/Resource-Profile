@@ -42,12 +42,15 @@ public class RoleContextFilter extends OncePerRequestFilter {
         try {
             String header = request.getHeader(AUTH_HEADER);
             if (header != null && header.startsWith(BEARER_PREFIX)) {
+                // 端用户请求（经网关，必带合法 token）：标记已认证，advice 据此按角色脱敏。
+                RequestContext.setAuthenticated(true);
                 String token = header.substring(BEARER_PREFIX.length());
                 Set<String> roles = jwtUtil.parseRoles(token);
                 if (!roles.isEmpty()) {
                     RequestContext.setRoles(roles);
                 }
             }
+            // 无 Bearer = 内网 Feign 匿名直调：不标记已认证，advice 放行不脱敏（保 AI 取数链路完整）。
             chain.doFilter(request, response);
         } finally {
             RequestContext.clear();
