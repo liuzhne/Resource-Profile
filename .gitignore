@@ -82,6 +82,14 @@ dist-ssr/
 build/
 *.local
 
+# Python (ai-inference-service / eval)
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
 # Local env files
 .env.local
 .env.*.local
