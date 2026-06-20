@@ -174,6 +174,8 @@ services:
     environment:
       NACOS_SERVER: nacos:8848
       NACOS_NAMESPACE:
+      # A5：JWT 密钥（≥32 字符，否则 JwtUtil fail-fast）。dev 默认仅供本地起栈，生产务必经 env/Nacos 覆盖。
+      JWT_SECRET: ${JWT_SECRET:-edu-portrait-dev-jwt-secret-change-in-prod-0123456789}
     ports:
       - "8080:8080"
     depends_on:
@@ -182,9 +184,9 @@ services:
       - edu-network
 
   # ============================================================
-  # EduCare Agent 全栈（agent-service + 3 个 MCP server）
+  # EduCare Agent 全栈（agent-service + 2 个 MCP server）
   # 本地 LLM/embedding/reranker 仍在宿主 llama.cpp，通过 host.docker.internal 访问。
-  # 真跑 AgentLoop：把 agent-service 的 EDUCARE_AGENT_LOOP_ENABLED 置 true。
+  # AgentLoop 现为默认主路径（educare.agent.loop.enabled 默认 true）；回落 legacy 置 false。
   # ============================================================
 
   # H-1.2：student-data MCP server（Java，8094）
@@ -199,6 +201,8 @@ services:
       NACOS_SERVER: nacos:8848
       NACOS_NAMESPACE:
       MYSQL_HOST: mysql
+      # MCP 内部预共享 token（与 agent-service 同值才放行 /mcp）。空=仅网络隔离（A3）
+      EDUCARE_MCP_TOKEN: ${EDUCARE_MCP_TOKEN:-}
     ports:
       - "127.0.0.1:8094:8094"   # 仅本机回环：student-data MCP 直吐学生画像，禁外网绕过网关
     depends_on:
@@ -262,14 +266,17 @@ services:
       MYSQL_HOST: mysql
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      # A5：JWT 密钥（≥32 字符 fail-fast）。dev 默认仅本地，生产经 env/Nacos 覆盖。
+      JWT_SECRET: ${JWT_SECRET:-edu-portrait-dev-jwt-secret-change-in-prod-0123456789}
       # 宿主 llama.cpp（生成 LLM）
       SPRING_AI_OPENAI_BASE_URL: http://host.docker.internal:8091
-      EDUCARE_LOCAL_LLM_BASE_URL: http://host.docker.internal:8091
       # 容器网络内的 MCP server
       MCP_STUDENT_DATA_URL: http://mcp-student-data:8094
       MCP_KNOWLEDGE_RAG_URL: http://knowledge-rag-mcp:8095
-      # AgentLoop 默认关；真跑切流时置 true（或经 Nacos agent-canary.yml 灰度）
-      EDUCARE_AGENT_LOOP_ENABLED: "false"
+      # AgentLoop 为默认主路径（亮点链）；回落 legacy 置 false
+      EDUCARE_AGENT_LOOP_ENABLED: "true"
+      # MCP 内部预共享 token（纵深防御）。空=仅网络隔离；设值则与 MCP server 互验（A3）
+      EDUCARE_MCP_TOKEN: ${EDUCARE_MCP_TOKEN:-}
     ports:
       - "127.0.0.1:8087:8087"   # 仅本机回环：禁外网直连 8087 绕过网关鉴权；本机 smoke/actuator 照常
     depends_on:

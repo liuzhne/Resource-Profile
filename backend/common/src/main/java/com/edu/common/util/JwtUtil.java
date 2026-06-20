@@ -27,12 +27,19 @@ public class JwtUtil {
 
     @PostConstruct
     public void init() {
-        // 从配置中读取密钥
+        // A5：密钥 fail-fast —— 不留可预测默认，缺失/过弱即拒绝启动（清晰报错，胜过 jjwt 的 WeakKeyException）。
         String secret = jwtProperties.getSecret();
-        if (secret == null || secret.isEmpty()) {
-            throw new IllegalStateException("JWT secret must be configured. Please set jwt.secret in configuration.");
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalStateException(
+                    "JWT 密钥未配置：请设置 JWT_SECRET 环境变量（或 Nacos jwt.secret），长度 ≥ 32 字符。");
         }
-        this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+        byte[] bytes = secret.getBytes(StandardCharsets.UTF_8);
+        if (bytes.length < 32) {
+            throw new IllegalStateException(
+                    "JWT 密钥强度不足：HS256 要求 ≥ 256 位（≥ 32 字节），当前 " + bytes.length
+                            + " 字节。请设置更长的 JWT_SECRET。");
+        }
+        this.key = Keys.hmacShaKeyFor(bytes);
     }
 
     /**
