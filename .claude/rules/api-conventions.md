@@ -11,7 +11,7 @@
 - 网关 Spring Cloud Gateway（8080），`lb://{service}` + `StripPrefix=0`：
   `/auth /user /teacher /student /mental /data /agent → 对应服务`。
 - 端口：gateway 8080 / auth 8081 / user 8082 / teacher 8083 / student 8084 / mental 8085 / data 8086 / agent 8087。
-- MCP server：mcp-student-data 8094 / knowledge-rag 8095 / memory 8096（Streamable HTTP，单端点 `/mcp`）。
+- MCP server：mcp-student-data 8094 / knowledge-rag 8095（Streamable HTTP，单端点 `/mcp`；均绑 127.0.0.1）。
 
 ## 鉴权
 - JWT（HS256）：access 24h / refresh 7d；`Authorization: Bearer <token>`。
