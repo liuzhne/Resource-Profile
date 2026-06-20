@@ -235,6 +235,8 @@ services:
       RERANKER_BASE_URL: http://host.docker.internal:8093
       RERANKER_ENABLED: "true"
       MCP_KNOWLEDGE_RAG_PORT: "8095"
+      # MCP 内部预共享 token（与 agent-service 同值才放行 /mcp）。空=仅网络隔离（A3）
+      EDUCARE_MCP_TOKEN: ${EDUCARE_MCP_TOKEN:-}
     ports:
       - "127.0.0.1:8095:8095"   # 仅本机回环（同 8094）
     depends_on:

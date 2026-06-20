@@ -89,8 +89,8 @@
 - **现象/影响**：请求参数 `userId/id` 直接当身份，无"登录用户==被查对象"校验。学生 A 改 `userId` 即可拉 B 的数据。涉未成年人敏感数据，合规红线。
 - **建议**：身份一律从已验证 token 的 subject/claims 取；跨人查询走显式角色校验 + 字段权限。
 
-### A3 MCP server 与 dry-run 端点无鉴权  `P0`  ◐
-- **部分完成 2026-06-19**：① dry-run 端点经网关 `/_internal/`→403 挡在公网外，8087/8094-96 端口收紧到 `127.0.0.1`；② Phase 2 加内部预共享 token（`educare.mcp.token`，gated，默认空=仅网络隔离）：agent client customizer 附 `X-MCP-Token` + 8094(student-data，PII 主敏感面)`McpTokenFilter` 校验，已编译验证。**未做**：8095(knowledge-rag，Python FastMCP)服务端校验（通用知识非 PII；fastmcp 无法 headless 验证 middleware）+ token 链 e2e 运行验证 —— 待 server 可实跑时补。
+### A3 MCP server 与 dry-run 端点无鉴权  `P0`  ☑ 2026-06-20
+- **完成**：① dry-run 端点经网关 `/_internal/`→403 挡在公网外，8087/8094-96 端口收紧 `127.0.0.1`；② 内部预共享 token 全链闭合（`educare.mcp.token`/`EDUCARE_MCP_TOKEN`，gated，默认空=仅网络隔离）：agent client customizer 附 `X-MCP-Token` + 8094(student-data) `McpTokenFilter` + 8095(knowledge-rag) `McpTokenMiddleware`（纯 ASGI，保流式）；三容器 compose 直通同一 env；③ **8087 自身鉴权** `AgentSelfAuthFilter`（闭合 AccessGuard 内网信任在直连 8087 下的 tokenless 缺口）。单测：8094 filter 编译验证、8095 middleware 5 例、8087 filter 7 例。**仅活模型 e2e 待用户侧起栈验证**（fastmcp 不在 .venv）。
 - **位置**：`mcp-student-data/.../StudentDataTools.java`（8094，4 个读敏感数据 tool，端口无鉴权，Feign 调下游不带 token）；`agent-service/.../AgentLoopDryRunController.java`（`/agent/api/v1/_internal/loop/dry-run`，自述"不挂 Security/JWT"，挂在 gateway `/agent/**` 对外可达）。
 - **建议**：MCP 端口加内部预共享 token / 网络隔离；删除 dry-run 端点或挂 admin。（注：B2 若把 MCP 收回内联，A3 的 MCP 部分自然消除。）
 
@@ -203,7 +203,7 @@
 |------|------|---------|------|------|
 | T1 | A1·A6 | gateway 全局 JWT `GlobalFilter`（签名+过期+Redis 白名单），放行 `/auth/**`+健康检查 | 无 token 调 `/student/**` 返回 401；登出后旧 token 失效 | ☑ 2026-06-19 |
 | T2 | A2 | controller 身份改取自 token claims，请求参数 userId 不可信；跨人查询加角色校验 | 学生越权查他人返回 403 | ☑ 2026-06-19 |
-| T3 | A3 | MCP 端口加内部 token / 网络隔离；删除或给 dry-run 挂 admin | 外部直连 8094/dry-run 被拒 | ◐ 部分（dry-run/端口已隔离；MCP 应用层 token 移交 Phase 2 T6） |
+| T3 | A3 | MCP 端口加内部 token / 网络隔离；删除或给 dry-run 挂 admin | 外部直连 8094/dry-run 被拒 | ☑ 2026-06-20（端口隔离 + 全链 MCP token 8094/8095/client + 8087 自鉴权） |
 | T4 | A11 | 同步更正 CLAUDE.md 鉴权描述 | 文档与代码一致 | ☑ 2026-06-19 |
 
 ### 5.2 阶段二 — 瘦身（B 类删除/降级，缩小后续工作面）
