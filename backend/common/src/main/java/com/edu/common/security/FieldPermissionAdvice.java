@@ -88,22 +88,29 @@ public class FieldPermissionAdvice implements ResponseBodyAdvice<Object> {
     private void walk(Object obj, Set<String> roles, Set<Object> visited) {
         if (obj == null || visited.contains(obj)) return;
         Class<?> cls = obj.getClass();
-        if (isLeaf(cls)) return;
-        visited.add(obj);
 
+        // 容器（Collection/Map/数组）类身处 java.*，但其元素可能是需脱敏的业务对象 —— 必须先于
+        // isLeaf 递归，否则 isLeaf 把整个集合当叶子跳过，导致 list/page 响应（Result<List<X>> /
+        // Page<X>）漏脱敏（单对象响应不受影响，因其 data 是业务类）。
         if (obj instanceof Collection<?> coll) {
+            visited.add(obj);
             for (Object el : coll) walk(el, roles, visited);
             return;
         }
         if (obj instanceof Map<?, ?> map) {
+            visited.add(obj);
             for (Object v : map.values()) walk(v, roles, visited);
             return;
         }
         if (cls.isArray()) {
+            visited.add(obj);
             int n = java.lang.reflect.Array.getLength(obj);
             for (int i = 0; i < n; i++) walk(java.lang.reflect.Array.get(obj, i), roles, visited);
             return;
         }
+
+        if (isLeaf(cls)) return;
+        visited.add(obj);
 
         FieldDescriptor[] fields = CACHE.computeIfAbsent(cls, FieldPermissionAdvice::scan);
         for (FieldDescriptor fd : fields) {
