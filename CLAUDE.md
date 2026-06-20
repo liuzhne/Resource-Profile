@@ -105,7 +105,9 @@ Global CORS is configured on the gateway (`allowedOrigins: "*"`).
 - Secret configured via `jwt.secret` (reads `JWT_SECRET` env var if mapped)
 - On login: tokens generated, access token stored in Redis as `token:{userId}` with 24h TTL
 - Frontend sends `Authorization: Bearer {token}` header
-- Auth endpoints (`/auth/**`) are public; all other requests require authentication, **enforced at the gateway by `JwtAuthGlobalFilter`** (validates JWT signature + expiry → 401 on failure; accepts `Authorization: Bearer` or `?token=` for SSE; `**/_internal/**` paths → 403; toggle via `educare.gateway.auth.enabled`, default on). `auth-service`'s own Spring Security only protects auth-service itself. **Caveat:** the gateway gate authenticates ("is the caller logged in") but does **not** yet authorize per-resource ownership — horizontal IDOR checks (current user == queried `id`/`userId`) are still TODO, and field-level permission (`educare.field-permission.enabled`) defaults off.
+- Auth endpoints (`/auth/**`) are public; all other requests require authentication, **enforced at the gateway by `JwtAuthGlobalFilter`** (validates JWT signature + expiry, then checks the Redis session whitelist `token:{userId}` so logout/password-change revokes old tokens → 401 on failure; accepts `Authorization: Bearer` or `?token=` for SSE; `**/_internal/**` paths → 403; toggles `educare.gateway.auth.enabled` / `educare.gateway.auth.check-session`, both default on). `auth-service`'s own Spring Security only protects auth-service itself.
+- **Horizontal authorization (IDOR)** is enforced per-endpoint via `common`'s `AccessGuard.allowSelfRoleOrInternal` (self or privileged staff role; tokenless internal Feign calls trusted) across student/mental/agent/data controllers.
+- **Field-level permission** (`@SensitiveField` + `FieldPermissionAdvice`, `educare.field-permission.enabled`) **defaults on**: filters response fields by role for token-bearing end-user requests; tokenless internal Feign calls pass through unmasked (so the AI portrait chain keeps full data). See `docs/educare/FIELD_PERMISSION.md`.
 
 ## agent-service — AI Orchestration
 

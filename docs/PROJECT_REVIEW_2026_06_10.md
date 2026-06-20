@@ -94,11 +94,11 @@
 - **位置**：`mcp-student-data/.../StudentDataTools.java`（8094，4 个读敏感数据 tool，端口无鉴权，Feign 调下游不带 token）；`agent-service/.../AgentLoopDryRunController.java`（`/agent/api/v1/_internal/loop/dry-run`，自述"不挂 Security/JWT"，挂在 gateway `/agent/**` 对外可达）。
 - **建议**：MCP 端口加内部预共享 token / 网络隔离；删除 dry-run 端点或挂 admin。（注：B2 若把 MCP 收回内联，A3 的 MCP 部分自然消除。）
 
-### A4 Python 服务 CORS 非法组合  `P1`  ☐
+### A4 Python 服务 CORS 非法组合  `P1`  ☑ 2026-06-20（白名单 + 关 credentials）
 - **位置**：`ai-inference-service/app/main.py`（`allow_origins=["*"]` + `allow_credentials=True`）。
 - **建议**：收敛为白名单；无凭证需求则 `allow_credentials=False`。
 
-### A5 密钥硬编码 + 默认账号可预测  `P1`  ☐
+### A5 密钥硬编码 + 默认账号可预测  `P1`  ☑ 2026-06-20（JWT 密钥 fail-fast；infra/种子账号见 §5.3 T14 备注）
 - **位置**：`docker/docker-compose.yml`（MySQL `root`/`edu123456`、Nacos token 明文、MinIO `minioadmin`、Langfuse `dev-only-replace-in-prod-…`）；`sql/init/01_init.sql`（admin/teacher/student 同一 bcrypt hash，密码=用户名）。
 - **建议**：敏感值改环境变量/Nacos 加密配置且无默认（缺失即 fail-fast）；首启强制改密或随机化默认口令。
 
@@ -107,31 +107,31 @@
 - **位置**：`auth-service/.../AuthServiceImpl.java`（登录写 Redis `token:{userId}`，logout 删 key），但无任何校验端读该白名单。
 - **建议**：并入 A1 的准入 filter——校验 Redis 白名单存在且匹配才放行，让登出/改密即时失效。
 
-### A7 异常不规范，GlobalExceptionHandler 仅 1/9 模块  `P1`  ☐
+### A7 异常不规范，GlobalExceptionHandler 仅 1/9 模块  `P1`  ☑ 2026-06-20（下沉 common 自动装配 + BusinessException）
 - **位置**：`GlobalExceptionHandler` 仅 auth-service；`AuthServiceImpl` 全程裸 `RuntimeException`，用户名/密码错误返回 500（应 400/401）。
 - **建议**：`GlobalExceptionHandler` 下沉 `common` 统一装配；业务用带错误码的自定义异常。
 
-### A8 测试覆盖失衡  `P1`  ☐
+### A8 测试覆盖失衡  `P1`  ◐ 单测已补（gateway 10/AccessGuard 12/各 controller/FieldPermission 5）；CI 覆盖门槛未加
 - **现状**：agent-service 17 个测试类，其余 8 模块均 0；`JwtUtil`/`FieldPermissionAdvice`/`AuthServiceImpl` 零覆盖。
 - **建议**：优先为鉴权/越权/字段权限补纯 Mockito 单测；CI 加最低覆盖门槛。
 
-### A9 编译产物入库 + .gitignore 缺项  `P2`  ☐
+### A9 编译产物入库 + .gitignore 缺项  `P2`  ☑ 2026-06-20（清 14 个 .pyc + 补 Python .gitignore）
 - **现状**：`git ls-files` 跟踪 14 个 `*.pyc`；`.gitignore` 缺 `__pycache__/`、`*.pyc`、`.DS_Store`。
 - **建议**：补 `.gitignore` 并 `git rm -r --cached` 清除已跟踪产物。
 
-### A10 误入的大目录  `P2`  ☐
+### A10 误入的大目录  `P2`  ☑ 2026-06-19（.gitignore 已排除 师生画像系统/、知识库数据/；git 未跟踪）
 - **位置**：仓库根 `师生画像系统/`（`.docx`、知识库数据、`.DS_Store`）。
 - **建议**：移出仓库或归入 `docs/` 并纳入忽略/LFS。
 
-### A11 文档与代码漂移  `P2`  ☐
+### A11 文档与代码漂移  `P2`  ☑ 2026-06-20（CLAUDE.md/rules：Spring AI 1.1.6、模型名、MCP 端口、鉴权描述）
 - **现状**：`CLAUDE.md` 写 Spring AI `1.0.0-M6`（实际 `pom.xml` 1.1.6 GA）；模型名 `qwen2.5-32b` vs `config.py` 默认 `qwen2.5-14b`；CLAUDE.md 鉴权描述错误（见 A1）。
 - **建议**：以代码为准刷新 CLAUDE.md。
 
-### A12 `getMentalIndicators` 未真正排序  `P2`  ☐
+### A12 `getMentalIndicators` 未真正排序  `P2`  ☑ 2026-06-20（按 assessTime/createTime 倒序 max 取首条）
 - **位置**：`mcp-student-data/.../StudentDataTools.java`（注释称倒序取最近，实际 `list.get(0)`）。
 - **建议**：显式按 `assessTime/createTime` 倒序取首条，或下游约定有序返回。（B2 内联后随之处理。）
 
-### A13 前端 HTTP 401 不触发登出  `P2`  ☐
+### A13 前端 HTTP 401 不触发登出  `P2`  ☑ 2026-06-20（error 拦截器 HTTP 401→logout）
 - **位置**：`frontend/src/utils/request.js`（只认 body `res.code===401`，HTTP 401 走 error 分支只弹消息）。
 - **建议**：error 拦截器中 `error.response?.status===401 → userStore.logout()`。
 
@@ -222,20 +222,23 @@
 
 | 任务 | 对应 | 关键动作 | 状态 |
 |------|------|---------|------|
-| T12 | A7 | `GlobalExceptionHandler` 下沉 common；业务用带错误码自定义异常 | ☐ |
-| T13 | A4 | Python CORS 收敛白名单 / 关 credentials | ☐ |
-| T14 | A5 | 密钥改无默认环境变量（缺失 fail-fast）；默认账号随机化/首启改密 | ☐ |
-| T15 | A8 | 为鉴权/越权/字段权限补纯 Mockito 单测；CI 加覆盖门槛 | ☐ |
-| T16 | （字段权限） | `educare.field-permission.enabled` 默认开并验证 | ☐ |
+| T12 | A7 | `GlobalExceptionHandler` 下沉 common；业务用带错误码自定义异常 | ☑ 2026-06-20 |
+| T13 | A4 | Python CORS 收敛白名单 / 关 credentials | ☑ 2026-06-20 |
+| T14 | A5 | 密钥改无默认环境变量（缺失 fail-fast） | ☑ 2026-06-20（JWT 密钥 fail-fast；infra/默认账号 see 备注） |
+| T15 | A8 | 为鉴权/越权/字段权限补纯 Mockito 单测；CI 加覆盖门槛 | ◐ 单测已补（gateway/AccessGuard/各 controller/FieldPermission）；CI 覆盖门槛未加 |
+| T16 | （字段权限） | `educare.field-permission.enabled` 默认开 | ☑ 2026-06-20（默认开 + 内网放行安全前提；运行态矩阵待 e2e） |
+
+> T14 备注：JWT 密钥（鉴权基石）已 fail-fast 无默认。MySQL/MinIO/Nacos 默认口令 + SQL 种子默认账号
+> （admin/teacher/student 密码=用户名）属本地 demo 便利项，端口已绑 127.0.0.1；生产前需改，暂留文档。
 
 ### 5.4 阶段四 — 工程卫生（P2）
 
 | 任务 | 对应 | 关键动作 | 状态 |
 |------|------|---------|------|
-| T17 | A9 | 补 `.gitignore` + `git rm -r --cached` 清 `.pyc`/`__pycache__` | ☐ |
-| T18 | A10 | 移出 `师生画像系统/` 大目录 | ☐ |
-| T19 | A11 | 刷新 CLAUDE.md 版本号/模型名（鉴权部分已在 T4 处理） | ☐ |
-| T20 | A12·A13 | `getMentalIndicators` 显式排序；前端 error 拦截器处理 HTTP 401 | ☐ |
+| T17 | A9 | 补 `.gitignore` + `git rm -r --cached` 清 `.pyc`/`__pycache__` | ☑ 2026-06-20 |
+| T18 | A10 | 移出 `师生画像系统/` 大目录 | ☑ 2026-06-19（Phase 1 .gitignore 已排除，git 未跟踪，零文件） |
+| T19 | A11 | 刷新 CLAUDE.md 版本号/模型名（鉴权部分已在 T4 处理） | ☑ 2026-06-20 |
+| T20 | A12·A13 | `getMentalIndicators` 显式排序；前端 error 拦截器处理 HTTP 401 | ☑ 2026-06-20 |
 
 ---
 
