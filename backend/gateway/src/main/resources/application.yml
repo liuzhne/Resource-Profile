@@ -131,6 +131,20 @@ spring:
             allowedHeaders: "*"
             allowCredentials: false
 
+# Actuator + Prometheus：公网入口指标（http.server.requests 速率/错误/时延）。
+# 只放 health/info/prometheus；filter 已放行 /actuator/（PUBLIC_PREFIXES），且不在 /api 下故不经 nginx 对外。
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: when_authorized
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
 logging:
   level:
     org.springframework.cloud.gateway: debug

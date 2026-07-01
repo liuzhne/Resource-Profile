@@ -72,7 +72,7 @@ export const permission = {
 /** 在 setup 中用 v-if / 计算属性的场景。 */
 export const usePermission = () => {
   const hasRole = (allowed) => {
-    const list = Array.isArray(allowed) ? allowed : (allowed ? [allowed] : PRIVILEGED_FALLBACK)
+    const list = Array.isArray(allowed) ? allowed : allowed ? [allowed] : PRIVILEGED_FALLBACK
     return hasAnyRole(list)
   }
   return { hasRole }

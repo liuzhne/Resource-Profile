@@ -11,7 +11,13 @@ export default defineConfig({
     AutoImport({
       resolvers: [ElementPlusResolver()],
       imports: ['vue', 'vue-router', 'pinia'],
-      dts: false
+      dts: false,
+      // 生成 ESLint 可识别的全局符号清单，避免自动导入的 API（ref/computed/ElMessage…）被 no-undef 误报
+      eslintrc: {
+        enabled: true,
+        filepath: './.eslintrc-auto-import.json',
+        globalsPropValue: true
+      }
     }),
     Components({
       resolvers: [ElementPlusResolver()]

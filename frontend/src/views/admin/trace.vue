@@ -24,7 +24,9 @@
           <div class="hint">
             <p>请在 <code>frontend/.env.local</code> 设置：</p>
             <pre>VITE_LANGFUSE_URL=http://localhost:3001</pre>
-            <p class="muted">并启动 langfuse 容器：<code>docker-compose --profile langfuse up -d</code></p>
+            <p class="muted">
+              并启动 langfuse 容器：<code>docker-compose --profile langfuse up -d</code>
+            </p>
           </div>
         </el-empty>
       </div>

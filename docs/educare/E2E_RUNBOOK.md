@@ -80,6 +80,15 @@ docker compose logs --tail=200 agent-service | grep -E "AgentLoop|iter=|COMPLETE
 EDUCARE_DEBUG_FORCE_RISK_LEVEL=high bash scripts/smoke_test_agent.sh   # 强制走完整 4 阶段
 ```
 
+## 6.5 网关安全门复验（鉴权链证据）
+```bash
+bash scripts/gateway_verify.sh         # 准入 401 / 有效 200 / 无效 401 / _internal 403 / 登出吊销
+```
+通过判据：6 项自动断言全过（无 token→401、有效→200、无效→401、`/_internal/`→403、登出前 200→登出后 401）。
+角色相关项需多账号手动复验：
+- **字段脱敏**：admin 与 student 两个 token 取同一学生，student 的响应里敏感字段（心理/经济）应被脱敏（`@SensitiveField` + `FieldPermissionAdvice`，默认开）。
+- **IDOR**：student A 的 token 取 student B 详情应 403（`AccessGuard.allowSelfRoleOrInternal`）。
+
 ## 7. agent vs legacy eval 对比（合格性证据，见第 5 件）
 ```bash
 bash eval/agent_vs_legacy.sh           # 同一组学生分别按 legacy / agent 跑，比对风险等级一致性与对 ground truth 的准确率

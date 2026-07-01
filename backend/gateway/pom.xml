@@ -60,6 +60,16 @@
             <scope>provided</scope>
         </dependency>
 
+        <!-- Actuator + Micrometer/Prometheus：公网入口的 HTTP 速率/错误率/时延指标，暴露 /actuator/prometheus -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+
         <!-- Test：网关全局鉴权门单测（MockServerWebExchange + Mockito） -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

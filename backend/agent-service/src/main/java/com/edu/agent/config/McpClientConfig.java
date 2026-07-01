@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import java.net.URI;
+import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 
 /**
@@ -33,6 +34,11 @@ public class McpClientConfig {
             @Override
             public void customize(HttpRequest.Builder builder, String method, URI uri,
                                   String body, McpTransportContext context) {
+                // 强制 HTTP/1.1：mcp-core 底层 java.net.http.HttpClient 默认 HTTP/2，对明文连接会发
+                // h2c 升级（Connection: Upgrade / Upgrade: h2c），而服务端 uvicorn(FastMCP, httptools)
+                // 不支持 → "Unsupported upgrade request" → GET 开流被判 400，MCP 握手失败、agent fail-fast。
+                // 逐请求锁 HTTP/1.1 关闭升级，与服务端对齐。
+                builder.version(HttpClient.Version.HTTP_1_1);
                 if (!token.isEmpty()) {
                     builder.header("X-MCP-Token", token);
                 }

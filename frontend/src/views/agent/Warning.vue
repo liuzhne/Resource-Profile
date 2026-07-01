@@ -5,8 +5,10 @@
         <div class="card-header">
           <span>AI 预警中心</span>
           <div>
-            <el-button :icon="Refresh" @click="fetchList" :loading="loading">刷新</el-button>
-            <el-button type="primary" :icon="MagicStick" @click="triggerForm.visible = true">触发分析</el-button>
+            <el-button :icon="Refresh" :loading="loading" @click="fetchList">刷新</el-button>
+            <el-button type="primary" :icon="MagicStick" @click="triggerForm.visible = true"
+              >触发分析</el-button
+            >
           </div>
         </div>
       </template>
@@ -14,12 +16,27 @@
       <!-- 过滤栏 -->
       <el-form :model="searchForm" inline>
         <el-form-item label="状态">
-          <el-select v-model="searchForm.status" placeholder="全部状态" clearable style="width: 200px">
-            <el-option v-for="o in STATUS_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
+          <el-select
+            v-model="searchForm.status"
+            placeholder="全部状态"
+            clearable
+            style="width: 200px"
+          >
+            <el-option
+              v-for="o in STATUS_OPTIONS"
+              :key="o.value"
+              :label="o.label"
+              :value="o.value"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="风险等级">
-          <el-select v-model="searchForm.riskLevel" placeholder="全部等级" clearable style="width: 160px">
+          <el-select
+            v-model="searchForm.riskLevel"
+            placeholder="全部等级"
+            clearable
+            style="width: 160px"
+          >
             <el-option v-for="o in RISK_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
           </el-select>
         </el-form-item>
@@ -41,9 +58,9 @@
 
       <!-- 任务表 -->
       <el-table
+        v-loading="loading"
         :data="taskList"
         stripe
-        v-loading="loading"
         element-loading-text="加载中..."
         :row-class-name="rowClass"
         empty-text="暂无任务，点击右上角「触发分析」开始"
@@ -52,7 +69,9 @@
         <el-table-column prop="studentId" label="学生ID" width="100" />
         <el-table-column label="状态" width="160">
           <template #default="{ row }">
-            <el-tag :type="statusType(row.status)" effect="dark">{{ statusLabel(row.status) }}</el-tag>
+            <el-tag :type="statusType(row.status)" effect="dark">{{
+              statusLabel(row.status)
+            }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="风险等级" width="110" align="center">
@@ -86,9 +105,9 @@
       </el-table>
 
       <el-pagination
-        class="pagination"
         v-model:current-page="currentPage"
         v-model:page-size="pageSize"
+        class="pagination"
         :page-sizes="[10, 20, 50, 100]"
         :total="total"
         layout="total, sizes, prev, pager, next, jumper"
@@ -117,7 +136,9 @@
       </el-form>
       <template #footer>
         <el-button @click="triggerForm.visible = false">取消</el-button>
-        <el-button type="primary" :loading="triggerForm.submitting" @click="handleTrigger">立即触发</el-button>
+        <el-button type="primary" :loading="triggerForm.submitting" @click="handleTrigger"
+          >立即触发</el-button
+        >
       </template>
     </el-dialog>
   </div>
@@ -163,7 +184,11 @@ const RISK_OPTIONS = [
 ]
 
 const IN_PROGRESS_STATUSES = new Set([
-  'PENDING', 'RISK_ANALYZING', 'KNOWLEDGE_RETRIEVING', 'PLAN_GENERATING', 'COMPLIANCE_CHECKING'
+  'PENDING',
+  'RISK_ANALYZING',
+  'KNOWLEDGE_RETRIEVING',
+  'PLAN_GENERATING',
+  'COMPLIANCE_CHECKING'
 ])
 
 const fetchList = async () => {
@@ -294,11 +319,11 @@ const statusType = (s) =>
     COMPLETED: 'success',
     REJECTED: 'danger',
     FAILED: 'danger'
-  }[s] || '')
+  })[s] || ''
 const statusLabel = (s) => STATUS_OPTIONS.find((o) => o.value === s)?.label || s
 
 const riskType = (r) =>
-  ({ NONE: 'info', LOW: 'success', MEDIUM: 'warning', HIGH: 'danger' }[r] || '')
+  ({ NONE: 'info', LOW: 'success', MEDIUM: 'warning', HIGH: 'danger' })[r] || ''
 const riskLabel = (r) => RISK_OPTIONS.find((o) => o.value === r)?.label || r
 
 const rowClass = ({ row }) => (row.riskLevel === 'HIGH' ? 'high-risk-row' : '')
@@ -356,12 +381,21 @@ const formatTime = (s) => {
   animation: pulse 1.6s ease-in-out infinite;
 }
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
 }
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 :deep(.high-risk-row) {
   background-color: #fff1f0 !important;

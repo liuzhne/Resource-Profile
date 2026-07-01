@@ -1,32 +1,41 @@
 <template>
   <div class="page-container">
-    <el-page-header @back="goBack" :title="`任务 #${taskId} · 干预报告`">
+    <el-page-header :title="`任务 #${taskId} · 干预报告`" @back="goBack">
       <template #extra>
         <el-button
-          v-permission="['admin','psychologist']"
+          v-permission="['admin', 'psychologist']"
           type="primary"
           :icon="Download"
           :loading="exporting"
           :disabled="!canExport"
           @click="handleExport"
-        >{{ exporting ? '导出中...' : '导出 PDF' }}</el-button>
-        <el-button :icon="Refresh" @click="fetchDetail" :loading="loading">刷新</el-button>
+          >{{ exporting ? '导出中...' : '导出 PDF' }}</el-button
+        >
+        <el-button :icon="Refresh" :loading="loading" @click="fetchDetail">刷新</el-button>
       </template>
     </el-page-header>
 
-    <el-card class="meta-card" v-loading="loading">
+    <el-card v-loading="loading" class="meta-card">
       <el-descriptions :column="4" border size="small">
         <el-descriptions-item label="任务ID">{{ task.id }}</el-descriptions-item>
         <el-descriptions-item label="学生ID">{{ task.studentId }}</el-descriptions-item>
         <el-descriptions-item label="状态">
-          <el-tag :type="statusType(task.status)" effect="dark">{{ statusLabel(task.status) }}</el-tag>
+          <el-tag :type="statusType(task.status)" effect="dark">{{
+            statusLabel(task.status)
+          }}</el-tag>
         </el-descriptions-item>
         <el-descriptions-item label="风险等级">
-          <el-tag v-if="task.riskLevel" :type="riskType(task.riskLevel)">{{ riskLabel(task.riskLevel) }}</el-tag>
+          <el-tag v-if="task.riskLevel" :type="riskType(task.riskLevel)">{{
+            riskLabel(task.riskLevel)
+          }}</el-tag>
           <span v-else>—</span>
         </el-descriptions-item>
-        <el-descriptions-item label="创建时间">{{ formatTime(task.createdAt) }}</el-descriptions-item>
-        <el-descriptions-item label="完成时间">{{ formatTime(task.completedAt) || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="创建时间">{{
+          formatTime(task.createdAt)
+        }}</el-descriptions-item>
+        <el-descriptions-item label="完成时间">{{
+          formatTime(task.completedAt) || '—'
+        }}</el-descriptions-item>
         <el-descriptions-item label="主要风险" :span="2">
           {{ risk.primary_risk_type || '—' }}
         </el-descriptions-item>
@@ -34,7 +43,7 @@
     </el-card>
 
     <!-- 4 阶段时间线 -->
-    <el-card class="timeline-card" v-loading="loading">
+    <el-card v-loading="loading" class="timeline-card">
       <template #header>
         <span>4-Agent 流水线</span>
       </template>
@@ -56,7 +65,9 @@
                 <span class="lbl">风险分</span>
               </div>
               <div class="risk-level">
-                <el-tag :type="riskType(task.riskLevel)" size="large">{{ riskLabel(task.riskLevel) }}</el-tag>
+                <el-tag :type="riskType(task.riskLevel)" size="large">{{
+                  riskLabel(task.riskLevel)
+                }}</el-tag>
                 <div class="primary-type">{{ risk.primary_risk_type || '' }}</div>
               </div>
             </div>
@@ -69,7 +80,11 @@
               class="mt-12"
             />
             <!-- 关键指标可能含心理量表原始分等敏感字段；普通辅导员视角隐藏 -->
-            <div v-if="risk.key_indicators?.length" v-permission="['psychologist','admin']" class="mt-12">
+            <div
+              v-if="risk.key_indicators?.length"
+              v-permission="['psychologist', 'admin']"
+              class="mt-12"
+            >
               <div class="sub-h">关键指标</div>
               <el-tag v-for="(k, i) in risk.key_indicators" :key="i" class="tag-mr">{{ k }}</el-tag>
             </div>
@@ -81,7 +96,8 @@
                 type="success"
                 effect="plain"
                 class="tag-mr"
-              >{{ t }}</el-tag>
+                >{{ t }}</el-tag
+              >
             </div>
             <div v-if="risk.urgency_reason" class="mt-12 urgency">
               <strong>紧迫性：</strong>{{ risk.urgency_reason }}
@@ -100,8 +116,12 @@
         >
           <div class="stage-title">
             阶段 2 · 知识检索
-            <el-tag v-if="knowledge.reranked" type="success" size="small" class="ml-8">Cross-Encoder 精排</el-tag>
-            <el-tag v-else-if="knowledge.fallback" type="info" size="small" class="ml-8">示例数据降级</el-tag>
+            <el-tag v-if="knowledge.reranked" type="success" size="small" class="ml-8"
+              >Cross-Encoder 精排</el-tag
+            >
+            <el-tag v-else-if="knowledge.fallback" type="info" size="small" class="ml-8"
+              >示例数据降级</el-tag
+            >
           </div>
           <div v-if="hasStage(2) && knowledge.chunks?.length" class="stage-body">
             <el-table :data="knowledge.chunks" stripe size="small">
@@ -164,7 +184,8 @@
                       size="small"
                       effect="plain"
                       class="tag-mr"
-                    >{{ r }}</el-tag>
+                      >{{ r }}</el-tag
+                    >
                   </template>
                 </el-table-column>
               </el-table>
@@ -193,12 +214,7 @@
 
             <div v-if="plan.talk_outline" class="block">
               <div class="sub-h">谈话提纲</div>
-              <el-input
-                type="textarea"
-                :model-value="plan.talk_outline"
-                :rows="6"
-                readonly
-              />
+              <el-input type="textarea" :model-value="plan.talk_outline" :rows="6" readonly />
             </div>
 
             <div v-if="plan.resources?.length" class="block">
@@ -295,7 +311,8 @@
             :loading="feedbackSubmitting"
             :disabled="!feedback.score"
             @click="handleSubmitFeedback"
-          >提交反馈</el-button>
+            >提交反馈</el-button
+          >
         </el-form-item>
       </el-form>
     </el-card>
@@ -523,12 +540,13 @@ const statusType = (s) =>
     COMPLETED: 'success',
     REJECTED: 'danger',
     FAILED: 'danger'
-  }[s] || '')
+  })[s] || ''
 const statusLabel = (s) => STATUS_LABELS[s] || s
-const riskType = (r) => ({ NONE: 'info', LOW: 'success', MEDIUM: 'warning', HIGH: 'danger' }[r] || '')
+const riskType = (r) =>
+  ({ NONE: 'info', LOW: 'success', MEDIUM: 'warning', HIGH: 'danger' })[r] || ''
 const riskLabel = (r) => RISK_LABELS[r] || r
 const sourceTagType = (s) =>
-  ({ case: '', psychology: 'success', policy: 'warning', success: 'info' }[s] || '')
+  ({ case: '', psychology: 'success', policy: 'warning', success: 'info' })[s] || ''
 const sourceLabel = (s) => SOURCE_LABELS[s] || s
 const dimensionLabel = (d) => DIMENSION_LABELS[d] || d
 
@@ -608,8 +626,16 @@ const formatTime = (s) => (s ? s.replace('T', ' ').slice(0, 19) : '')
   margin-right: 6px;
   margin-bottom: 6px;
 }
-.mt-12 { margin-top: 12px; }
-.mb-12 { margin-bottom: 12px; }
-.ml-8 { margin-left: 8px; }
-.muted { color: rgba(0, 0, 0, 0.4); }
+.mt-12 {
+  margin-top: 12px;
+}
+.mb-12 {
+  margin-bottom: 12px;
+}
+.ml-8 {
+  margin-left: 8px;
+}
+.muted {
+  color: rgba(0, 0, 0, 0.4);
+}
 </style>

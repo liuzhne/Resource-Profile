@@ -172,6 +172,58 @@
                     </compilerArgs>
                 </configuration>
             </plugin>
+            <!--
+              JaCoCo：全模块出覆盖率报告（target/site/jacoco）。
+              覆盖率门采「按类 includes 的定向门」而非全局百分比——历史业务模块覆盖稀疏，
+              全局阈值会误红；这里只对已补齐单测的安全关键类设硬阈值，其余模块无匹配类即自动通过。
+              补齐更多核心模块单测后，往 check 的 includes 里追加类即可逐步收紧。
+            -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.12</version>
+                <executions>
+                    <execution>
+                        <id>jacoco-prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>jacoco-report</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>jacoco-check-security-critical</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <haltOnFailure>true</haltOnFailure>
+                            <rules>
+                                <rule>
+                                    <element>CLASS</element>
+                                    <includes>
+                                        <!-- 登录/发 token/会话白名单核心，已有 AuthServiceImplTest 覆盖 -->
+                                        <include>com.edu.auth.service.impl.AuthServiceImpl</include>
+                                    </includes>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.80</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
         <pluginManagement>
             <plugins>
