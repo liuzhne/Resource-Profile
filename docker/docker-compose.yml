@@ -146,6 +146,8 @@ services:
   # Nacos
   nacos:
     image: nacos/nacos-server:v2.3.0
+    # 该 tag 无 arm64 清单；Apple Silicon 上经 QEMU 模拟跑 amd64（见下方 healthcheck 注释）
+    platform: linux/amd64
     container_name: edu-portrait-nacos
     environment:
       MODE: standalone

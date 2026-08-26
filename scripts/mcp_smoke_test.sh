@@ -52,6 +52,15 @@ rpc() {
 
     curl "${args[@]}" "$base_url$MCP_PATH" || true
 
+    # Streamable HTTP 服务器可能以 SSE 帧回包（id:...\nevent:message\ndata:{...}）。
+    # 归一化成纯 JSON 再落盘，jq 才能解析；单请求单帧场景取全部 data: 行拼接即完整 JSON。
+    if grep -q '^data:' "$out_body" 2>/dev/null; then
+        local norm
+        norm=$(mktemp)
+        grep '^data:' "$out_body" | sed 's/^data:[[:space:]]*//' > "$norm"
+        [[ -s "$norm" ]] && mv "$norm" "$out_body" || rm -f "$norm"
+    fi
+
     # 抽取 Mcp-Session-Id（首次 initialize 才会回）
     local new_sid
     new_sid=$(grep -i '^Mcp-Session-Id:' "$hdr_file" 2>/dev/null | tail -n1 | awk '{print $2}' | tr -d '\r')
@@ -164,11 +173,11 @@ echo
 echo "[1/2] student-data (端口 8094, Java)"
 if handshake "student-data" "$STUDENT_DATA_URL"; then
     list_tools "student-data" "$STUDENT_DATA_URL" \
-        get_student_profile get_academic_history get_mental_indicators get_attendance
-    call_tool "student-data" "$STUDENT_DATA_URL" get_student_profile   "{\"studentId\":$STUDENT_ID}"
-    call_tool "student-data" "$STUDENT_DATA_URL" get_academic_history  "{\"studentId\":$STUDENT_ID}"
-    call_tool "student-data" "$STUDENT_DATA_URL" get_mental_indicators "{\"studentId\":$STUDENT_ID}"
-    call_tool "student-data" "$STUDENT_DATA_URL" get_attendance        "{\"studentId\":$STUDENT_ID}"
+        getStudentProfile getAcademicHistory getMentalIndicators getAttendance
+    call_tool "student-data" "$STUDENT_DATA_URL" getStudentProfile   "{\"studentId\":$STUDENT_ID}"
+    call_tool "student-data" "$STUDENT_DATA_URL" getAcademicHistory  "{\"studentId\":$STUDENT_ID}"
+    call_tool "student-data" "$STUDENT_DATA_URL" getMentalIndicators "{\"studentId\":$STUDENT_ID}"
+    call_tool "student-data" "$STUDENT_DATA_URL" getAttendance        "{\"studentId\":$STUDENT_ID}"
 fi
 
 # ---- [2/2] knowledge-rag ----

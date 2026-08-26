@@ -61,6 +61,27 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _embeddings(self, payload):
+        """确定性桩向量：同文本同向量（sha256 播种），维度对齐 EMBEDDING_DIM（默认 1024）。
+        仅供无 GPU 环境打通 RAG upsert/search 的机械链路；语义检索质量需真 embedding 模型。"""
+        import hashlib
+        import math
+        dim = int(os.getenv("MOCK_EMBEDDING_DIM", "1024"))
+        data = []
+        for i, text in enumerate(payload.get("input", [])):
+            seed = hashlib.sha256(str(text).encode("utf-8")).digest()
+            vec = []
+            for j in range(dim):
+                h = hashlib.sha256(seed + j.to_bytes(4, "little")).digest()
+                # 映射到 [-1,1) 并粗归一，避免全零/爆值
+                v = (int.from_bytes(h[:4], "little") / 0xFFFFFFFF) * 2 - 1
+                vec.append(round(v / math.sqrt(dim), 8))
+            data.append({"object": "embedding", "index": i, "embedding": vec})
+        sys.stderr.write(f"[mock-llm] embeddings x{len(data)} dim={dim}\n")
+        self._send({"object": "list", "data": data, "model": os.getenv("EMBEDDING_MODEL", "mock-bge"),
+                    "usage": {"prompt_tokens": sum(len(str(t)) for t in payload.get("input", [])),
+                              "total_tokens": 0}})
+
     def do_GET(self):
         if self.path.endswith("/models"):
             self._send({"object": "list", "data": [{"id": "mock-qwen", "object": "model"}]})
@@ -70,6 +91,12 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(length)  # 含 messages / system prompt
+        if self.path.endswith("/embeddings"):
+            try:
+                self._embeddings(json.loads(body or b"{}"))
+            except Exception as e:
+                self._send({"error": {"message": str(e)}}, code=400)
+            return
         # 双模：agent-loop 的 system prompt 含 "final_answer" → 返回 ReAct；否则是 legacy 风险识别 → 返回普通 risk JSON
         is_react = b"final_answer" in body
         # 诊断：把 system prompt 里出现的工具名 dump 出来（composeSystemPrompt 写 "- name: <tool>"）
