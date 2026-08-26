@@ -45,7 +45,7 @@
 ## 1. 下一步指针（Next Action）
 
 **当前阶段**（2026-08-26 复核确认，下述状态经仓库实际产物审计仍有效）：Phase G/H/I/J 完结。`docs/PROJECT_REVIEW_2026_06_10.md` 四阶段路线图（目标＝简历/答辩）**代码侧全部收尾 + P1 收尾项全做完**：阶段一安全止血（§5.1）+ 阶段二瘦身（§5.2）+ 阶段三规范健壮性（§5.3）+ 阶段四工程卫生（§5.4）+ A3 全链 MCP token（8094/8095/client）+ 8087 自鉴权 + CI 测试门禁。亮点链定型＝**Agent 风险画像全链**（AgentLoop 默认主路径 + 2 MCP + RAG 真灌库）。`mvn clean install` 11 模块全绿 + Python 19 例全过。
-**下一步（仅剩用户侧 e2e 运行验证，环境受限只能你这边跑）**：起栈（`docs/educare/E2E_RUNBOOK.md`，鉴权 ON：先 `/auth/login` 取 token）+ 本地 llama.cpp + Milvus 灌库（`/api/v1/rag/upsert`，`RAG_UPSERT_DESIGN.md`）→ `scripts/mcp_smoke_test.sh` + 真实 `/agent/api/v1/task/trigger/{id}` → 确认「风险画像→ReAct→MCP 取数+RAG→干预方案」端到端 + Langfuse trace。可选：设 `EDUCARE_MCP_TOKEN` 三进程验 MCP token 互验链；字段权限运行态已有 headless 单测覆盖（`FieldPermissionAdviceWalkTest`），五角色矩阵手测（`FIELD_PERMISSION_VERIFY.md`）作活体复核。**剩余唯一非环境项**：CI 覆盖率%门（需先补业务模块核心单测，现为「测试全绿」门）。
+**下一步**：执行 §11 上线解阻清单（U-1 起，按可执行性排序；GPU 类 U-7 标注用户侧）。
 - **I-5 完结**：`intervention_feedback` 表 + agent-service 反馈提交/月报/CSV 接口 + `ReportDetail.vue` 评分组件
 - **I-1 完结**：进程内 BM25 + RRF（不加 ES/不改 Milvus schema）`hybrid_retrieval.py` + `RAG_HYBRID_ENABLED` 灰度 + `eval/hybrid_eval.py` top-3 命中率评测 + `HYBRID_RETRIEVAL_DESIGN.md`
 - **待实跑（用户侧）**：① 灰度切流 `agent_loop_canary.sh`（需 MCP server + llama.cpp + Nacos）② memory-server 8096 mcp-inspector 验 3 tool ③ hybrid `RAG_HYBRID_ENABLED=true` 跑 `eval/hybrid_eval.py`（需 Milvus 已灌库）④ 加载 `05_intervention_feedback.sql` 后验证反馈提交/CSV ⑤ G-2.3/G-3.4 既有待实跑项
@@ -480,3 +480,18 @@ H-4 (ModelRouter) ──► H-2 (Loop 选模型)
   - **Phase J 活跑验证**：全部 J-1/J-2/J-3 bean 接入后 agent-service 真实启动（3s，health UP，无 DI 冲突）+ 桩 LLM 触发任务 → COMPLETED，risk/plan 落库 MySQL，AgentLoop 正常、无 hook 异常
 
 **Phase J 验收**：✅ Harness 补全全部完成（上下文压缩 / 工具守卫 / 输出验证自纠错 / 子代理 / 记忆接线 / 规划步 / 并行工具 / hooks / 流式 / 检查点 / 协议双轨）。从"能活跑的 ReAct loop"升级为"现代 Agent Harness"，所有原语默认安全（守卫开、其余高级特性默认关，opt-in），既有链路零回归。
+
+---
+
+## 11. 上线解阻清单（2026-08-26 固化）
+
+> 由 2026-08-26 进度审计提炼：代码侧已收尾，卡点集中在运行态验证。本节按「可执行性」排序逐项解阻，每项完成后按 §0 协议回写。环境前提类（GPU）无法在本机闭环的明确标注"用户侧"，不虚勾。
+
+- [ ] **U-1 Docker daemon 起动**（解锁 U-2/U-3 的前置）
+- [ ] **U-2 生产形态实例化验证**：`docker compose -f docker-compose.prod.yml config` 解析 + 前端镜像 build（`Dockerfile.frontend`）+ `nginx -t`（`docker/nginx/edu-portrait.conf`）+ `scripts/preflight-prod.sh` 真实场景复跑
+- [ ] **U-3 桩 LLM 全栈起栈冒烟**（当前 HEAD 复验 §9 结论）：infra（mysql/redis/nacos/milvus）+ agent-service/mcp-student-data + `scripts/mock_llm_server.py` → `bash scripts/mcp_smoke_test.sh` + `/agent/api/v1/task/trigger/{id}` e2e 到 COMPLETED
+- [ ] **U-4 RAG 灌库 + hybrid eval 实跑**：Milvus 起后 `/api/v1/rag/upsert` 灌真实语料（需 embedding 端点；无 GPU/embedding server 则标注环境阻塞转用户侧）→ `RAG_HYBRID_ENABLED=true` 跑 `eval/hybrid_eval.py`
+- [ ] **U-5 CI 覆盖率 % 门推进**（唯一非环境依赖项）：为业务模块核心类补单测 + 扩 jacoco includes 定向门，保持 backend-ci 绿
+- [ ] **U-6 五角色字段权限活体复核**（栈起后）：跑 `FIELD_PERMISSION_VERIFY.md §4` curl+jq 一键脚本 + `scripts/gateway_verify.sh`
+- [ ] **U-7 真 14B GPU 全链路 + Langfuse trace**（**用户侧**，无 GPU 物理限制）：llama.cpp(8091) + Runbook §1-§6 + G-1 cache 命中验收
+- [ ] **U-8 灰度切流/memory-server 实跑**（栈全起后 opt-in）：`agent_loop_canary.sh`、memory-server(8096) 三 tool mcp-inspector 验证
