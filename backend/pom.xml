@@ -210,6 +210,9 @@
                                     <includes>
                                         <!-- 登录/发 token/会话白名单核心，已有 AuthServiceImplTest 覆盖 -->
                                         <include>com.edu.auth.service.impl.AuthServiceImpl</include>
+                                        <!-- U-5 扩项（2026-08-26）：JWT 原语与 Prompt 注入清洗，JwtUtilTest/PromptSanitizerTest 覆盖 -->
+                                        <include>com.edu.common.util.JwtUtil</include>
+                                        <include>com.edu.common.util.PromptSanitizer</include>
                                     </includes>
                                     <limits>
                                         <limit>
