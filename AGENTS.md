@@ -8,7 +8,7 @@ Resource-Profile is a **Teacher-Student Resource Portrait System** (师生资源
 
 ## EduCare 子系统路线图
 
-The AI subsystem (agent-service + ai-inference-service + Multi-Agent + RAG + 本地 LLM) is tracked in **`docs/educare/EXECUTION_PLAN.md`** — single source of truth for Phase G/H/I 的可执行原子任务清单、§1 下一步指针、§6 变更记录、§8 已知阻塞。当前状态：Phase G 代码侧基本完成（仅 G-2.3/G-3.4 待用户实跑验证），Phase H 启动中（H-1.1 完成，下一步 H-1.2 student-data MCP server），Phase I 储备。设计源（决策依据）见 `docs/educare/IMPROVEMENT_2026_MAY.md` (v1.1, 2026-05-12 拍板)。**Read EXECUTION_PLAN.md first** instead of grepping git log or prior session jsonls. After finishing an atomic task, follow §0 Update Protocol: 勾选 + 追加 `完成于 YYYY-MM-DD：备注` 行 + 更新 §1 指针 + 顶部"最近更新"。
+The AI subsystem (agent-service + ai-inference-service + Multi-Agent + RAG + 本地 LLM) is tracked in **`docs/educare/EXECUTION_PLAN.md`** — single source of truth for Phase G/H/I/J 的可执行原子任务清单、§1 下一步指针、§6 变更记录、§8 已知阻塞。当前状态（2026-08-26 审计）：Phase G/H/I/J 全部完结（代码侧 100% 收尾），亮点链定型＝Agent 风险画像全链（AgentLoop ReAct 默认主路径 + 2 个 MCP server：Java student-data :8094 / Python knowledge-rag :8095，另有 memory-server :8096 + RAG 真灌库）；安全增量（网关 JWT 门禁、IDOR 闭环 AccessGuard、A3 MCP token 全链、8087 自鉴权、字段权限默认开）与上线前工程化（prod compose/nginx TLS、Prometheus/Grafana、备份/压测、CI 测试门禁 backend-ci + eval-gate）均已落地。剩余项收敛为三类：① 用户侧 e2e 实跑验证（GPU/Docker 环境，见 §1 指针）；② CI 覆盖率 % 门（唯一非环境依赖项）；③ Phase I 储备项 I-2/I-4/I-6。设计源（决策依据）见 `docs/educare/IMPROVEMENT_2026_MAY.md` (v1.1, 2026-05-12 拍板)。**Read EXECUTION_PLAN.md first** instead of grepping git log or prior session jsonls. After finishing an atomic task, follow §0 Update Protocol: 勾选 + 追加 `完成于 YYYY-MM-DD：备注` 行 + 更新 §1 指针 + 顶部"最近更新"。
 
 ## Architecture
 
@@ -42,6 +42,7 @@ The Java side handles business logic, persistence, and orchestration. AI calls g
 | `mental-service` | 8085 | Mental health assessment |
 | `data-service` | 8086 | Data analysis and dashboard |
 | `agent-service` | 8087 | LLM/Agent orchestration (Spring AI + Feign to Python) |
+| `mcp-student-data` | 8094 | MCP server exposing student/academic/mental/attendance tools (Streamable HTTP `/mcp`) |
 | `common` | — | Shared library (JWT, Result wrapper) |
 
 **Key Dependencies:**
@@ -49,7 +50,7 @@ The Java side handles business logic, persistence, and orchestration. AI calls g
 - JWT 0.12.5 (jjwt-api, jjwt-impl, jjwt-jackson)
 - MySQL 8.0.33
 - Spring Cloud Alibaba Nacos (Service Discovery + Configuration)
-- Spring AI OpenAI starter (`spring-ai-openai-spring-boot-starter`) — used by `agent-service`
+- Spring AI OpenAI starter (`spring-ai-starter-model-openai`) + MCP starters (`spring-ai-starter-mcp-client` / `spring-ai-starter-mcp-server-webmvc`) — used by `agent-service` and `mcp-student-data`
 - Spring Cloud OpenFeign — used by `agent-service` to call `ai-inference-service`
 - Lombok 1.18.30
 
