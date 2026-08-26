@@ -489,7 +489,8 @@ H-4 (ModelRouter) ──► H-2 (Loop 选模型)
 
 - [x] **U-1 Docker daemon 起动**（解锁 U-2/U-3 的前置）
   - 完成于 2026-08-26：`open -a Docker` 启动 Docker Desktop，daemon v29.6.2 就绪
-- [ ] **U-2 生产形态实例化验证**：`docker compose -f docker-compose.prod.yml config` 解析 + 前端镜像 build（`Dockerfile.frontend`）+ `nginx -t`（`docker/nginx/edu-portrait.conf`）+ `scripts/preflight-prod.sh` 真实场景复跑
+- [x] **U-2 生产形态实例化验证**：`docker compose -f docker-compose.prod.yml config` 解析 + 前端镜像 build（`Dockerfile.frontend`）+ `nginx -t`（`docker/nginx/edu-portrait.conf`）+ `scripts/preflight-prod.sh` 真实场景复跑
+  - 完成于 2026-08-26（Docker daemon v29.6.2）：① preflight 三场景实测——缺 `.env` exit 1 / dev 默认值 exit 1 / `openssl rand -hex|base64` 强随机生成 `docker/.env`（gitignored）后「体检全部通过」exit 0；② compose 校验须用叠加形式 `-f docker-compose.yml -f docker-compose.prod.yml`（单跑 prod 报 edu-network 未定义，属预期用法），config 解析 OK；③ `nginx -t` 首跑因 upstream `gateway` 与证书缺失失败，加 `--add-host gateway:127.0.0.1` + 一次性自签证书挂载后 syntax ok / test successful；④ 前端镜像 `edu-portrait-frontend:audit` 构建成功（node:20-alpine build + nginx:1.27-alpine 运行时）。**遗留真实发现**：prod 形态此前从未实例化验证过，本次为首次全链通过
 - [ ] **U-3 桩 LLM 全栈起栈冒烟**（当前 HEAD 复验 §9 结论）：infra（mysql/redis/nacos/milvus）+ agent-service/mcp-student-data + `scripts/mock_llm_server.py` → `bash scripts/mcp_smoke_test.sh` + `/agent/api/v1/task/trigger/{id}` e2e 到 COMPLETED
 - [ ] **U-4 RAG 灌库 + hybrid eval 实跑**：Milvus 起后 `/api/v1/rag/upsert` 灌真实语料（需 embedding 端点；无 GPU/embedding server 则标注环境阻塞转用户侧）→ `RAG_HYBRID_ENABLED=true` 跑 `eval/hybrid_eval.py`
 - [ ] **U-5 CI 覆盖率 % 门推进**（唯一非环境依赖项）：为业务模块核心类补单测 + 扩 jacoco includes 定向门，保持 backend-ci 绿
