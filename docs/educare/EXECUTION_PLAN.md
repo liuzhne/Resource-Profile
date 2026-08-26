@@ -313,6 +313,8 @@
 
 ### I-1 Hybrid Retrieval（向量 + BM25）
 
+> ⚠ **后记（2026-08-26 审计补注）**：I-1 四项曾于 2026-06-05 全部落地（commit 01d788e）；**2026-06-19 阶段二瘦身按 review B5/T9 整体删除**（commit fb4ec14，理由：知识库规模小 dense 已够、`RAG_HYBRID_ENABLED` 默认关长期未启用、简历取向删半成品），RAG 回纯 dense。下方勾选保留作历史记录，当前代码已无 hybrid 路径；`eval/hybrid_eval.py`/`hybrid_queries.jsonl`/`HYBRID_RETRIEVAL_DESIGN.md` 一并移除。
+
 - [x] **I-1.1** Docker compose 加 Elasticsearch 8.x（或评估 Milvus 2.4 内置 BM25 替代，决策点）
   - 完成于 2026-06-05：`docs/educare/HYBRID_RETRIEVAL_DESIGN.md` §1 拍板 **进程内 BM25 + RRF（不加 ES，不改 Milvus schema）**。理由：Milvus 原生 BM25 函数要 2.5+（现 2.4.1 仅 sparse 向量、要改 schema 重灌）；ES 是重容器违背"复用既有栈"；I-1 验收是专有名词 top-3 命中，dense 放大候选池 + BM25 池内重排正好命中。升级路径（Milvus 2.5 原生 BM25 / ES）接口不变
 - [x] **I-1.2** `ai-inference-service/app/services/hybrid_retrieval.py`：dense + BM25 并行召回 + RRF 融合
@@ -493,7 +495,8 @@ H-4 (ModelRouter) ──► H-2 (Loop 选模型)
   - 完成于 2026-08-26（Docker daemon v29.6.2）：① preflight 三场景实测——缺 `.env` exit 1 / dev 默认值 exit 1 / `openssl rand -hex|base64` 强随机生成 `docker/.env`（gitignored）后「体检全部通过」exit 0；② compose 校验须用叠加形式 `-f docker-compose.yml -f docker-compose.prod.yml`（单跑 prod 报 edu-network 未定义，属预期用法），config 解析 OK；③ `nginx -t` 首跑因 upstream `gateway` 与证书缺失失败，加 `--add-host gateway:127.0.0.1` + 一次性自签证书挂载后 syntax ok / test successful；④ 前端镜像 `edu-portrait-frontend:audit` 构建成功（node:20-alpine build + nginx:1.27-alpine 运行时）。**遗留真实发现**：prod 形态此前从未实例化验证过，本次为首次全链通过
 - [x] **U-3 桩 LLM 全栈起栈冒烟**（当前 HEAD 复验 §9 结论）：infra（mysql/redis/nacos/milvus）+ agent-service/mcp-student-data + `scripts/mock_llm_server.py` → `bash scripts/mcp_smoke_test.sh` + `/agent/api/v1/task/trigger/{id}` e2e 到 COMPLETED
   - 完成于 2026-08-26：栈形态＝Docker infra（mysql:8.0 全新卷自动加载 sql/init 5 脚本 21 表 / redis / nacos(healthy) / milvus+etcd+minio）+ 宿主 jar 六服务（student 8084 / mental 8085 / gateway 8080 / agent 8087 / mcp-student-data 8094 / knowledge-rag 8095，JDK17+Maven 经 brew 现装）+ 桩 LLM :8091（chat + 新增 /v1/embeddings）。**结果**：① `mcp_smoke_test.sh` **7/7 工具全绿**（student-data 四工具回真 MySQL 数据；knowledge-rag 三工具空库 fallback 正常）；② 网关触发 task=1 → `[AgentLoop] iter=1 tool=getStudentProfile → 224 bytes`（真 MCP Streamable HTTP 取数）→ iter=2 final_answer → **COMPLETED / risk_level=LOW / risk 313B + plan 271B 落库**；③ 鉴权链活体验证：无 token 401、手铸 HS256 token + Redis 会话白名单 `token:{userId}` 后 200。**途中修的真实问题（3 个 commit 内）**：a) `01_init.sql:150` mental_questionnaire 表缺逗号 + update_time 列重复定义——全新库初始化必断的真 schema bug；b) `mcp_smoke_test.sh` 两处滞后：未剥 SSE 信封致 jq 必败 + student-data 工具名蛇形≠实际驼峰 @Tool 名（§9 已知问题的残留）；c) compose nacos 服务补 `platform: linux/amd64`（该 tag 无 arm64 清单）。**环境经验**：BuildKit 内 Maven 走外网仅 B 级速率（宿主同源 MB 级），Java 服务改宿主构建运行；服务经 Nacos 注册 LAN IP 会被本机防火墙超时，需 `SPRING_CLOUD_NACOS_DISCOVERY_IP=127.0.0.1`
-- [ ] **U-4 RAG 灌库 + hybrid eval 实跑**：Milvus 起后 `/api/v1/rag/upsert` 灌真实语料（需 embedding 端点；无 GPU/embedding server 则标注环境阻塞转用户侧）→ `RAG_HYBRID_ENABLED=true` 跑 `eval/hybrid_eval.py`
+- [~] **U-4 RAG 灌库 + hybrid eval 实跑**：Milvus 起后 `/api/v1/rag/upsert` 灌真实语料（需 embedding 端点；无 GPU/embedding server 则标注环境阻塞转用户侧）→ `RAG_HYBRID_ENABLED=true` 跑 `eval/hybrid_eval.py`
+  - 机械链路完成于 2026-08-26：`init_milvus.py` 建 4 集合（dim=1024）→ 桩 LLM 新增 `/v1/embeddings`（确定性向量，dim 对齐）→ G-4 upsert API 三库灌入种子语料（chunks_written=1×3，幂等短路/删除重插路径首次真跑）→ `/api/v1/rag/retrieve` dense 检索命中。**两项转用户侧/作废**：① hybrid eval **随 B5 删除而作废**（见 §4 I-1 后记）；② "真实语料 + 真 BGE 向量"的语义检索质量验证需 GPU/embedding 服务（桩向量仅证明机械链路，无语义判别力）
 - [ ] **U-5 CI 覆盖率 % 门推进**（唯一非环境依赖项）：为业务模块核心类补单测 + 扩 jacoco includes 定向门，保持 backend-ci 绿
 - [ ] **U-6 五角色字段权限活体复核**（栈起后）：跑 `FIELD_PERMISSION_VERIFY.md §4` curl+jq 一键脚本 + `scripts/gateway_verify.sh`
 - [ ] **U-7 真 14B GPU 全链路 + Langfuse trace**（**用户侧**，无 GPU 物理限制）：llama.cpp(8091) + Runbook §1-§6 + G-1 cache 命中验收
