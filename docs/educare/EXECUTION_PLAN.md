@@ -487,7 +487,8 @@ H-4 (ModelRouter) ──► H-2 (Loop 选模型)
 
 > 由 2026-08-26 进度审计提炼：代码侧已收尾，卡点集中在运行态验证。本节按「可执行性」排序逐项解阻，每项完成后按 §0 协议回写。环境前提类（GPU）无法在本机闭环的明确标注"用户侧"，不虚勾。
 
-- [ ] **U-1 Docker daemon 起动**（解锁 U-2/U-3 的前置）
+- [x] **U-1 Docker daemon 起动**（解锁 U-2/U-3 的前置）
+  - 完成于 2026-08-26：`open -a Docker` 启动 Docker Desktop，daemon v29.6.2 就绪
 - [ ] **U-2 生产形态实例化验证**：`docker compose -f docker-compose.prod.yml config` 解析 + 前端镜像 build（`Dockerfile.frontend`）+ `nginx -t`（`docker/nginx/edu-portrait.conf`）+ `scripts/preflight-prod.sh` 真实场景复跑
 - [ ] **U-3 桩 LLM 全栈起栈冒烟**（当前 HEAD 复验 §9 结论）：infra（mysql/redis/nacos/milvus）+ agent-service/mcp-student-data + `scripts/mock_llm_server.py` → `bash scripts/mcp_smoke_test.sh` + `/agent/api/v1/task/trigger/{id}` e2e 到 COMPLETED
 - [ ] **U-4 RAG 灌库 + hybrid eval 实跑**：Milvus 起后 `/api/v1/rag/upsert` 灌真实语料（需 embedding 端点；无 GPU/embedding server 则标注环境阻塞转用户侧）→ `RAG_HYBRID_ENABLED=true` 跑 `eval/hybrid_eval.py`
