@@ -13,6 +13,13 @@ envVarGroups:
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: prod
+      # 禁用 Nacos 注册与配置拉取（Render 独立容器运行）
+      - key: SPRING_CLOUD_NACOS_DISCOVERY_ENABLED
+        value: "false"
+      - key: SPRING_CLOUD_NACOS_CONFIG_ENABLED
+        value: "false"
+      - key: SPRING_CLOUD_NACOS_CONFIG_IMPORT_CHECK_ENABLED
+        value: "false"
       # JWT 认证密钥：Render 自动生成强随机 256 位安全密钥
       - key: JWT_SECRET
         generateValue: true
@@ -69,9 +76,6 @@ services:
       - path: /*
         name: X-Frame-Options
         value: SAMEORIGIN
-      - path: /*
-        name: X-Content-Type-Options
-        value: nosniff
       - path: /assets/*
         name: Cache-Control
         value: "public, max-age=31536000, immutable"
@@ -89,8 +93,6 @@ services:
     healthCheckPath: /actuator/health
     envVars:
       - fromGroup: edu-portrait-common-env
-      - key: PORT
-        value: "8080"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0 -XX:+UseG1GC"
       - key: AUTH_SERVICE_URL
@@ -120,8 +122,6 @@ services:
     plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
-      - key: PORT
-        value: "8081"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0"
     autoDeploy: true
@@ -134,8 +134,6 @@ services:
     plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
-      - key: PORT
-        value: "8082"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0"
     autoDeploy: true
@@ -148,8 +146,6 @@ services:
     plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
-      - key: PORT
-        value: "8083"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0"
     autoDeploy: true
@@ -162,8 +158,6 @@ services:
     plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
-      - key: PORT
-        value: "8084"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0"
     autoDeploy: true
@@ -176,8 +170,6 @@ services:
     plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
-      - key: PORT
-        value: "8085"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0"
     autoDeploy: true
@@ -190,8 +182,6 @@ services:
     plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
-      - key: PORT
-        value: "8086"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0"
     autoDeploy: true
@@ -207,8 +197,6 @@ services:
     plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
-      - key: PORT
-        value: "8087"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0"
       - key: MCP_STUDENT_DATA_URL
@@ -229,8 +217,6 @@ services:
     plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
-      - key: PORT
-        value: "8094"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0"
     autoDeploy: true
@@ -243,8 +229,6 @@ services:
     plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
-      - key: PORT
-        value: "8090"
       - key: LLM_API_KEY
         sync: false
     autoDeploy: true
