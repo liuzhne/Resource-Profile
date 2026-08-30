@@ -1,12 +1,12 @@
 # ==============================================================================
-# Render Blueprint Specification (师生资源画像系统 / EduCare 生产环境配置)
-# Docs: https://render.com/docs/blueprint-spec
+# Render Blueprint Specification - 100% Free Tier (零费用免费版)
+# Docs: https://render.com/docs/free
 # ==============================================================================
 
 version: 1
 
 # ------------------------------------------------------------------------------
-# 共享环境变量组 (统一管控通用数据库、Redis、JWT密钥与 AI 模型配置)
+# 共享环境变量组 (统一管控数据库、Redis、JWT密钥与 AI 模型配置)
 # ------------------------------------------------------------------------------
 envVarGroups:
   - name: edu-portrait-common-env
@@ -19,9 +19,9 @@ envVarGroups:
       # MCP 内部通信安全 Token（纵深防御）
       - key: EDUCARE_MCP_TOKEN
         generateValue: true
-      # MySQL 数据库配置（Render 私有内网直连）
+      # MySQL 数据库连接配置 (Render 免费实例互联)
       - key: MYSQL_HOST
-        value: edu-portrait-mysql
+        value: edu-portrait-mysql.onrender.com
       - key: MYSQL_PORT
         value: "3306"
       - key: MYSQL_DATABASE
@@ -30,12 +30,12 @@ envVarGroups:
         value: edu
       - key: MYSQL_PASSWORD
         value: edu123456
-      # Redis 会话缓存配置（Render Key Value 私有内网直连）
+      # Redis 会话缓存配置 (Render 免费实例互联)
       - key: REDIS_HOST
-        value: edu-portrait-redis
+        value: edu-portrait-redis.onrender.com
       - key: REDIS_PORT
         value: "6379"
-      # AI 与大模型接口通用配置 (OpenAI / DeepSeek / 通义千问等兼容端点)
+      # AI 与大模型接口通用配置
       - key: LLM_BASE_URL
         value: https://api.openai.com/v1
       - key: LLM_MODEL
@@ -47,7 +47,7 @@ envVarGroups:
 
 services:
   # ============================================================================
-  # 1. 前端 Vue 3 单页应用 (Render Static Site - 全球 CDN 高速分发)
+  # 1. 前端 Vue 3 单页应用 (Render Static Site - 100% 免费全球 CDN)
   # ============================================================================
   - type: web
     name: edu-portrait-frontend
@@ -59,11 +59,9 @@ services:
       paths:
         - frontend/**
     routes:
-      # /api/* 接口请求反向代理到后端网关 (部署后可自动解析网关公网域名)
       - type: rewrite
         source: /api/*
         destination: https://edu-portrait-gateway.onrender.com/*
-      # SPA 路由兜底重定向，保障 Vue Router HTML5 History 模式正常跳转与刷新
       - type: rewrite
         source: /*
         destination: /index.html
@@ -80,49 +78,46 @@ services:
     autoDeploy: true
 
   # ============================================================================
-  # 2. 网关服务 (Web Service - 生产公网唯一 API 入口)
+  # 2. 网关服务 (Web Service - 100% 免费层)
   # ============================================================================
   - type: web
     name: edu-portrait-gateway
     runtime: docker
     dockerContext: ./backend
     dockerfilePath: ./docker/Dockerfile.gateway
-    plan: starter
+    plan: free
     healthCheckPath: /actuator/health
-    maxShutdownDelaySeconds: 60
     envVars:
       - fromGroup: edu-portrait-common-env
       - key: PORT
         value: "8080"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0 -XX:+UseG1GC"
-      # 内网微服务直连路由配置（通过 Render Private Network 高速互联）
       - key: AUTH_SERVICE_URL
-        value: http://edu-portrait-auth:8081
+        value: https://edu-portrait-auth.onrender.com
       - key: USER_SERVICE_URL
-        value: http://edu-portrait-user:8082
+        value: https://edu-portrait-user.onrender.com
       - key: TEACHER_SERVICE_URL
-        value: http://edu-portrait-teacher:8083
+        value: https://edu-portrait-teacher.onrender.com
       - key: STUDENT_SERVICE_URL
-        value: http://edu-portrait-student:8084
+        value: https://edu-portrait-student.onrender.com
       - key: MENTAL_SERVICE_URL
-        value: http://edu-portrait-mental:8085
+        value: https://edu-portrait-mental.onrender.com
       - key: DATA_SERVICE_URL
-        value: http://edu-portrait-data:8086
+        value: https://edu-portrait-data.onrender.com
       - key: AGENT_SERVICE_URL
-        value: http://edu-portrait-agent:8087
+        value: https://edu-portrait-agent.onrender.com
     autoDeploy: true
 
   # ============================================================================
-  # 3. 核心业务微服务群 (Private Services - 仅内网可见，杜绝未授权公网暴露)
+  # 3. 核心业务微服务群 (Web Services - 100% 免费层)
   # ============================================================================
-  - type: pserv
+  - type: web
     name: edu-portrait-auth
     runtime: docker
     dockerContext: ./backend
     dockerfilePath: ./docker/Dockerfile.auth
-    plan: starter
-    maxShutdownDelaySeconds: 60
+    plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
       - key: PORT
@@ -131,13 +126,12 @@ services:
         value: "-XX:MaxRAMPercentage=75.0"
     autoDeploy: true
 
-  - type: pserv
+  - type: web
     name: edu-portrait-user
     runtime: docker
     dockerContext: ./backend
     dockerfilePath: ./docker/Dockerfile.user
-    plan: starter
-    maxShutdownDelaySeconds: 60
+    plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
       - key: PORT
@@ -146,13 +140,12 @@ services:
         value: "-XX:MaxRAMPercentage=75.0"
     autoDeploy: true
 
-  - type: pserv
+  - type: web
     name: edu-portrait-teacher
     runtime: docker
     dockerContext: ./backend
     dockerfilePath: ./docker/Dockerfile.teacher
-    plan: starter
-    maxShutdownDelaySeconds: 60
+    plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
       - key: PORT
@@ -161,13 +154,12 @@ services:
         value: "-XX:MaxRAMPercentage=75.0"
     autoDeploy: true
 
-  - type: pserv
+  - type: web
     name: edu-portrait-student
     runtime: docker
     dockerContext: ./backend
     dockerfilePath: ./docker/Dockerfile.student
-    plan: starter
-    maxShutdownDelaySeconds: 60
+    plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
       - key: PORT
@@ -176,13 +168,12 @@ services:
         value: "-XX:MaxRAMPercentage=75.0"
     autoDeploy: true
 
-  - type: pserv
+  - type: web
     name: edu-portrait-mental
     runtime: docker
     dockerContext: ./backend
     dockerfilePath: ./docker/Dockerfile.mental
-    plan: starter
-    maxShutdownDelaySeconds: 60
+    plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
       - key: PORT
@@ -191,13 +182,12 @@ services:
         value: "-XX:MaxRAMPercentage=75.0"
     autoDeploy: true
 
-  - type: pserv
+  - type: web
     name: edu-portrait-data
     runtime: docker
     dockerContext: ./backend
     dockerfilePath: ./docker/Dockerfile.data
-    plan: starter
-    maxShutdownDelaySeconds: 60
+    plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
       - key: PORT
@@ -207,15 +197,14 @@ services:
     autoDeploy: true
 
   # ============================================================================
-  # 4. EduCare Agent 智能编排与 MCP 节点
+  # 4. EduCare Agent 智能编排与 MCP 节点 (100% 免费层)
   # ============================================================================
-  - type: pserv
+  - type: web
     name: edu-portrait-agent
     runtime: docker
     dockerContext: ./backend
     dockerfilePath: ./docker/Dockerfile.agent
-    plan: starter
-    maxShutdownDelaySeconds: 60
+    plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
       - key: PORT
@@ -223,23 +212,21 @@ services:
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0"
       - key: MCP_STUDENT_DATA_URL
-        value: http://edu-portrait-mcp-student:8094
+        value: https://edu-portrait-mcp-student.onrender.com
       - key: MCP_KNOWLEDGE_RAG_URL
-        value: http://edu-portrait-ai-inference:8095
+        value: https://edu-portrait-ai-inference.onrender.com
       - key: EDUCARE_AGENT_LOOP_ENABLED
         value: "true"
-      # 大模型 API 密钥（通过控制台提示输入安全保存）
       - key: LLM_API_KEY
         sync: false
     autoDeploy: true
 
-  - type: pserv
+  - type: web
     name: edu-portrait-mcp-student
     runtime: docker
     dockerContext: ./backend
     dockerfilePath: ./docker/Dockerfile.mcp-student-data
-    plan: starter
-    maxShutdownDelaySeconds: 60
+    plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
       - key: PORT
@@ -248,12 +235,12 @@ services:
         value: "-XX:MaxRAMPercentage=75.0"
     autoDeploy: true
 
-  - type: pserv
+  - type: web
     name: edu-portrait-ai-inference
     runtime: docker
     dockerContext: ./ai-inference-service
     dockerfilePath: ./ai-inference-service/Dockerfile
-    plan: starter
+    plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
       - key: PORT
@@ -263,26 +250,27 @@ services:
     autoDeploy: true
 
   # ============================================================================
-  # 5. 基础设施：Redis 缓存与 MySQL 数据库
+  # 5. 基础设施：Redis 缓存与 MySQL 数据库 (100% 免费层)
   # ============================================================================
-  - type: keyvalue
+  - type: web
     name: edu-portrait-redis
-    plan: starter
-    ipAllowList: [] # 拒绝公网访问，仅限 Render 私有网络连接
-    maxmemoryPolicy: allkeys-lru
-    persistenceMode: journal-snapshot
-
-  - type: pserv
-    name: edu-portrait-mysql
     runtime: image
     image:
-      url: mysql:8.0
-    plan: starter
-    disk:
-      name: mysql-data
-      mountPath: /var/lib/mysql
-      sizeGB: 10
+      url: redis:7-alpine
+    plan: free
     envVars:
+      - key: PORT
+        value: "6379"
+
+  - type: web
+    name: edu-portrait-mysql
+    runtime: docker
+    dockerContext: ./
+    dockerfilePath: ./docker/Dockerfile.mysql
+    plan: free
+    envVars:
+      - key: PORT
+        value: "3306"
       - key: MYSQL_DATABASE
         value: edu_portrait
       - key: MYSQL_USER
