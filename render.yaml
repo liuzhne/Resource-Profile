@@ -57,8 +57,9 @@ services:
   # ============================================================================
   # 1. 前端 Vue 3 单页应用 (Render Static Site - 全球 CDN 高速分发)
   # ============================================================================
-  - type: static
+  - type: web
     name: edu-portrait-frontend
+    runtime: static
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist
@@ -98,6 +99,7 @@ services:
     healthCheckPath: /actuator/health
     maxShutdownDelaySeconds: 60
     envVars:
+      - fromGroup: edu-portrait-common-env
       - key: PORT
         value: "8080"
       - key: JAVA_TOOL_OPTIONS
@@ -117,8 +119,6 @@ services:
         value: http://edu-portrait-data:8086
       - key: AGENT_SERVICE_URL
         value: http://edu-portrait-agent:8087
-    envVarGroups:
-      - edu-portrait-common-env
     autoDeploy: true
 
   # ============================================================================
@@ -132,12 +132,11 @@ services:
     plan: starter
     maxShutdownDelaySeconds: 60
     envVars:
+      - fromGroup: edu-portrait-common-env
       - key: PORT
         value: "8081"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0"
-    envVarGroups:
-      - edu-portrait-common-env
     autoDeploy: true
 
   - type: pserv
@@ -148,12 +147,11 @@ services:
     plan: starter
     maxShutdownDelaySeconds: 60
     envVars:
+      - fromGroup: edu-portrait-common-env
       - key: PORT
         value: "8082"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0"
-    envVarGroups:
-      - edu-portrait-common-env
     autoDeploy: true
 
   - type: pserv
@@ -164,12 +162,11 @@ services:
     plan: starter
     maxShutdownDelaySeconds: 60
     envVars:
+      - fromGroup: edu-portrait-common-env
       - key: PORT
         value: "8083"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0"
-    envVarGroups:
-      - edu-portrait-common-env
     autoDeploy: true
 
   - type: pserv
@@ -180,12 +177,11 @@ services:
     plan: starter
     maxShutdownDelaySeconds: 60
     envVars:
+      - fromGroup: edu-portrait-common-env
       - key: PORT
         value: "8084"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0"
-    envVarGroups:
-      - edu-portrait-common-env
     autoDeploy: true
 
   - type: pserv
@@ -196,12 +192,11 @@ services:
     plan: starter
     maxShutdownDelaySeconds: 60
     envVars:
+      - fromGroup: edu-portrait-common-env
       - key: PORT
         value: "8085"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0"
-    envVarGroups:
-      - edu-portrait-common-env
     autoDeploy: true
 
   - type: pserv
@@ -212,12 +207,11 @@ services:
     plan: starter
     maxShutdownDelaySeconds: 60
     envVars:
+      - fromGroup: edu-portrait-common-env
       - key: PORT
         value: "8086"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0"
-    envVarGroups:
-      - edu-portrait-common-env
     autoDeploy: true
 
   # ============================================================================
@@ -231,6 +225,7 @@ services:
     plan: starter
     maxShutdownDelaySeconds: 60
     envVars:
+      - fromGroup: edu-portrait-common-env
       - key: PORT
         value: "8087"
       - key: JAVA_TOOL_OPTIONS
@@ -241,8 +236,6 @@ services:
         value: http://edu-portrait-ai-inference:8095
       - key: EDUCARE_AGENT_LOOP_ENABLED
         value: "true"
-    envVarGroups:
-      - edu-portrait-common-env
     autoDeploy: true
 
   - type: pserv
@@ -253,12 +246,11 @@ services:
     plan: starter
     maxShutdownDelaySeconds: 60
     envVars:
+      - fromGroup: edu-portrait-common-env
       - key: PORT
         value: "8094"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0"
-    envVarGroups:
-      - edu-portrait-common-env
     autoDeploy: true
 
   - type: pserv
@@ -268,10 +260,9 @@ services:
     dockerfilePath: ./ai-inference-service/Dockerfile
     plan: starter
     envVars:
+      - fromGroup: edu-portrait-common-env
       - key: PORT
         value: "8090"
-    envVarGroups:
-      - edu-portrait-common-env
     autoDeploy: true
 
   # ============================================================================
