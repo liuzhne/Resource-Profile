@@ -9,9 +9,7 @@ spring:
 
   # 配置导入（替代 bootstrap 机制）
   config:
-    import:
-      - optional:nacos:user-service.yml?group=DEFAULT_GROUP
-      - optional:nacos:common.yml?group=DEFAULT_GROUP
+    import: ${SPRING_CONFIG_IMPORT:optional:nacos:user-service.yml?group=DEFAULT_GROUP,optional:nacos:common.yml?group=DEFAULT_GROUP}
 
   cloud:
     nacos:

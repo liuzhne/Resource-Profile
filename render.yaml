@@ -20,6 +20,8 @@ envVarGroups:
         value: "false"
       - key: SPRING_CLOUD_NACOS_CONFIG_IMPORT_CHECK_ENABLED
         value: "false"
+      - key: SPRING_CONFIG_IMPORT
+        value: ""
       # JWT 认证密钥：Render 自动生成强随机 256 位安全密钥
       - key: JWT_SECRET
         generateValue: true

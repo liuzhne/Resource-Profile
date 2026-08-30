@@ -29,9 +29,7 @@ spring:
 
   # Nacos 配置导入
   config:
-    import:
-      - optional:nacos:gateway-service.yml?group=DEFAULT_GROUP
-      - optional:nacos:common.yml?group=DEFAULT_GROUP
+    import: ${SPRING_CONFIG_IMPORT:optional:nacos:gateway-service.yml?group=DEFAULT_GROUP,optional:nacos:common.yml?group=DEFAULT_GROUP}
 
   cloud:
     nacos:
