@@ -7,9 +7,6 @@ spring:
   profiles:
     active: dev
 
-  # 配置导入（替代 bootstrap 机制）
-  config:
-    import: ${SPRING_CONFIG_IMPORT:optional:nacos:mental-service.yml?group=DEFAULT_GROUP,optional:nacos:common.yml?group=DEFAULT_GROUP}
 
   cloud:
     nacos:

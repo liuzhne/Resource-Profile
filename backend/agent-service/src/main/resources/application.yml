@@ -4,9 +4,6 @@ server:
 spring:
   application:
     name: agent-service
-  # 替代 bootstrap.yml：直接通过 import 加载 Nacos 配置
-  config:
-    import: ${SPRING_CONFIG_IMPORT:optional:nacos:agent-service.yml?group=DEFAULT_GROUP,optional:nacos:common.yml?group=DEFAULT_GROUP}
   cloud:
     openfeign:
       okhttp:

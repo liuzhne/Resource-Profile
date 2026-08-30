@@ -27,9 +27,6 @@ spring:
       password: ${REDIS_PASSWORD:}
       database: 0
 
-  # Nacos 配置导入
-  config:
-    import: ${SPRING_CONFIG_IMPORT:optional:nacos:gateway-service.yml?group=DEFAULT_GROUP,optional:nacos:common.yml?group=DEFAULT_GROUP}
 
   cloud:
     nacos:
