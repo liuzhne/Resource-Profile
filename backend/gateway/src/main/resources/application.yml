@@ -37,8 +37,8 @@ spring:
     nacos:
       # 注册中心
       discovery:
-        enabled: true
-        register-enabled: true
+        enabled: ${SPRING_CLOUD_NACOS_DISCOVERY_ENABLED:true}
+        register-enabled: ${SPRING_CLOUD_NACOS_DISCOVERY_REGISTER_ENABLED:true}
         server-addr: ${NACOS_SERVER:localhost:8848}
         namespace: ${NACOS_NAMESPACE:}
         username: ${NACOS_USERNAME:nacos}
@@ -49,6 +49,7 @@ spring:
 
       # 配置中心
       config:
+        enabled: ${SPRING_CLOUD_NACOS_CONFIG_ENABLED:true}
         import-check:
           enabled: false
         server-addr: ${NACOS_SERVER:localhost:8848}
