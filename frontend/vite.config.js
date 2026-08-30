@@ -25,7 +25,7 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@': resolve(__dirname, 'src')
+      '@': resolve(import.meta.dirname, 'src')
     }
   },
   css: {
@@ -47,6 +47,33 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    assetsDir: 'assets'
+    assetsDir: 'assets',
+    // 业务入口保持在 500 KiB 内；ECharts/Element Plus 等重依赖独立缓存，
+    // scripts/check-bundle-size.mjs 在本地和 CI 中执行同一套硬预算。
+    chunkSizeWarningLimit: 1200,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          const moduleId = id.replaceAll('\\', '/')
+          if (moduleId.includes('/node_modules/echarts/') || moduleId.includes('/node_modules/zrender/')) {
+            return 'charts'
+          }
+          if (
+            moduleId.includes('/node_modules/element-plus/') ||
+            moduleId.includes('/node_modules/@element-plus/icons-vue/')
+          ) {
+            return 'element-plus'
+          }
+          if (
+            moduleId.includes('/node_modules/vue/') ||
+            moduleId.includes('/node_modules/@vue/') ||
+            moduleId.includes('/node_modules/vue-router/') ||
+            moduleId.includes('/node_modules/pinia/')
+          ) {
+            return 'vue-vendor'
+          }
+        }
+      }
+    }
   }
 })

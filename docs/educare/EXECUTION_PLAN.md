@@ -4,8 +4,8 @@
 >
 > **设计源**：`IMPROVEMENT_2026_MAY.md`（v1.1，2026-05-12 拍板）
 > **创建日期**：2026-05-13
-> **最近更新**：2026-08-26（**§11 上线解阻清单执行日（同日第二笔回写）**：U-1 Docker daemon 起（v29.6.2）；U-2 生产形态首次实例化验证全过（preflight 三场景 fail-fast/放行、compose 叠加解析、nginx -t 带自签证书、前端镜像 build）；U-3 桩 LLM 全栈冒烟达成——Docker infra + 宿主 jar 九服务，`mcp_smoke_test.sh` **7/7 工具**（修 smoke 脚本 SSE 归一化 + 驼峰工具名两个滞后 bug），网关触发 task → AgentLoop iter1 真调 `getStudentProfile`（MCP 取数）→ iter2 final_answer → COMPLETED/LOW 落库；途中修 `01_init.sql:150` 问卷表缺逗号+重复列的**全新库初始化必断 schema bug** 与 compose nacos arm64 platform 缺失；U-4 灌库机械链路通（init_milvus 4 集合 + mock /v1/embeddings + G-4 upsert 首次真跑 + dense 检索命中），hybrid eval 经审计确认已随 B5 删除作废（§4 I-1 补后记）；U-5 新增 JwtUtilTest/PromptSanitizerTest 20 例 + jacoco includes 扩两安全原语 ≥80%，后端 11 模块 + Python 19 例全绿；U-6 五角色字段矩阵/gateway_verify 6 项/A6 登出吊销/IDOR 双断言全部活体验证通过。**剩余仅 U-7 真 14B GPU 全链路（用户侧）与 U-8 灰度/memory-server opt-in 实跑**。附带发现：AGENTS.md 种子账号「password=username」描述与实际哈希不符（admin/admin 登录 401））
-> **历史最近更新（进度审计）**：2026-08-26（**进度审计（纯文档回写，零代码变更）**：对照本文件 §1-§10 与仓库实际产物逐项复核。确认完结面：Phase G/H/I/J 全部 `[x]` + 四阶段审查路线图（PROJECT_REVIEW_2026_06_10 §5.1-5.4）+ 安全增量（A3 MCP token 全链 client+8094+8095 / 8087 自鉴权 / 字段权限 list-page 漏脱敏修复 / backend-ci 测试门禁）+ 上线前工程化；产物在位核验通过：`.github/workflows/{backend-ci,eval-gate}.yml`、`docker/docker-compose.{prod,monitoring}.yml`、`scripts/preflight-prod.sh`、`backend/mcp-student-data` 与 `ai-inference-service/app/mcp/` 双端 server、`eval/run_eval.py`。剩余项收敛为三类——① 用户侧 e2e 实跑验证（GPU/Docker 环境）、② CI 覆盖率 % 门（唯一非环境依赖项）、③ Phase I 储备项 I-2/I-4/I-6 不排期）
+> **最近更新**：2026-08-27（**R-1~R-4 完结**：JDK 17 Enforcer fail-fast；补 user/teacher 授权并将两控制器与 MCP token filter 纳入 ≥80% JaCoCo 门；Python 新增 RAG/upsert/MCP ASGI 集成测试；Redis/MCP 凭据改为生产硬门且 Redis requirepass/消费者接线闭环。全后端 177 例、Python 25 例通过；下一步 R-5 真 AI/可观测验收）
+> **历史最近更新（进度审计）**：2026-08-26（**进度审计（纯文档回写，零代码变更）**：对照本文件 §1-§11 与仓库实际产物逐项复核。确认完结面：Phase G/H/I/J 全部 `[x]` + 四阶段审查路线图（PROJECT_REVIEW_2026_06_10 §5.1-5.4）+ 安全增量（A3 MCP token 全链 client+8094+8095 / 8087 自鉴权 / 字段权限 list-page 漏脱敏修复 / backend-ci 测试门禁）+ 上线前工程化；产物在位核验通过：`.github/workflows/{backend-ci,eval-gate}.yml`、`docker/docker-compose.{prod,monitoring}.yml`、`scripts/preflight-prod.sh`、`backend/mcp-student-data` 与 `ai-inference-service/app/mcp/` 双端 server、`eval/run_eval.py`。剩余项收敛为三类——① 用户侧 e2e 实跑验证（GPU/Docker 环境）、② CI 覆盖率 % 门（唯一非环境依赖项）、③ Phase I 储备项 I-2/I-4/I-6 不排期）
 > **历史最近更新（上线前工程化）**：2026-06-27（**上线前工程化（非 Phase 任务，按上线清单逐项）**：① ESLint 链路(0/0)；② 生产密钥 fail-fast（compose 密钥参数化 + `docker/.env.example` + `scripts/preflight-prod.sh` + `sql/prod/` 改密 + `.gitignore` 护密钥/证书/备份）；③ auth-service 9 登录链单测(100% 覆盖) + jacoco 定向覆盖率门(`AuthServiceImpl`≥80%)接 CI；④ 生产部署形态（12 主机端口收敛 `127.0.0.1` + nginx TLS/SPA/SSE + `Dockerfile.frontend` + `docker-compose.prod.yml` + `docs/DEPLOY.md`）；⑤ 可观测（gateway actuator + `docker-compose.monitoring.yml` Prometheus/Grafana + 看板 + 4 告警规则）；⑥ 备份/压测（`backup-mysql.sh`/`restore-mysql.sh` + k6 `load-test.js`）；⑦ 补 `questionnaire.vue` 查看按钮。dev 默认不变、prod 经 `docker/.env` 覆盖 + preflight fail-fast。全后端 `mvn clean test` 11 模块绿 + 前端 build/lint(0/0) 绿；Docker daemon 未起→镜像 build/`nginx -t`/全栈 smoke + GPU 实跑(Task #7)留用户侧。详见 §6）
 > **历史最近更新（孤儿清理）**：2026-06-24（**孤儿代码清理（工程卫生，非 Phase 任务）**：两轮清理——① 96 游离空目录；② Python 死代码 `rag_service.py`/`embedding_service.py`（被 `rag_pipeline`/`embedding_client` 取代，0 引用）；③ 前端 4 孤儿文件 + 2 冗余依赖（`vue-echarts`/`js-cookie`）；④ **删 `AgentLoopDryRunController`**（兑现 H-2.3"切流后视情况删除"）；⑤ 过期文档 `GATEWAY_ISSUE_SUMMARY.md` + `AGENTS.md` 同步 CLAUDE.md。工具：knip/vulture/类级引用扫描 + 人工复核（Java 框架类 / Python FastAPI 端点判定非孤儿予以保留）。验证：前端 build 绿 + 后端 BUILD SUCCESS（17 filter 测试）+ Python 19 例。详见 §6）
 > **历史最近更新（P1 收尾）**：2026-06-20（**P1 收尾项全做完 + 一处真实 bug 修复**：① **8087 自鉴权** `AgentSelfAuthFilter`（闭合 AccessGuard 内网信任在直连 8087 下的 tokenless 缺口，豁免 actuator/_internal，7 单测）；② **8095 knowledge-rag 服务端 token** `McpTokenMiddleware`（纯 ASGI 保流式，5 单测；临装 fastmcp 2.14 验证 `http_app(middleware=)` 真挂栈后卸载）—— 至此 A3 全链 token 闭合（client+8094+8095）；③ **字段权限对 list/page 漏脱敏 bug** —— `FieldPermissionAdviceWalkTest` 端到端单测抓到 `walk()` 先判 isLeaf 致容器(java.*)被当叶子跳过，列表响应从不脱敏；修复容器递归提到 isLeaf 前；④ e2e runbook 触发链补登录取 token（鉴权 ON 下可跑）。6 个独立 commit，`mvn clean install` 11 模块全绿 + Python 19 例全过。剩余仅用户侧 e2e 起栈验证 + CI 覆盖率%门）
@@ -45,8 +45,8 @@
 
 ## 1. 下一步指针（Next Action）
 
-**当前阶段**（2026-08-26 复核确认，下述状态经仓库实际产物审计仍有效）：Phase G/H/I/J 完结。`docs/PROJECT_REVIEW_2026_06_10.md` 四阶段路线图（目标＝简历/答辩）**代码侧全部收尾 + P1 收尾项全做完**：阶段一安全止血（§5.1）+ 阶段二瘦身（§5.2）+ 阶段三规范健壮性（§5.3）+ 阶段四工程卫生（§5.4）+ A3 全链 MCP token（8094/8095/client）+ 8087 自鉴权 + CI 测试门禁。亮点链定型＝**Agent 风险画像全链**（AgentLoop 默认主路径 + 2 MCP + RAG 真灌库）。`mvn clean install` 11 模块全绿 + Python 19 例全过。
-**下一步**：执行 §11 上线解阻清单——U-1~U-6 已于 2026-08-26 全部完成（含 3 个真实 bug 修复与 20 例新单测）；**仅剩 U-7 真 14B GPU 全链路 + Langfuse trace（用户侧，无 GPU 物理限制）与 U-8 灰度切流/memory-server opt-in 实跑**。
+**当前阶段**（2026-08-27）：Phase G/H/I/J 的保留代码已落地，当前进入 §12 **Release Readiness**。目标是让瘦身后的真实交付面可上线：AgentLoop 默认主路径 + student-data/knowledge-rag 两个 MCP + dense RAG + 干预闭环 + 安全/运维基线。历史上已删除的 memory-server、Hybrid Retrieval、ModelRouter、百分比灰度不属于上线范围，不恢复、不作为环境阻塞。
+**下一步**：执行 **R-5.1 Langfuse 真 trace 验收**；随后按 R-5.2~R-5.4 完成 Qwen 14B、BGE embedding/dense baseline 与真模型质量门。R-1~R-4 已闭环；U-8 已完成范围裁决，不再重建已删除能力。
 - **I-5 完结**：`intervention_feedback` 表 + agent-service 反馈提交/月报/CSV 接口 + `ReportDetail.vue` 评分组件
 - **I-1 完结**：进程内 BM25 + RRF（不加 ES/不改 Milvus schema）`hybrid_retrieval.py` + `RAG_HYBRID_ENABLED` 灰度 + `eval/hybrid_eval.py` top-3 命中率评测 + `HYBRID_RETRIEVAL_DESIGN.md`
 - **待实跑（用户侧）**：① 灰度切流 `agent_loop_canary.sh`（需 MCP server + llama.cpp + Nacos）② memory-server 8096 mcp-inspector 验 3 tool ③ hybrid `RAG_HYBRID_ENABLED=true` 跑 `eval/hybrid_eval.py`（需 Milvus 已灌库）④ 加载 `05_intervention_feedback.sql` 后验证反馈提交/CSV ⑤ G-2.3/G-3.4 既有待实跑项
@@ -91,7 +91,7 @@
 
 - [x] **G-2.1** 设计字段权限模型（角色 → 字段白名单），输出 `docs/educare/FIELD_PERMISSION.md`
   - 完成于 2026-05-13：覆盖 6 个角色 × 4 档分级（PUBLIC/MEDIUM/HIGH/EXTREME）矩阵 + 4 个 entity 字段总表；落地方案选 `@SensitiveField` 注解 + `ResponseBodyAdvice`；拆出 G-2.2 五个子步 a-e；行级权限与 audit_log 明确推迟 Phase I-4
-- [ ] **G-2.2** 按 `FIELD_PERMISSION.md §6` 落地实施
+- [x] **G-2.2** 按 `FIELD_PERMISSION.md §6` 落地实施
   - [x] **G-2.2-a** `common/.../security/`：`SensitiveField` 注解 + `Sensitivity` 枚举 + `FieldPermissionAdvice`（`@RestControllerAdvice` 实现 `ResponseBodyAdvice`）+ 反射缓存
     - 完成于 2026-05-13：4 个新文件（Sensitivity / SensitiveField / RequestContext / FieldPermissionAdvice）；advice 用 `@ConditionalOnProperty(educare.field-permission.enabled=true)` 默认关闭，避免链路未补齐时误伤；矩阵实现见 `FieldPermissionAdvice.canSee`，与 `FIELD_PERMISSION.md §4` 列级部分一致；`mvn -pl common -am compile` 通过
   - [x] **G-2.2-b** JWT 加 `roles: List<String>` claim：`auth-service/.../AuthServiceImpl.java` 登录时查 `sys_role` 写入；`common/.../JwtUtil.java` 加 `parseRoles()`
@@ -102,9 +102,10 @@
     - 完成于 2026-05-13：Student（birthDate=HIGH, gpa/credits=MEDIUM）；Teacher（birthDate=HIGH, education=MEDIUM）；MentalAssessment（score/result/suggestion=EXTREME, level=MEDIUM）；User × 2（auth-service + user-service 各一份，password 加 `@JsonIgnore`，email/phone=HIGH）；4/5 模块 `mvn compile` 通过，mental-service 因预先存在 `Question` 实体字段缺失导致编译断（与本任务无关，见 §8）；`gender` 等未列出字段不标，默认 PUBLIC，linter 上线后再补
   - [x] **G-2.2-e** `common` 模块加 `@AutoConfiguration`，所有 service 自动启用 advice 与 filter
     - 完成于 2026-05-13：新增 `FieldPermissionAutoConfiguration`（`@AutoConfiguration` + `@ConditionalOnProperty(educare.field-permission.enabled=true)`）；3 个 `@Bean`：advice / filter / `FilterRegistrationBean<RoleContextFilter>`（url `/*`，order `LOWEST_PRECEDENCE - 100`，让 auth filter 先跑）；登记到 `META-INF/spring/...AutoConfiguration.imports` 第 4 行；`mvn -pl common,auth-service,student-service,teacher-service,user-service -am compile` 通过
-- [~] **G-2.3** 前端去除 "假脱敏"（信任后端返回），手动测试 admin / teacher / counselor / academic_advisor / student 五角色对同一 studentId 详情的字段集 diff，与 `FIELD_PERMISSION.md §4` 矩阵对齐
+- [x] **G-2.3** 前端去除 "假脱敏"（信任后端返回），手动测试 admin / teacher / counselor / academic_advisor / student 五角色对同一 studentId 详情的字段集 diff，与 `FIELD_PERMISSION.md §4` 矩阵对齐
   - 代码部分完成于 2026-05-13：`frontend/src/directives/permission.js` JSDoc 改写为 "UX-only，非安全防线"（G-2.2 后后端 advice 是权威）；新增 `docs/educare/FIELD_PERMISSION_VERIFY.md`（启用配置、5 角色测试账号、3 接口期望矩阵、一键 curl+jq 脚本、5 类故障排查表、通过标准 checklist）
   - 手测部分 ⏳ 待用户运行 `FIELD_PERMISSION_VERIFY.md §4` 脚本；通过后回写勾选 + 顶部加"验收通过"
+  - 完成于 2026-08-26：U-6 五角色字段矩阵、gateway_verify、登出吊销与 IDOR 活体断言全部通过，见 §11 U-6。
 
 ### G-3 启用 E-1 定时扫描 + Prometheus 监控
 
@@ -286,6 +287,8 @@
 
 ### H-5 Mem0 集成 + memory-server（视进度）
 
+> ⚠ **后记（2026-08-26 审计补注）**：H-5 三项曾于 2026-06-05 落地；**2026-06-19 阶段二瘦身按 review B1/T5 整体删除**（commit 75fc3f4，理由：四层记忆照搬 MemGPT 投入完整却零产出、agent 从未接入 memory-server）。Python memory_store/mcp/memory_* 与 Java MemoryGateway、compose memory-mcp(8096)、MEMORY_DESIGN.md 均已移除。下方勾选保留作历史记录，当前代码无记忆子系统。
+
 - [x] **H-5.1** 评估 Mem0 vs Letta 当前稳定性，做选型决策
   - 完成于 2026-06-05：`docs/educare/MEMORY_DESIGN.md` §1 拍板 **自实现轻量记忆层**（不引 Mem0/Letta SDK）。理由：Mem0 SDK 演进快、破坏性变更多且其向量/LLM 抽象与本项目 Milvus+llama.cpp 重叠；Letta 太重且自带 agent 框架与 H-2 AgentLoop 冲突。接口（recall/save/summarize）比实现重要，先用 Redis 跑通闭环，未来换 Mem0 只替换 `memory_store` 实现层、MCP 工具签名不变
 - [x] **H-5.2** 实现记忆分层（Working / Episodic / Semantic / Procedural）
@@ -459,6 +462,7 @@ H-4 (ModelRouter) ──► H-2 (Loop 选模型)
   - **J-1 关口**：`mvn clean install` 11 模块 SUCCESS，agent-service **51 测试**全绿（J-1 新增 17），Python 33 全过
 
 ### J-2 能力对齐
+> ⚠ **后记（2026-08-26 审计补注）**：J-2.2 的 MemoryGateway 随 H-5 记忆子系统一并被 B1/T5 删除（commit 75fc3f4）；J-2.1 子代理与 J-2.3/J-2.4 仍在代码中。
 - [x] **J-2.1 子代理编排（agent-as-tool，= I-3）**
   - 完成于 2026-06-06：`SubAgent` + `SubAgentToolCallback`（受限 AgentLoop 包成工具，独立 context + 工具子集，无递归）+ `SubAgentRegistry`（班主任/心理咨询师/学业导师，技能正文做 prompt，默认关 `educare.agent.subagents.enabled`）；`AgentTaskServiceImpl` 主工具 = MCP + 子代理工具。`SubAgentToolCallbackTest` 5 case
 - [x] **J-2.2 记忆接线（接 H-5 memory-server）**
@@ -496,7 +500,7 @@ H-4 (ModelRouter) ──► H-2 (Loop 选模型)
   - 完成于 2026-08-26（Docker daemon v29.6.2）：① preflight 三场景实测——缺 `.env` exit 1 / dev 默认值 exit 1 / `openssl rand -hex|base64` 强随机生成 `docker/.env`（gitignored）后「体检全部通过」exit 0；② compose 校验须用叠加形式 `-f docker-compose.yml -f docker-compose.prod.yml`（单跑 prod 报 edu-network 未定义，属预期用法），config 解析 OK；③ `nginx -t` 首跑因 upstream `gateway` 与证书缺失失败，加 `--add-host gateway:127.0.0.1` + 一次性自签证书挂载后 syntax ok / test successful；④ 前端镜像 `edu-portrait-frontend:audit` 构建成功（node:20-alpine build + nginx:1.27-alpine 运行时）。**遗留真实发现**：prod 形态此前从未实例化验证过，本次为首次全链通过
 - [x] **U-3 桩 LLM 全栈起栈冒烟**（当前 HEAD 复验 §9 结论）：infra（mysql/redis/nacos/milvus）+ agent-service/mcp-student-data + `scripts/mock_llm_server.py` → `bash scripts/mcp_smoke_test.sh` + `/agent/api/v1/task/trigger/{id}` e2e 到 COMPLETED
   - 完成于 2026-08-26：栈形态＝Docker infra（mysql:8.0 全新卷自动加载 sql/init 5 脚本 21 表 / redis / nacos(healthy) / milvus+etcd+minio）+ 宿主 jar 六服务（student 8084 / mental 8085 / gateway 8080 / agent 8087 / mcp-student-data 8094 / knowledge-rag 8095，JDK17+Maven 经 brew 现装）+ 桩 LLM :8091（chat + 新增 /v1/embeddings）。**结果**：① `mcp_smoke_test.sh` **7/7 工具全绿**（student-data 四工具回真 MySQL 数据；knowledge-rag 三工具空库 fallback 正常）；② 网关触发 task=1 → `[AgentLoop] iter=1 tool=getStudentProfile → 224 bytes`（真 MCP Streamable HTTP 取数）→ iter=2 final_answer → **COMPLETED / risk_level=LOW / risk 313B + plan 271B 落库**；③ 鉴权链活体验证：无 token 401、手铸 HS256 token + Redis 会话白名单 `token:{userId}` 后 200。**途中修的真实问题（3 个 commit 内）**：a) `01_init.sql:150` mental_questionnaire 表缺逗号 + update_time 列重复定义——全新库初始化必断的真 schema bug；b) `mcp_smoke_test.sh` 两处滞后：未剥 SSE 信封致 jq 必败 + student-data 工具名蛇形≠实际驼峰 @Tool 名（§9 已知问题的残留）；c) compose nacos 服务补 `platform: linux/amd64`（该 tag 无 arm64 清单）。**环境经验**：BuildKit 内 Maven 走外网仅 B 级速率（宿主同源 MB 级），Java 服务改宿主构建运行；服务经 Nacos 注册 LAN IP 会被本机防火墙超时，需 `SPRING_CLOUD_NACOS_DISCOVERY_IP=127.0.0.1`
-- [~] **U-4 RAG 灌库 + hybrid eval 实跑**：Milvus 起后 `/api/v1/rag/upsert` 灌真实语料（需 embedding 端点；无 GPU/embedding server 则标注环境阻塞转用户侧）→ `RAG_HYBRID_ENABLED=true` 跑 `eval/hybrid_eval.py`
+- [x] **U-4 RAG 灌库机械链路（瘦身后为 dense）**：Milvus 起后 `/api/v1/rag/upsert` 灌库并验证 dense retrieve；真 embedding 语义质量移交 R-5.3
   - 机械链路完成于 2026-08-26：`init_milvus.py` 建 4 集合（dim=1024）→ 桩 LLM 新增 `/v1/embeddings`（确定性向量，dim 对齐）→ G-4 upsert API 三库灌入种子语料（chunks_written=1×3，幂等短路/删除重插路径首次真跑）→ `/api/v1/rag/retrieve` dense 检索命中。**两项转用户侧/作废**：① hybrid eval **随 B5 删除而作废**（见 §4 I-1 后记）；② "真实语料 + 真 BGE 向量"的语义检索质量验证需 GPU/embedding 服务（桩向量仅证明机械链路，无语义判别力）
 - [x] **U-5 CI 覆盖率 % 门推进**（唯一非环境依赖项）：为业务模块核心类补单测 + 扩 jacoco includes 定向门，保持 backend-ci 绿
   - 完成于 2026-08-26：新增 `common` 两测试类——`JwtUtilTest` 8 例（A5 密钥 fail-fast 空/短、签发解析往返、roles claim 缺失/非集合降级、过期抛 ExpiredJwtException、签名篡改拒、异密钥拒；注：纯单测不触发 `@PostConstruct`，须显式 `init()`）+ `PromptSanitizerTest` 8 例（控制字符清洗但保留 \n\t、行首角色前缀剥离含中文「系统：」且非行首不误伤、截断标记、递归清洗仅触字符串叶、wrap 标签消毒）；jacoco includes 追加 `com.edu.common.util.{JwtUtil,PromptSanitizer}` ≥80% LINE。验证：`mvn -pl common test` 40 例全绿 + jacoco check 过 + **全后端 `mvn clean test` 11 模块 BUILD SUCCESS** + Python unittest 19 例全过
@@ -504,7 +508,64 @@ H-4 (ModelRouter) ──► H-2 (Loop 选模型)
   - 完成于 2026-08-26（9 服务活栈：auth/user/teacher/student/mental/gateway/agent/mcp-student-data/knowledge-rag）：① 造数：counselor/academic_advisor 两角色 + test_* 五账号（htpasswd 生成 bcrypt）经真 `/auth/login` 取 token；② **字段矩阵与 FIELD_PERMISSION.md §4 完全一致**——/student/1 birthDate(HIGH)：admin✓ counselor✓ acadv✗ teacher✗ student✗；gpa(MEDIUM)：student✗ 其余✓；/user/1 email/phone(HIGH) 同模式 + password 字段对全角色缺失（@JsonIgnore）✓；③ `gateway_verify.sh` **6/6 全过**（公开路径放行/准入 401/无效 token 401/_internal 403/**登出吊销 A6 活体验证**）；④ IDOR 活体断言：test_student(8) 读 student 1(属3) → 业务码 403「无权访问该学生档案」，acadvs(6) 查 mental userId=3 → 403「无权访问他人心理测评数据」（注：业务层拒绝走 Result.error(403)+HTTP200 信封，验脚本须比对 body.code 而非 HTTP status）。**附带发现**：种子账号默认口令与 AGENTS.md「password 等于 username」描述不符（admin/admin 登录 401），文档需订正或轮换种子哈希
 - [ ] **U-7 真 14B GPU 全链路 + Langfuse trace**（**用户侧**，无 GPU 物理限制）：llama.cpp(8091) + Runbook §1-§6 + G-1 cache 命中验收
   - 执行计划（2026-08-26 固化，拆两个半场）：① **U-7a Langfuse 半场（无 GPU 可做）**：`--profile langfuse` 起 postgres+langfuse-server → 控制台/API 建 project 取 key → agent-service/ai-inference 注入 LANGFUSE_* 重启 → 触发任务 → Langfuse API 查到 trace 即闭环；② **U-7b 真 14B 半场**：本机 48GB M4 Pro 具备 Metal 跑 Q4_14B 条件——brew install llama.cpp → hf-mirror 拉 qwen2.5-14b Q4_K_M（~9GB，网络允许则后台下）→ 起 :8091 → 切真模型全栈 e2e + `verify_prompt_cache.sh` 验 G-1 命中率 ≥80%；下载不可行则此半场明确留用户侧并注明带宽卡点
-- [ ] **U-8 灰度切流/memory-server 实跑**（栈全起后 opt-in）：`agent_loop_canary.sh`、memory-server(8096) 三 tool mcp-inspector 验证
-  - 执行计划（2026-08-26 固化，同日续）：① U-9 先行（种子口令核实，独立无依赖）→ ② U-8a memory-server(8096) 起服 + MCP 握手/三 tool curl 实测（Redis 已在栈内）→ ③ U-8b `agent_loop_canary.sh` 逐档灰度（前置全活：Nacos 无鉴权 API/jq/bash5/mock LLM/Prometheus actuator 均已就绪）
+- [x] **U-8 范围裁决：不恢复 memory-server / 百分比灰度**
+  - 完成于 2026-08-27：两项分别已由 review B1/B4 决策删除或降级，且当前交付目标是瘦身后的单布尔 AgentLoop 主路径；重新实现属于扩 scope，不是上线验证。保留真实主路径/legacy fallback 对比到 R-5.4。
 - [x] **U-9 种子账号口令核实与修正**：实测种子哈希真实明文 → 二选一（订正文档 OR 轮换种子哈希对齐「password=username」约定）→ 同步运行库与 AGENTS.md/deploy 文档 → gateway_verify.sh 默认凭据复验通过
   - 完成于 2026-08-26（U-8 前置先行）：① python bcrypt 对旧种子哈希 `$2a$10$N.zmd...` 跑 12 个常见候选（password/admin/123456/edu123456 等）**全部不中**——判定为教程复制来的来源不明孤儿凭据；② 决策走「轮换种子哈希对齐文档既有约定」（E2E_RUNBOOK/DEPLOY/AGENTS.md 本就写 password=username，改文档反而三处撒谎）：`01_init.sql` 三账号各生成独立 bcrypt（不再共用一哈希，顺带消除同盐表象）+ 运行库 UPDATE 同步；③ 复验：admin/admin 经网关登录 200 + `gateway_verify.sh` **默认凭据** 6/6 全过。prod 侧既有 `sql/prod/01_rotate_default_passwords.sql` 兜底不受影响
+
+---
+
+## 12. Release Readiness —— 上线原子任务（2026-08-27）
+
+> **上线完成定义**：R-1~R-6 全部完成；默认 ReAct 路径与可选 native 路径安全语义一致；生产依赖无 high/critical 已知漏洞；CI 覆盖后端/Python/前端/eval；真模型、真 embedding、Langfuse 与生产 compose 均有当前运行证据。储备项 I-2/I-4/I-6 不属于本轮上线范围。
+
+### R-1 MCP 工具契约闭环（首要阻塞）
+
+- [x] **R-1.1** 统一 Java MCP 工具名：显式声明为跨语言一致的 snake_case，保证 Agent prompt、Skills、SubAgent 白名单、ToolGuard 与 ToolDefinition 同名
+  - 完成于 2026-08-27：`StudentDataTools` 4 个 `@Tool` 显式声明 snake_case，同步 smoke/mock 调用契约。
+- [x] **R-1.2** 补真实 ToolDefinition 名称回归：覆盖 4 个 Java + 3 个 Python 工具、SubAgent 子集过滤、心理工具敏感守卫
+  - 完成于 2026-08-27：新增 `StudentDataToolsContractTest`、`SubAgentRegistryContractTest`、`test_mcp_tool_contract.py`，契约与既有 `ToolGuardTest` 共同覆盖。
+- [x] **R-1.3** 跑 agent-service/mcp-student-data 定向测试 + 全后端测试
+  - 完成于 2026-08-27：JDK 17 下 `mvn -B -ntp clean test` 11 模块 160 例全绿；Python unittest 20 例全绿。
+
+### R-2 native 协议安全语义闭环
+
+- [x] **R-2.1** native 调用前包装/过滤 ToolCallback，确保每次工具调用经过 ToolGuard
+  - 完成于 2026-08-27：`AgentLoop.guardNativeTools` 包装 native callbacks，拒绝调用返回 `TOOL_DENIED` 且不触发下游工具。
+- [x] **R-2.2** native 最终输出 validator 失败时不得返回 COMPLETED；定义失败/修复语义并补测试
+  - 完成于 2026-08-27：新增 `AgentLoopStatus.VALIDATION_ERROR`，validator 失败保留 trace 并按失败态返回。
+- [x] **R-2.3** 证明 react/native 两路在守卫、输出校验、hooks 的可观察语义一致
+  - 完成于 2026-08-27：`AgentLoopNativeTest` 扩至 6 例，覆盖允许/拒绝工具、输出校验和 start/iteration/finish hooks；全量回归通过。
+
+### R-3 前端供应链与 CI
+
+- [x] **R-3.1** 升级 axios/echarts 及传递依赖，`npm audit --omit=dev` 达到 high=0、critical=0
+  - 完成于 2026-08-27：锁定 axios 1.20.0、ECharts 6.1.0、PostCSS 8.5.26、nanoid 3.3.18，并升级 Vite 8.2.2；完整 `npm audit` 0 漏洞。
+- [x] **R-3.2** 新增 frontend-ci：npm ci + lint（无写模式）+ build + audit high 门
+  - 完成于 2026-08-27：新增 `.github/workflows/frontend-ci.yml` 与 `lint:check`，干净安装、只读 lint、生产构建、audit 门均本地通过。
+- [x] **R-3.3** 处理 >500KB 主 chunk（拆包或记录可接受预算并设显式门）
+  - 完成于 2026-08-27：Vite 函数式 manualChunks 将主入口拆至 64.0 KiB；`check-bundle-size.mjs` 固化入口 500 KiB/单 chunk 1200 KiB/总 JS 2500 KiB 预算并接 CI。
+
+### R-4 测试、工具链与生产安全门
+
+- [x] **R-4.1** 增加 Java 17 Maven Enforcer/Toolchains fail-fast，避免默认 JDK 26 + Lombok 静默失效
+  - 完成于 2026-08-27：父 POM `maven-enforcer-plugin` 强制 `[17,18)`；JDK 26 validate 按明确提示失败，JDK 17 全模块放行。
+- [x] **R-4.2** 为 user-service、teacher-service、mcp-student-data 补核心安全/控制器测试；扩 JaCoCo 定向门
+  - 完成于 2026-08-27：补 user/teacher 端点授权与 13 例控制器测试、MCP token filter 4 例；三类纳入定向行覆盖率 ≥80% 门。
+- [x] **R-4.3** 为 Python FastAPI RAG/upsert/MCP 增加无外部服务集成测试
+  - 完成于 2026-08-27：ASGI transport + stub 覆盖 RAG 降级、upsert 鉴权/写入、MCP adapter 限流与响应整形；Python 共 25 例，CI 安装最小测试依赖。
+- [x] **R-4.4** 生产 preflight 把 EDUCARE_MCP_TOKEN/REDIS_PASSWORD 从建议项升级为硬门
+  - 完成于 2026-08-27：两凭据均要求非占位且 ≥32 字符；compose 启用 Redis requirepass 并向 gateway/Agent/Python RAG 全消费者传递，新增 preflight 正反例 CI 回归。
+
+### R-5 真实 AI 与可观测验收
+
+- [ ] **R-5.1** Langfuse self-hosted 起栈、建 project、注入 key，触发任务并从 API/UI 查到 agent.loop + llm.chat trace
+- [ ] **R-5.2** 真 Qwen 14B 启动并跑完整 AgentLoop；真实工具名调用成功、final_answer 合法落库
+- [ ] **R-5.3** 真 BGE embedding 灌入真实语料，跑检索质量集并固化 dense baseline
+- [ ] **R-5.4** 真模型下 AgentLoop/legacy 对比 + prompt cache ≥80% + 50 例风险 eval ≥0.85
+
+### R-6 上线总验收
+
+- [ ] **R-6.1** CI 全门复验：backend/Python/frontend/eval 全绿，无 high/critical 生产依赖漏洞
+- [ ] **R-6.2** 生产 compose + TLS/nginx + gateway auth + 字段权限 + IDOR + MCP token + 备份恢复 + 监控告警全栈验收
+- [ ] **R-6.3** 更新 DEPLOY/E2E runbook 与本文件证据，形成上线签字清单；仅在全部证据齐全后声明可上线

@@ -42,7 +42,7 @@ public class StudentDataTools {
     // -----------------------------------------------------------------------
     // Tool 1：学生基础档案
     // -----------------------------------------------------------------------
-    @Tool(description = "获取学生基础档案：姓名、性别、年级、专业、院系、班级、学籍状态。" +
+    @Tool(name = "get_student_profile", description = "获取学生基础档案：姓名、性别、年级、专业、院系、班级、学籍状态。" +
             "用于 Agent Loop 拿到学生身份后做后续画像分析。" +
             "入参 studentId 来自 student_info.id（不是学号）。")
     public StudentProfileDto getStudentProfile(
@@ -70,7 +70,7 @@ public class StudentDataTools {
     // -----------------------------------------------------------------------
     // Tool 2：成绩历史
     // -----------------------------------------------------------------------
-    @Tool(description = "获取学生历次成绩：逐门课程的学分/分数/绩点 + 区间加权平均分与平均绩点。" +
+    @Tool(name = "get_academic_history", description = "获取学生历次成绩：逐门课程的学分/分数/绩点 + 区间加权平均分与平均绩点。" +
             "term 为空表示全部学期；指定 term（如 '2025-2026-1'）则仅返回该学期。" +
             "用于 LLM 评估学业表现、识别挂科或下滑趋势。")
     public AcademicHistoryDto getAcademicHistory(
@@ -122,7 +122,7 @@ public class StudentDataTools {
     // -----------------------------------------------------------------------
     // Tool 3：心理评估指标
     // -----------------------------------------------------------------------
-    @Tool(description = "获取学生最近一次心理评估的因子分与风险等级。" +
+    @Tool(name = "get_mental_indicators", description = "获取学生最近一次心理评估的因子分与风险等级。" +
             "返回 found=false 表示该学生未做过任何评估（不报错）。" +
             "用于 LLM 判断心理风险及是否需要介入。")
     public MentalIndicatorDto getMentalIndicators(
@@ -162,7 +162,7 @@ public class StudentDataTools {
     // -----------------------------------------------------------------------
     // Tool 4：考勤
     // -----------------------------------------------------------------------
-    @Tool(description = "获取学生考勤数据：区间内逐日明细 + summary（总天数、出勤数、迟到数、缺勤数、请假数、出勤率）。" +
+    @Tool(name = "get_attendance", description = "获取学生考勤数据：区间内逐日明细 + summary（总天数、出勤数、迟到数、缺勤数、请假数、出勤率）。" +
             "from/to 均可空：默认查询最近 30 天。日期格式 yyyy-MM-dd。" +
             "用于 LLM 评估学生出勤稳定性，结合成绩判断是否有学习投入下滑。")
     public AttendanceDto getAttendance(

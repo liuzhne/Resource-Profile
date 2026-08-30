@@ -27,5 +27,5 @@ USER appuser
 # 暴露端口
 EXPOSE 8090
 
-# 启动（单 worker，因为 GPU 推理在宿主机，容器内无 GPU 竞争）
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8090", "--workers", "1"]
+# 启动（单 worker，支持 Render $PORT 动态绑定，默认 8090）
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8090} --workers 1"]

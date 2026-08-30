@@ -27,6 +27,7 @@ services:
       # D 阶段：与 Java 服务共用同一 Redis（embedding/RAG 缓存）
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
     networks:
       - edu-network
     depends_on:
@@ -136,6 +137,12 @@ services:
   redis:
     image: redis:7-alpine
     container_name: edu-portrait-redis
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    command:
+      - sh
+      - -c
+      - if [ -n "$$REDIS_PASSWORD" ]; then exec redis-server --requirepass "$$REDIS_PASSWORD"; else exec redis-server; fi
     ports:
       - "127.0.0.1:6379:6379"
     volumes:
@@ -199,11 +206,16 @@ services:
       NACOS_PASSWORD: ${NACOS_PASSWORD:-nacos}
       # A5：JWT 密钥（≥32 字符，否则 JwtUtil fail-fast）。dev 默认仅供本地起栈，生产务必经 env/Nacos 覆盖。
       JWT_SECRET: ${JWT_SECRET:-edu-portrait-dev-jwt-secret-change-in-prod-0123456789}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
     ports:
       - "127.0.0.1:8080:8080"
     depends_on:
       nacos:
         condition: service_healthy
+      redis:
+        condition: service_started
     networks:
       - edu-network
 
@@ -263,6 +275,7 @@ services:
       MILVUS_PORT: 19530
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       EMBEDDING_BASE_URL: http://host.docker.internal:8092/v1
       EMBEDDING_MODEL: bge-large-zh-v1.5
       RERANKER_BASE_URL: http://host.docker.internal:8093

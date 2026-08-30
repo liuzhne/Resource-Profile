@@ -55,7 +55,7 @@ set +a
 echo "=== 体检 $ENV_FILE ==="
 
 # 必须覆盖（留空 / 等于 dev 默认 / 仍含 change-me 即 fail）
-REQUIRED="MYSQL_ROOT_PASSWORD MYSQL_PASSWORD NACOS_PASSWORD NACOS_AUTH_TOKEN MINIO_ACCESS_KEY MINIO_SECRET_KEY JWT_SECRET"
+REQUIRED="MYSQL_ROOT_PASSWORD MYSQL_PASSWORD NACOS_PASSWORD NACOS_AUTH_TOKEN MINIO_ACCESS_KEY MINIO_SECRET_KEY JWT_SECRET REDIS_PASSWORD EDUCARE_MCP_TOKEN"
 
 for var in $REQUIRED; do
   val="$(getval "$var")"
@@ -93,20 +93,25 @@ if [[ -n "$tok" && "$tok" != *change-me* && "$tok" != "$(dev_default NACOS_AUTH_
   fi
 fi
 
-# 建议项（不硬卡，但生产强烈建议）
+# 内部服务凭据强度：均为生产硬门。
 mcp="$(getval EDUCARE_MCP_TOKEN)"
-if [[ -z "$mcp" ]]; then
-  warn "EDUCARE_MCP_TOKEN 为空：MCP 仅靠 127.0.0.1 网络隔离，建议设 ≥32 字符做纵深防御"
-elif [[ "$mcp" == *change-me* ]]; then
-  err "EDUCARE_MCP_TOKEN 仍是模板占位（含 change-me）"
-else
-  ok "EDUCARE_MCP_TOKEN 已设置"
+if [[ -n "$mcp" && "$mcp" != *change-me* ]]; then
+  mcp_len=${#mcp}
+  if (( mcp_len < 32 )); then
+    err "EDUCARE_MCP_TOKEN 长度 $mcp_len < 32"
+  else
+    ok "EDUCARE_MCP_TOKEN 长度 $mcp_len ≥ 32"
+  fi
 fi
 
-if [[ -z "$(getval REDIS_PASSWORD)" ]]; then
-  warn "REDIS_PASSWORD 为空：生产建议设密码并让 redis 以 --requirepass 启动"
-else
-  ok "REDIS_PASSWORD 已设置"
+redis_password="$(getval REDIS_PASSWORD)"
+if [[ -n "$redis_password" && "$redis_password" != *change-me* ]]; then
+  redis_len=${#redis_password}
+  if (( redis_len < 32 )); then
+    err "REDIS_PASSWORD 长度 $redis_len < 32"
+  else
+    ok "REDIS_PASSWORD 长度 $redis_len ≥ 32"
+  fi
 fi
 
 echo ""

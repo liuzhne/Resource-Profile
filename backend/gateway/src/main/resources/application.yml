@@ -1,5 +1,5 @@
 server:
-  port: 8080
+  port: ${PORT:8080}
 
 # P0 鉴权门：默认开（校验 JWT 签名 + 未过期，拦截未登录直达业务服务）。
 # 本地免登录联调 / 灰度排障可改 false（@Value 非 @RefreshScope，改后重启网关生效）。
@@ -69,7 +69,7 @@ spring:
       routes:
         # 引擎服务
         - id: agent-service
-          uri: lb://agent-service
+          uri: ${AGENT_SERVICE_URL:lb://agent-service}
           predicates:
             - Path=/agent/**
           filters:
@@ -77,7 +77,7 @@ spring:
 
         # 认证服务
         - id: auth-service
-          uri: lb://auth-service
+          uri: ${AUTH_SERVICE_URL:lb://auth-service}
           predicates:
             - Path=/auth/**
           filters:
@@ -85,7 +85,7 @@ spring:
 
         # 用户服务
         - id: user-service
-          uri: lb://user-service
+          uri: ${USER_SERVICE_URL:lb://user-service}
           predicates:
             - Path=/user/**
           filters:
@@ -93,7 +93,7 @@ spring:
 
         # 教师服务
         - id: teacher-service
-          uri: lb://teacher-service
+          uri: ${TEACHER_SERVICE_URL:lb://teacher-service}
           predicates:
             - Path=/teacher/**
           filters:
@@ -101,7 +101,7 @@ spring:
 
         # 学生服务
         - id: student-service
-          uri: lb://student-service
+          uri: ${STUDENT_SERVICE_URL:lb://student-service}
           predicates:
             - Path=/student/**
           filters:
@@ -109,7 +109,7 @@ spring:
 
         # 心理健康服务
         - id: mental-service
-          uri: lb://mental-service
+          uri: ${MENTAL_SERVICE_URL:lb://mental-service}
           predicates:
             - Path=/mental/**
           filters:
@@ -117,7 +117,7 @@ spring:
 
         # 数据分析服务
         - id: data-service
-          uri: lb://data-service
+          uri: ${DATA_SERVICE_URL:lb://data-service}
           predicates:
             - Path=/data/**
           filters:

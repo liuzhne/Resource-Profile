@@ -162,6 +162,29 @@
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>3.5.0</version>
+                <executions>
+                    <execution>
+                        <id>enforce-java-17</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <!-- Spring Boot 3.2/Lombok 1.18.30 构建链仅在 JDK 17 验证；错误 JDK 立即失败。 -->
+                                <requireJavaVersion>
+                                    <version>[17,18)</version>
+                                    <message>EduCare backend requires JDK 17. Set JAVA_HOME to a JDK 17 installation.</message>
+                                </requireJavaVersion>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.13.0</version>
                 <configuration>
@@ -213,6 +236,10 @@
                                         <!-- U-5 扩项（2026-08-26）：JWT 原语与 Prompt 注入清洗，JwtUtilTest/PromptSanitizerTest 覆盖 -->
                                         <include>com.edu.common.util.JwtUtil</include>
                                         <include>com.edu.common.util.PromptSanitizer</include>
+                                        <!-- R-4.2：用户/教师管理授权与 MCP 应用层凭据门 -->
+                                        <include>com.edu.user.controller.UserController</include>
+                                        <include>com.edu.teacher.controller.TeacherController</include>
+                                        <include>com.edu.mcp.student.security.McpTokenFilter</include>
                                     </includes>
                                     <limits>
                                         <limit>

@@ -1,5 +1,5 @@
 server:
-  port: 8087
+  port: ${PORT:8087}
 
 spring:
   application:
@@ -55,7 +55,7 @@ spring:
         identity-value: ${NACOS_AUTH_IDENTITY_VALUE:security}
         file-extension: yml
   datasource:
-    url: jdbc:mysql://${MYSQL_HOST:localhost}:3306/edu_portrait?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:edu_portrait}?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
     username: ${MYSQL_USER:edu}
     password: ${MYSQL_PASSWORD:edu123456}
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -68,13 +68,13 @@ spring:
 
   ai:
     openai:
-      api-key: dummy
-      base-url: http://localhost:8091 #http://host.docker.internal:8091
+      api-key: ${SPRING_AI_OPENAI_API_KEY:${LLM_API_KEY:dummy}}
+      base-url: ${SPRING_AI_OPENAI_BASE_URL:${LLM_BASE_URL:http://localhost:8091}}
       chat:
         options:
-          model: qwen2.5-32b-instruct-q4_k_m
-          temperature: 0.3
-          max-tokens: 2048
+          model: ${SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL:${LLM_MODEL:qwen2.5-32b-instruct-q4_k_m}}
+          temperature: ${LLM_TEMPERATURE:0.3}
+          max-tokens: ${LLM_MAX_TOKENS:2048}
     # H-2.2：MCP client 接两个 Streamable HTTP server。
     # 启动时 Spring AI 1.1.6 auto-config 对每个 connection 走 initialize → tools/list 拉工具清单，
     # 暴露合并的 ToolCallbackProvider Bean。两端均为 fail-fast：server 起不来则 agent-service 起不来。

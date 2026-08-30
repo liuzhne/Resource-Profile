@@ -44,7 +44,7 @@ RISK_JSON = json.dumps({
 # 之后返回 final_answer。用于真实栈演示 ReAct 经 MCP 调真工具。设 MOCK_LLM_CALL_TOOL=0 可关。
 _react_calls = {"n": 0}
 _TOOL_TURN = json.dumps(
-    {"thought": "先取该生画像", "action": {"tool": "getStudentProfile", "args": {"studentId": 1}}},
+    {"thought": "先取该生画像", "action": {"tool": "get_student_profile", "args": {"studentId": 1}}},
     ensure_ascii=False)
 _CALL_TOOL_FIRST = os.getenv("MOCK_LLM_CALL_TOOL", "1") == "1"
 

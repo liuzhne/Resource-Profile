@@ -7,8 +7,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
+import org.springframework.ai.tool.metadata.ToolMetadata;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -279,7 +281,7 @@ public class AgentLoop {
             content = chatClient.prompt()
                     .system(req.systemPrompt() == null ? "" : req.systemPrompt())
                     .user(req.userPrompt())
-                    .toolCallbacks(req.tools())
+                    .toolCallbacks(guardNativeTools(req.tools()))
                     .call()
                     .content();
         } catch (Exception e) {
@@ -291,14 +293,59 @@ public class AgentLoop {
         if (validator != null) {
             FinalAnswerValidator.Result vr = validator.validate(content);
             if (!vr.valid()) {
-                log.warn("[AgentLoop][{}] native final_answer 不合格（native 不做修复轮）：{}",
+                recordTrace(req, traces, new AgentTrace(1, content, null, null, null, null,
+                        System.currentTimeMillis() - t0, "final-answer-invalid: " + vr.correction()));
+                log.warn("[AgentLoop][{}] native final_answer 不合格，终止为 VALIDATION_ERROR：{}",
                         req.taskTag(), vr.correction());
+                return finishRun(req,
+                        new AgentLoopResult(AgentLoopStatus.VALIDATION_ERROR, content, traces, 1), runStart);
             }
         }
         recordTrace(req, traces, new AgentTrace(1, content, null, null, null, null,
                 System.currentTimeMillis() - t0, null));
         log.info("[AgentLoop][{}] native COMPLETED finalAnswer={}", req.taskTag(), abbreviate(content));
         return finishRun(req, new AgentLoopResult(AgentLoopStatus.COMPLETED, content, traces, 1), runStart);
+    }
+
+    /**
+     * native 协议由 Spring AI 执行隐式工具循环，因此必须包装每个 callback，
+     * 让实际调用（而非仅工具注册）仍经过与 ReAct 相同的 ToolGuard。
+     */
+    List<ToolCallback> guardNativeTools(List<ToolCallback> tools) {
+        if (toolGuard == null || tools == null || tools.isEmpty()) {
+            return tools == null ? List.of() : tools;
+        }
+        return tools.stream().<ToolCallback>map(delegate -> new ToolCallback() {
+            @Override
+            public ToolDefinition getToolDefinition() {
+                return delegate.getToolDefinition();
+            }
+
+            @Override
+            public ToolMetadata getToolMetadata() {
+                return delegate.getToolMetadata();
+            }
+
+            @Override
+            public String call(String toolInput) {
+                return guardedCall(delegate, toolInput, null);
+            }
+
+            @Override
+            public String call(String toolInput, ToolContext toolContext) {
+                return guardedCall(delegate, toolInput, toolContext);
+            }
+        }).toList();
+    }
+
+    private String guardedCall(ToolCallback delegate, String toolInput, ToolContext toolContext) {
+        String toolName = delegate.getToolDefinition().name();
+        ToolGuard.GuardDecision decision = toolGuard.check(toolName, toolInput);
+        if (!decision.allowed()) {
+            log.warn("[AgentLoop][native] tool={} 被守卫拒绝: {}", toolName, decision.reason());
+            return "TOOL_DENIED: " + decision.reason();
+        }
+        return toolContext == null ? delegate.call(toolInput) : delegate.call(toolInput, toolContext);
     }
 
     // -------- 拼接 prompt --------

@@ -173,11 +173,11 @@ echo
 echo "[1/2] student-data (端口 8094, Java)"
 if handshake "student-data" "$STUDENT_DATA_URL"; then
     list_tools "student-data" "$STUDENT_DATA_URL" \
-        getStudentProfile getAcademicHistory getMentalIndicators getAttendance
-    call_tool "student-data" "$STUDENT_DATA_URL" getStudentProfile   "{\"studentId\":$STUDENT_ID}"
-    call_tool "student-data" "$STUDENT_DATA_URL" getAcademicHistory  "{\"studentId\":$STUDENT_ID}"
-    call_tool "student-data" "$STUDENT_DATA_URL" getMentalIndicators "{\"studentId\":$STUDENT_ID}"
-    call_tool "student-data" "$STUDENT_DATA_URL" getAttendance        "{\"studentId\":$STUDENT_ID}"
+        get_student_profile get_academic_history get_mental_indicators get_attendance
+    call_tool "student-data" "$STUDENT_DATA_URL" get_student_profile   "{\"studentId\":$STUDENT_ID}"
+    call_tool "student-data" "$STUDENT_DATA_URL" get_academic_history  "{\"studentId\":$STUDENT_ID}"
+    call_tool "student-data" "$STUDENT_DATA_URL" get_mental_indicators "{\"studentId\":$STUDENT_ID}"
+    call_tool "student-data" "$STUDENT_DATA_URL" get_attendance        "{\"studentId\":$STUDENT_ID}"
 fi
 
 # ---- [2/2] knowledge-rag ----
