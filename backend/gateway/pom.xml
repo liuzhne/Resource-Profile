@@ -45,6 +45,12 @@
             <groupId>com.edu</groupId>
             <artifactId>common</artifactId>
             <version>${project.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-web</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <!-- Reactive Redis：A6 登出撤销 —— 网关校验 token:{userId} 会话白名单（reactive 适配 WebFlux 网关） -->
