@@ -13,6 +13,8 @@ envVarGroups:
     envVars:
       - key: PORT
         value: "10000"
+      - key: SERVER_PORT
+        value: "10000"
       - key: SPRING_PROFILES_ACTIVE
         value: prod
       # 禁用 Nacos 注册与配置拉取（Render 独立容器运行）

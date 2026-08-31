@@ -42,7 +42,21 @@ def create_app() -> FastAPI:
     app.include_router(agent.router)
     app.include_router(rag.router)
     app.include_router(diagnostics.router)
-    app.include_router(rag_upsert.router)
+    # 注册 MCP Streamable HTTP 协议端点 (/mcp)
+    try:
+        from starlette.middleware import Middleware
+        from app.mcp.tools import get_mcp
+        from app.mcp.token_middleware import McpTokenMiddleware
+
+        mcp = get_mcp()
+        mcp_app = mcp.http_app(
+            path="/",
+            transport="http",
+            middleware=[Middleware(McpTokenMiddleware, token=settings.MCP_TOKEN)],
+        )
+        app.mount("/mcp", mcp_app)
+    except Exception as e:
+        print(f"Warning: Failed to mount MCP endpoint: {e}")
 
     return app
 
