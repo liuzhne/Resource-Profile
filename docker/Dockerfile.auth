@@ -18,7 +18,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
 
 COPY --from=builder /build/auth-service/target/*.jar app.jar
 
-ENV PORT=10000
-EXPOSE 10000
+EXPOSE 8081
 
 ENTRYPOINT ["java", "-jar", "app.jar"]

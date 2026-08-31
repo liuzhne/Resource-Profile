@@ -137,6 +137,11 @@ management:
   endpoint:
     health:
       show-details: when_authorized
+      probes:
+        enabled: true
+  health:
+    redis:
+      enabled: false
   metrics:
     tags:
       application: ${spring.application.name}
