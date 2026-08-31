@@ -11,10 +11,6 @@ version: 1
 envVarGroups:
   - name: edu-portrait-common-env
     envVars:
-      - key: PORT
-        value: "10000"
-      - key: SERVER_PORT
-        value: "10000"
       - key: MANAGEMENT_HEALTH_REDIS_ENABLED
         value: "false"
       - key: SPRING_PROFILES_ACTIVE
@@ -101,6 +97,8 @@ services:
     healthCheckPath: /actuator/health
     envVars:
       - fromGroup: edu-portrait-common-env
+      - key: PORT
+        value: "8080"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0 -XX:+UseG1GC"
       - key: AUTH_SERVICE_URL
@@ -130,6 +128,8 @@ services:
     plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
+      - key: PORT
+        value: "8081"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0"
     autoDeploy: true
@@ -142,6 +142,8 @@ services:
     plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
+      - key: PORT
+        value: "8082"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0"
     autoDeploy: true
@@ -154,6 +156,8 @@ services:
     plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
+      - key: PORT
+        value: "8083"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0"
     autoDeploy: true
@@ -166,6 +170,8 @@ services:
     plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
+      - key: PORT
+        value: "8084"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0"
     autoDeploy: true
@@ -178,6 +184,8 @@ services:
     plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
+      - key: PORT
+        value: "8085"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0"
     autoDeploy: true
@@ -190,6 +198,8 @@ services:
     plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
+      - key: PORT
+        value: "8086"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0"
     autoDeploy: true
@@ -205,6 +215,8 @@ services:
     plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
+      - key: PORT
+        value: "8087"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0"
       - key: MCP_STUDENT_DATA_URL
@@ -225,6 +237,8 @@ services:
     plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
+      - key: PORT
+        value: "8094"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0"
     autoDeploy: true
@@ -237,6 +251,8 @@ services:
     plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
+      - key: PORT
+        value: "8090"
       - key: LLM_API_KEY
         sync: false
     autoDeploy: true
