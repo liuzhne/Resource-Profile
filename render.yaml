@@ -99,6 +99,8 @@ services:
       - fromGroup: edu-portrait-common-env
       - key: PORT
         value: "8080"
+      - key: SERVER_PORT
+        value: "8080"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0 -XX:+UseG1GC"
       - key: AUTH_SERVICE_URL
@@ -130,6 +132,8 @@ services:
       - fromGroup: edu-portrait-common-env
       - key: PORT
         value: "8081"
+      - key: SERVER_PORT
+        value: "8081"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0"
     autoDeploy: true
@@ -143,6 +147,8 @@ services:
     envVars:
       - fromGroup: edu-portrait-common-env
       - key: PORT
+        value: "8082"
+      - key: SERVER_PORT
         value: "8082"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0"
@@ -158,6 +164,8 @@ services:
       - fromGroup: edu-portrait-common-env
       - key: PORT
         value: "8083"
+      - key: SERVER_PORT
+        value: "8083"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0"
     autoDeploy: true
@@ -171,6 +179,8 @@ services:
     envVars:
       - fromGroup: edu-portrait-common-env
       - key: PORT
+        value: "8084"
+      - key: SERVER_PORT
         value: "8084"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0"
@@ -186,6 +196,8 @@ services:
       - fromGroup: edu-portrait-common-env
       - key: PORT
         value: "8085"
+      - key: SERVER_PORT
+        value: "8085"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0"
     autoDeploy: true
@@ -199,6 +211,8 @@ services:
     envVars:
       - fromGroup: edu-portrait-common-env
       - key: PORT
+        value: "8086"
+      - key: SERVER_PORT
         value: "8086"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0"
@@ -216,6 +230,8 @@ services:
     envVars:
       - fromGroup: edu-portrait-common-env
       - key: PORT
+        value: "8087"
+      - key: SERVER_PORT
         value: "8087"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0"
@@ -238,6 +254,8 @@ services:
     envVars:
       - fromGroup: edu-portrait-common-env
       - key: PORT
+        value: "8094"
+      - key: SERVER_PORT
         value: "8094"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0"
