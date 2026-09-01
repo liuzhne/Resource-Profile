@@ -1,12 +1,12 @@
 # ==============================================================================
-# Render Blueprint Specification - 100% Free Tier (零费用免费版)
+# Render Blueprint Specification - 免费预览部署
 # Docs: https://render.com/docs/free
 # ==============================================================================
 
-version: 1
+version: "1"
 
 # ------------------------------------------------------------------------------
-# 共享环境变量组 (统一管控数据库、Redis、JWT密钥与 AI 模型配置)
+# 共享环境变量组（Aiven MySQL 凭据由 Render Dashboard 手工维护，不写入仓库）
 # ------------------------------------------------------------------------------
 envVarGroups:
   - name: edu-portrait-common-env
@@ -30,31 +30,15 @@ envVarGroups:
       # MCP 内部通信安全 Token（纵深防御）
       - key: EDUCARE_MCP_TOKEN
         generateValue: true
-      # MySQL 数据库连接配置 (Render 免费实例互联)
-      - key: MYSQL_HOST
-        value: edu-portrait-mysql.onrender.com
-      - key: MYSQL_PORT
-        value: "3306"
-      - key: MYSQL_DATABASE
-        value: edu_portrait
-      - key: MYSQL_USER
-        value: edu
-      - key: MYSQL_PASSWORD
-        value: edu123456
-      # Redis 会话缓存配置 (Render 免费实例互联)
-      - key: REDIS_HOST
-        value: edu-portrait-redis.onrender.com
-      - key: REDIS_PORT
-        value: "6379"
-      # AI 与大模型接口通用配置
-      - key: LLM_BASE_URL
-        value: https://api.openai.com/v1
-      - key: LLM_MODEL
-        value: qwen2.5-14b
-      - key: LLM_TEMPERATURE
-        value: "0.3"
-      - key: LLM_MAX_TOKENS
-        value: "2048"
+      # Aiven Free MySQL 强制 TLS；每个微服务最多占 3 条连接，避免耗尽免费实例连接数。
+      - key: MYSQL_SSL_MODE
+        value: REQUIRED
+      - key: DB_MAXIMUM_POOL_SIZE
+        value: "3"
+      - key: DB_MINIMUM_IDLE
+        value: "0"
+      - key: DB_MAX_LIFETIME_MS
+        value: "600000"
 
 services:
   # ============================================================================
@@ -66,6 +50,10 @@ services:
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist
+    envVars:
+      # 未配置 LLM 供应商前隐藏 AI 预警与 LLM 追踪入口。
+      - key: VITE_AI_ENABLED
+        value: "false"
     buildFilter:
       paths:
         - frontend/**
@@ -117,6 +105,11 @@ services:
         value: https://edu-portrait-data.onrender.com
       - key: AGENT_SERVICE_URL
         value: https://edu-portrait-agent.onrender.com
+      - key: SPRING_DATA_REDIS_URL
+        fromService:
+          type: keyvalue
+          name: edu-portrait-kv
+          property: connectionString
     autoDeploy: true
 
   # ============================================================================
@@ -136,6 +129,11 @@ services:
         value: "8081"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0"
+      - key: SPRING_DATA_REDIS_URL
+        fromService:
+          type: keyvalue
+          name: edu-portrait-kv
+          property: connectionString
     autoDeploy: true
 
   - type: web
@@ -250,9 +248,14 @@ services:
       - key: MCP_CLIENT_REQUEST_TIMEOUT
         value: 120s
       - key: EDUCARE_AGENT_LOOP_ENABLED
-        value: "true"
-      - key: LLM_API_KEY
-        sync: false
+        value: "false"
+      - key: SPRING_AI_MCP_CLIENT_ENABLED
+        value: "false"
+      - key: SPRING_DATA_REDIS_URL
+        fromService:
+          type: keyvalue
+          name: edu-portrait-kv
+          property: connectionString
     autoDeploy: true
 
   - type: web
@@ -286,40 +289,16 @@ services:
       - fromGroup: edu-portrait-common-env
       - key: PORT
         value: "8090"
-      - key: LLM_API_KEY
-        sync: false
     healthCheckPath: /api/v1/health
     autoDeploy: true
 
   # ============================================================================
-  # 5. 基础设施：Redis 缓存与 MySQL 数据库 (100% 免费层)
+  # 5. 基础设施：Render 托管 Key Value（MySQL 使用外部 Aiven Free MySQL）
   # ============================================================================
-  - type: web
-    name: edu-portrait-redis
-    runtime: image
-    image:
-      url: redis:7-alpine
+  - type: keyvalue
+    name: edu-portrait-kv
     plan: free
-    envVars:
-      - key: PORT
-        value: "6379"
-
-  - type: web
-    name: edu-portrait-mysql
-    runtime: docker
-    dockerContext: ./
-    dockerfilePath: ./docker/Dockerfile.mysql
-    plan: free
-    envVars:
-      - key: PORT
-        value: "3306"
-      - key: MYSQL_DATABASE
-        value: edu_portrait
-      - key: MYSQL_USER
-        value: edu
-      - key: MYSQL_PASSWORD
-        value: edu123456
-      - key: MYSQL_ROOT_PASSWORD
-        value: root123456
-      - key: TZ
-        value: Asia/Shanghai
+    region: oregon
+    ipAllowList: []
+    maxmemoryPolicy: noeviction
+    persistenceMode: off

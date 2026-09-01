@@ -51,10 +51,14 @@ spring:
         identity-value: ${NACOS_AUTH_IDENTITY_VALUE:security}
         file-extension: yml
   datasource:
-    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:edu_portrait}?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:edu_portrait}?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&sslMode=${MYSQL_SSL_MODE:PREFERRED}
     username: ${MYSQL_USER:edu}
     password: ${MYSQL_PASSWORD:edu123456}
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: ${DB_MAXIMUM_POOL_SIZE:3}
+      minimum-idle: ${DB_MINIMUM_IDLE:0}
+      max-lifetime: ${DB_MAX_LIFETIME_MS:600000}
 
   redis:
     host: ${REDIS_HOST:localhost}
@@ -71,11 +75,11 @@ spring:
           model: ${SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL:${LLM_MODEL:qwen2.5-32b-instruct-q4_k_m}}
           temperature: ${LLM_TEMPERATURE:0.3}
           max-tokens: ${LLM_MAX_TOKENS:2048}
-    # H-2.2：MCP client 接两个 Streamable HTTP server。
-    # 启动时 Spring AI 1.1.6 auto-config 对每个 connection 走 initialize → tools/list 拉工具清单，
-    # 暴露合并的 ToolCallbackProvider Bean。两端均为 fail-fast：server 起不来则 agent-service 起不来。
+    # H-2.2：MCP client 接两个 Streamable HTTP server。enabled=false 时不初始化任何 MCP 组件，
+    # 供 Render 的“暂未配置 LLM/RAG”模式安全启动；默认 true 仍保持 initialize/tools-list fail-fast。
     mcp:
       client:
+        enabled: ${SPRING_AI_MCP_CLIENT_ENABLED:true}
         # Render free web services can take 50s+ to wake. Keep fail-fast semantics, but allow
         # enough time for both public MCP dependencies to complete a cold start.
         request-timeout: ${MCP_CLIENT_REQUEST_TIMEOUT:120s}

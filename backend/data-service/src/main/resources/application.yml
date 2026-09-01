@@ -32,10 +32,14 @@ spring:
         file-extension: yml
 
   datasource:
-    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:edu_portrait}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:edu_portrait}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&sslMode=${MYSQL_SSL_MODE:PREFERRED}
     username: ${MYSQL_USER:root}
     password: ${MYSQL_PASSWORD:root}
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: ${DB_MAXIMUM_POOL_SIZE:3}
+      minimum-idle: ${DB_MINIMUM_IDLE:0}
+      max-lifetime: ${DB_MAX_LIFETIME_MS:600000}
 
   redis:
     host: ${REDIS_HOST:localhost}

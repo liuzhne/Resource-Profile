@@ -403,6 +403,57 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
   `lint:check` 0 error（1 条既有 Prettier warning）且生产构建通过，`render.yaml` YAML 解析与
   `git diff --check` 通过。修复后 Blueprint 同步、持久数据层与端到端登录仍待验证。
 
+### AIVEN-RENDER-20260901：Aiven Free MySQL + 无 LLM 的 Render 部署
+
+- 前提：登录 Aiven Console 与 Render Blueprint `exs-da9vgj942hec7392v2vg`；本机安装 MySQL 8
+  client。Aiven Free MySQL 处于 `Running`，Overview/Quick connect 中可读取 host、port、user、
+  password；不要把这些值提交到 Git。
+- 初始化数据库：先执行会创建 `edu_portrait` 的 `01`，再以该库为默认库顺序执行 `02`~`05`。
+
+  ```bash
+  export MYSQL_HOST='<aiven-host>' MYSQL_PORT='<aiven-port>' MYSQL_USER='avnadmin'
+  export MYSQL_PWD='<aiven-password>'
+
+  mysql --ssl-mode=REQUIRED --host="$MYSQL_HOST" --port="$MYSQL_PORT" \
+    --user="$MYSQL_USER" < sql/init/01_init.sql
+
+  for sql_file in sql/init/02_questionnaire_extension.sql \
+    sql/init/03_agent_init.sql sql/init/04_student_extras.sql \
+    sql/init/05_intervention_feedback.sql; do
+    mysql --ssl-mode=REQUIRED --host="$MYSQL_HOST" --port="$MYSQL_PORT" \
+      --user="$MYSQL_USER" --database=edu_portrait < "$sql_file"
+  done
+
+  unset MYSQL_PWD
+  ```
+
+- Render 配置：在 `edu-portrait-common-env` 手工设置 `MYSQL_HOST`、`MYSQL_PORT`、
+  `MYSQL_DATABASE=edu_portrait`、`MYSQL_USER=avnadmin`、`MYSQL_PASSWORD`。Blueprint 文件只声明
+  `MYSQL_SSL_MODE=REQUIRED` 与连接池上限，不声明凭据。同步 Blueprint 后确认新建
+  `edu-portrait-kv`，Gateway/Auth/Agent 的 `SPRING_DATA_REDIS_URL` 均引用其私网
+  `connectionString`。
+- 无 LLM 判据：`SPRING_AI_MCP_CLIENT_ENABLED=false`、`EDUCARE_AGENT_LOOP_ENABLED=false`、
+  `VITE_AI_ENABLED=false`；不填写 `LLM_API_KEY`。前端侧边栏不出现“AI 预警”和“LLM 追踪”，核心
+  业务路由仍可使用。
+- 线上验证：
+
+  1. Aiven 执行 `SELECT COUNT(*) FROM edu_portrait.sys_user;` 返回至少 3。
+  2. `GET https://edu-portrait-gateway.onrender.com/actuator/health` 返回 200/UP。
+  3. 使用 `admin/admin` 经前端登录，`/user/info` 成功；登出后旧 token 再请求返回 401。
+  4. 管理员数据面板、教师列表、学生列表、心理概览至少各打开一次且无 JDBC/Redis 错误。
+  5. Render 日志中 JDBC URL 使用 Aiven host，且没有 MCP initialize 阻止 Agent 启动。
+- 排错：TLS 错误先核对 `MYSQL_SSL_MODE=REQUIRED` 与 Aiven service 状态；`Too many connections`
+  核对每服务 `DB_MAXIMUM_POOL_SIZE=3`；登录成功但后续 401 时检查三处
+  `SPRING_DATA_REDIS_URL` 是否指向同一个 Key Value；SQL 导入失败时从首个失败文件停止，修正后只
+  重跑该文件及后续脚本。
+- 回滚：应用可回退 Render 上一 deploy；数据库凭据可切回另一个已验证的外部 MySQL。不要回退到
+  普通 Web Service MySQL/Redis。Aiven 已承载写入后，删除/重建服务前必须先导出备份。AI 开关只在
+  供应商和 MCP/RAG 同时就绪后恢复。
+- 验证状态：2026-09-01 本地 JDK 17 Reactor 177 例、前端 lint（0 error、1 条既有 warning）和
+  `VITE_AI_ENABLED=false/true` 两种生产构建通过；`render.yaml` 通过 Ruby/Psych 语法解析、Render
+  官方 JSON Schema 与 `git diff --check`。Aiven 登录、服务创建、SQL 导入、Blueprint 同步和线上
+  业务验收待完成。
+
 ## 10. 修复方案的运行手册更新模板
 
 每个修复方案在本文件追加或修改可执行步骤，并在维护记录使用与 `ARCHITECTURE.md`、`DECISIONS.md` 相同标识：
@@ -424,3 +475,4 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
 |---|---|---|
 | 2026-09-01 / DOC-BASELINE | 按当前脚本、CI、compose 和执行计划初始化启动/测试/排错/发布手册 | 文档链接与命令静态核对；未执行真实服务和生产发布 |
 | 2026-09-01 / RENDER-DEPLOY-20260901 | 增加 Render MCP/Feign 冷启动与 MySQL 协议排错、验证和回滚步骤 | 本地后端 125 例、前端构建通过；修复后云端复验待完成 |
+| 2026-09-01 / AIVEN-RENDER-20260901 | 增加 Aiven 初始化、Render 凭据注入、无 LLM 判据与回滚步骤 | 本地后端 177 例、前端构建、YAML 语法通过；云端待登录后验证 |

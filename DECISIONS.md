@@ -143,6 +143,31 @@
   auth 日志底层为 `SocketTimeoutException: Connect timed out`。本地 JDK 17 定向 Reactor 125 例与
   前端构建通过；修复后的云端复验待完成。
 
+## ADR-016：Render 免费预览采用 Aiven MySQL，并在未配置供应商时关闭 AI 启动依赖
+
+- 状态：已采纳；云端凭据与数据导入待完成
+- 日期/修复标识：2026-09-01 / AIVEN-RENDER-20260901
+- 背景：部署方已选择 Aiven Free MySQL，并明确暂不配置 LLM 供应商。原 Blueprint 把 MySQL 和
+  Redis 作为普通 Free Web Service 暴露，二进制协议不可达；Agent 还会在启动时初始化 MCP，从而让
+  尚未配置的 AI 依赖阻塞整套系统。
+- 选择：关系库使用外部 Aiven Free MySQL，JDBC 强制 `sslMode=REQUIRED`；七个连接池上限统一为 3、
+  最小空闲为 0。Redis 会话改用 Render Free Key Value 的私网连接串。Aiven 凭据仅在 Render 环境组
+  手工维护，`render.yaml` 不包含连接秘密。无 LLM 阶段关闭 Spring AI MCP client 和 AgentLoop，
+  前端构建时不注册 AI 预警/LLM 追踪路由。
+- 原因：Aiven 提供真正的 MySQL 协议、持久存储与 TLS，能被 Render 公网出站连接；小连接池适配免费
+  实例连接上限。Render Key Value 与 Spring Data Redis 协议兼容，且其私网连接串可以由 Blueprint
+  自动注入。显式关闭 AI 比保留一个必然报错的入口更符合当前可用能力。
+- 放弃方案：继续使用 Render Web Service 承载 MySQL/Redis 已被线上 timeout 证伪；Render 付费私有
+  MySQL 需要计费授权；TiDB 不是原生 MySQL且需要额外兼容验证；用假 LLM key 或 mock 端点会把演示
+  能力误报成真实供应商能力。
+- 后果：Aiven Free 单节点没有生产 SLA；Render Free Key Value 重启会清空会话，用户需重新登录。
+  AI 页面在重新构建前不可见，直连 Agent API 也不作为当前验收面。恢复 AI 时必须同时配置
+  `LLM_BASE_URL/LLM_MODEL/LLM_API_KEY`、可达 MCP/RAG 服务，将两个开关打开并重建前端。
+- 证据：[`render.yaml`](./render.yaml)、七个服务的 `application.yml` 与
+  [`frontend/src/router/index.js`](./frontend/src/router/index.js)；JDK 17 Reactor 177 例、前端
+  `VITE_AI_ENABLED=false` 生产构建和 YAML 语法解析已通过。Aiven 实例创建、SQL `01`~`05` 导入、
+  Render Blueprint 同步与线上登录仍待验证。
+
 ## 新决策模板
 
 ```markdown
@@ -164,3 +189,4 @@
 |---|---|---|
 | 2026-09-01 / DOC-BASELINE | 从当前实现与执行计划整理有效决策，并建立修复文档规则 | 新增 ADR-001~014；未改变运行时代码 |
 | 2026-09-01 / RENDER-DEPLOY-20260901 | 新增 ADR-015，明确 Render 预览调用链与数据层授权边界 | 禁止把免费 Web Service MySQL/Redis 误报为可用生产数据层 |
+| 2026-09-01 / AIVEN-RENDER-20260901 | 新增 ADR-016，拍板 Aiven MySQL、Render Key Value 与无 LLM 降级模式 | 取代 ADR-015 中待确认的数据层分支 |

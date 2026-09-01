@@ -212,14 +212,18 @@ Legacy 是故障回退和真实模型对比基线，不是默认新功能入口�
 - `langfuse` 和 `monitoring` 都是 profile 门控，默认不启动。
 - 生成模型、embedding 和 reranker 运行在宿主机，通过 `host.docker.internal` 被容器访问；权重和启动器不是仓库交付物。
 - 截至 2026-09-01，真 Qwen 14B、真 BGE 质量基线、Langfuse 活 trace 和生产 TLS/备份恢复/告警全栈证据仍属于 R-5/R-6 待办。
-- Render Blueprint `edu-portrait-free` 当前使用公网 Static Site + 多个 Free Web Service。由于 Render
-  免费 Web Service 不能接收私网流量，Java/MCP 服务在该预览形态通过显式 HTTPS URL 互调，不能依赖
-  已关闭的 Nacos 或 `lb://` 服务发现；免费实例冷启动可能超过 50 秒，Agent 的 MCP 初始化窗口为
-  120 秒并继续保持 fail-fast。
-- Render 的 `onrender.com` Web Service 入口只代理 HTTP，不能把 MySQL/Redis 二进制协议当作普通
-  Web Service 暴露。当前 `edu-portrait-mysql.onrender.com:3306` 已实测 JDBC connect timeout；因此
-  该 Blueprint 在换成“付费 MySQL Private Service + 持久盘”或“外部托管 MySQL”之前，只能算预览
-  部署，不能算完整系统上线。Redis 应使用 Render Key Value（或外部托管 Redis）。
+- Render Blueprint `edu-portrait-free` 使用公网 Static Site + 多个 Free Web Service。由于 Render
+  Free Web Service 不能接收私网流量，Java/MCP 服务在该预览形态通过显式 HTTPS URL 互调，不能依赖
+  已关闭的 Nacos 或 `lb://` 服务发现。
+- `AIVEN-RENDER-20260901` 将关系库边界改为外部 **Aiven Free MySQL**：七个 JDBC 消费者通过公网
+  TLS（`sslMode=REQUIRED`）连接，凭据只在 Render 的 `edu-portrait-common-env` 手工维护；每服务
+  Hikari 上限 3、最小空闲 0，整栈常态最多约 21 条数据库连接。仓库不保存 Aiven 主机、端口、用户或
+  密码。会话白名单改连 `edu-portrait-kv`（Render Free Key Value）的私网 `connectionString`，不再
+  把 MySQL/Redis 二进制协议伪装成 Web Service。
+- 当前部署明确处于“无 LLM 供应商”模式：Render 将 `SPRING_AI_MCP_CLIENT_ENABLED=false`、
+  `EDUCARE_AGENT_LOOP_ENABLED=false`，前端以 `VITE_AI_ENABLED=false` 不注册 AI 预警与 LLM 追踪
+  路由。核心 Auth/User/Teacher/Student/Mental/Data 链路可独立验收；AI 能力恢复必须同时配置模型、
+  RAG/MCP 依赖并重新构建前端，不能只打开菜单开关。
 
 ## 6. 变更原则
 
@@ -234,3 +238,4 @@ Legacy 是故障回退和真实模型对比基线，不是默认新功能入口�
 |---|---|---|
 | 2026-09-01 / DOC-BASELINE | 按当前代码、compose 与执行计划初始化项目级架构文档 | 建立现状基线；未改变运行时代码 |
 | 2026-09-01 / RENDER-DEPLOY-20260901 | 记录 Render 无注册中心调用链、MCP 冷启动策略及免费数据服务限制 | Render 预览链改用显式 HTTPS；持久 MySQL/Redis 仍是上线硬阻塞 |
+| 2026-09-01 / AIVEN-RENDER-20260901 | 外置 Aiven MySQL、改用 Render Key Value，并定义无 LLM 降级边界 | 数据层跨云 TLS；核心业务与 AI 启动依赖解耦 |
