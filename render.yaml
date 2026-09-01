@@ -289,7 +289,7 @@ services:
       - fromGroup: edu-portrait-common-env
       - key: PORT
         value: "8090"
-    healthCheckPath: /api/v1/health
+    healthCheckPath: /health
     autoDeploy: true
 
   # ============================================================================

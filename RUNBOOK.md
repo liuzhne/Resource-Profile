@@ -386,7 +386,7 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
   Blueprint 同步后依次检查：
 
   1. `edu-portrait-mcp-student` 日志包含 `Tomcat started`，`GET /actuator/health` 返回 200/UP。
-  2. `edu-portrait-ai-inference` 的 `GET /api/v1/health` 返回 200，带正确 `X-MCP-Token` 的 `/mcp`
+  2. `edu-portrait-ai-inference` 的 `GET /health` 返回 200，带正确 `X-MCP-Token` 的 `/mcp`
      initialize/tools/list 成功。
   3. `edu-portrait-agent` 在 120 秒窗口内完成两个 MCP initialize 并出现 `Started AgentServiceApplication`。
   4. 数据库必须是可接收 MySQL TCP 的 Private Service/外部托管实例；不得再使用普通 Web Service
@@ -454,6 +454,19 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
   官方 JSON Schema 与 `git diff --check`。Aiven 登录、服务创建、SQL 导入、Blueprint 同步和线上
   业务验收待完成。
 
+### AI-HEALTH-20260901：修正 Render 的 ai-inference 健康检查路径
+
+- 复现：打开 Render 部署 `dep-dabdn8jtqb8s73fjjsh0`；日志显示 Uvicorn 已监听 `0.0.0.0:8090`，但
+  每 10 秒一次的 `GET /api/v1/health` 均返回 404，部署持续为 Deploying。
+- 修复后验证：同步最新 Blueprint，确认 `GET https://edu-portrait-ai-inference.onrender.com/health`
+  返回 200 且 JSON 包含 `"status":"OK"`，部署状态转为 Live。
+- 通过判据：Render 内部健康检查不再出现 404，`edu-portrait-ai-inference` 显示 Deployed。
+- 排错：若 `/health` 仍失败，先确认容器监听 `PORT=8090`，再核对 `app/main.py` 是否仍
+  `include_router(health.router)`；不得通过关闭健康检查掩盖问题。
+- 回滚：可把 Blueprint 回退到上一提交，但旧 `/api/v1/health` 会恢复固定 404；只有 FastAPI 同时
+  提供该路由时才可回退探针路径。
+- 验证状态：根因已由 Render 实时日志确认；修复后 Blueprint 同步与公网 200 待验证。
+
 ## 10. 修复方案的运行手册更新模板
 
 每个修复方案在本文件追加或修改可执行步骤，并在维护记录使用与 `ARCHITECTURE.md`、`DECISIONS.md` 相同标识：
@@ -476,3 +489,4 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
 | 2026-09-01 / DOC-BASELINE | 按当前脚本、CI、compose 和执行计划初始化启动/测试/排错/发布手册 | 文档链接与命令静态核对；未执行真实服务和生产发布 |
 | 2026-09-01 / RENDER-DEPLOY-20260901 | 增加 Render MCP/Feign 冷启动与 MySQL 协议排错、验证和回滚步骤 | 本地后端 125 例、前端构建通过；修复后云端复验待完成 |
 | 2026-09-01 / AIVEN-RENDER-20260901 | 增加 Aiven 初始化、Render 凭据注入、无 LLM 判据与回滚步骤 | 本地后端 177 例、前端构建、YAML 语法通过；云端待登录后验证 |
+| 2026-09-01 / AI-HEALTH-20260901 | 增加 ai-inference 探针 404 的复现、判据与回滚步骤 | 根因已在线确认；修复后云端复验待完成 |

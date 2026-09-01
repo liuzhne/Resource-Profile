@@ -168,6 +168,23 @@
   `VITE_AI_ENABLED=false` 生产构建和 YAML 语法解析已通过。Aiven 实例创建、SQL `01`~`05` 导入、
   Render Blueprint 同步与线上登录仍待验证。
 
+## ADR-017：Render 健康检查必须复用 FastAPI 已注册路由
+
+- 状态：已采纳
+- 日期/修复标识：2026-09-01 / AI-HEALTH-20260901
+- 背景：`ai-inference-service` 已在 Render 启动并监听 8090，但 Blueprint 探测
+  `/api/v1/health`；生产 app 实际直接注册 `health.router`，公开路径是 `/health`，连续 404 使部署
+  长期停留在 Deploying。
+- 选择：将 `edu-portrait-ai-inference` 的 `healthCheckPath` 改为 `/health`，不为部署探针额外复制
+  一个别名路由。
+- 原因：健康检查应以运行应用现有的公开契约为准；单一路径避免文档、测试与部署配置继续漂移。
+- 放弃方案：在 FastAPI 增加 `/api/v1/health` 兼容别名会扩大无业务价值的 API 面；继续等待无法让
+  固定 404 自愈；关闭健康检查会掩盖进程不可用。
+- 后果：无架构和业务行为变化；后续修改 health router 前必须同步 Render 探针与 RUNBOOK 验证命令。
+- 证据：Render 部署 `dep-dabdn8jtqb8s73fjjsh0` 日志显示 Uvicorn 启动完成、随后
+  `GET /api/v1/health` 持续 404；[`app/api/health.py`](./ai-inference-service/app/api/health.py) 声明
+  `prefix="/health"`。修复后云端复验待完成。
+
 ## 新决策模板
 
 ```markdown
@@ -190,3 +207,4 @@
 | 2026-09-01 / DOC-BASELINE | 从当前实现与执行计划整理有效决策，并建立修复文档规则 | 新增 ADR-001~014；未改变运行时代码 |
 | 2026-09-01 / RENDER-DEPLOY-20260901 | 新增 ADR-015，明确 Render 预览调用链与数据层授权边界 | 禁止把免费 Web Service MySQL/Redis 误报为可用生产数据层 |
 | 2026-09-01 / AIVEN-RENDER-20260901 | 新增 ADR-016，拍板 Aiven MySQL、Render Key Value 与无 LLM 降级模式 | 取代 ADR-015 中待确认的数据层分支 |
+| 2026-09-01 / AI-HEALTH-20260901 | 新增 ADR-017，校准 ai-inference 的 Render 健康检查路径 | 不增加兼容别名，以实际 FastAPI 路由作为唯一探针契约 |

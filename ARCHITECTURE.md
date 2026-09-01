@@ -239,3 +239,4 @@ Legacy 是故障回退和真实模型对比基线，不是默认新功能入口�
 | 2026-09-01 / DOC-BASELINE | 按当前代码、compose 与执行计划初始化项目级架构文档 | 建立现状基线；未改变运行时代码 |
 | 2026-09-01 / RENDER-DEPLOY-20260901 | 记录 Render 无注册中心调用链、MCP 冷启动策略及免费数据服务限制 | Render 预览链改用显式 HTTPS；持久 MySQL/Redis 仍是上线硬阻塞 |
 | 2026-09-01 / AIVEN-RENDER-20260901 | 外置 Aiven MySQL、改用 Render Key Value，并定义无 LLM 降级边界 | 数据层跨云 TLS；核心业务与 AI 启动依赖解耦 |
+| 2026-09-01 / AI-HEALTH-20260901 | 将 Render 的 ai-inference 健康检查契约修正为 FastAPI 实际暴露的 `GET /health` | 无架构影响；仅校准部署平台与 `ai-inference-service` 的存活探针边界 |
