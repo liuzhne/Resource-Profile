@@ -14,9 +14,10 @@ import java.util.Map;
 /**
  * 调用 student-service (port 8084)。
  * Gateway 路由 /student/** → student-service (StripPrefix=0)，
- * 这里走 lb://student-service 直连，避免经过 gateway。
+ * 本地/Nacos 环境留空 URL 时走 lb://student-service；Render 等无注册中心环境通过
+ * STUDENT_SERVICE_URL 注入固定 HTTPS 地址。
  */
-@FeignClient(name = "student-service")
+@FeignClient(name = "student-service", url = "${STUDENT_SERVICE_URL:}")
 public interface StudentServiceClient {
 
     /** 学生基础档案 */

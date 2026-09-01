@@ -1,6 +1,12 @@
-# Render.com 生产环境完整部署指南
+# Render.com 部署指南（预览与生产）
 
-本文档提供**师生资源画像系统（EduCare Portrait System）**在 [Render.com](https://render.com) 云平台上的完整生产环境部署流程、架构说明与运维排错规范。
+本文档提供**师生资源画像系统（EduCare Portrait System）**在 [Render.com](https://render.com) 云平台上的部署流程、架构说明与运维排错规范。
+
+> **重要限制（2026-09-01 实测）**：仓库当前 Blueprint 的“全部 Free Web Service”只能作为预览
+> 拓扑，不能承载完整生产系统。Render Web Service 的公网入口代理 HTTP，不代理 MySQL/Redis
+> 二进制协议；免费 Web Service 也不能接收私网流量。MySQL 必须改成带持久盘的付费 Private
+> Service，或使用外部托管 MySQL；Redis 应使用 Render Key Value 或外部托管 Redis。完成数据层、
+> LLM/RAG 与 R-5/R-6 验收之前，不得把 Dashboard 的 `Deployed` 等同于系统可用。
 
 ---
 
@@ -19,7 +25,7 @@
 
 ## 1. 架构与拓扑
 
-系统在 Render 上的生产拓扑严格遵循**纵深防御**与**最小权限原则**：
+生产目标拓扑遵循**纵深防御**与**最小权限原则**；当前免费预览 Blueprint 尚未达到该拓扑：
 
 ```mermaid
 graph TD
@@ -66,7 +72,10 @@ graph TD
 
 1. **Git 仓库**：确保本系统代码已推送到 GitHub / GitLab 私有或公开仓库。
 2. **Render 账号**：登录 [Render.com](https://dashboard.render.com/)。
-3. **大模型 API Key**：准备好 OpenAI API Key、DeepSeek API Key 或通义千问 API Key。
+3. **大模型配置**：准备同一供应商配套的 `LLM_BASE_URL`、`LLM_MODEL` 与 `LLM_API_KEY`；不能把
+   OpenAI 官方 base URL 与 Qwen 模型名混配。
+4. **数据层选择（必须先决定）**：付费 MySQL Private Service + 持久盘，或外部托管 MySQL。
+   未取得计费授权时，不要在 Dashboard 中升级计划或创建付费磁盘。
 
 ---
 
@@ -81,13 +90,15 @@ graph TD
    - 填写 Blueprint 实例名称（如 `edu-portrait-prod`）。
    - 选择部署区域 **Region**（建议选择与大模型 API 最接近的区域，如 `Oregon (US West)` 或 `Singapore`）。
    - 按提示输入 `LLM_API_KEY`（大模型 API 密钥）。
-5. 点击 **Apply**，Render 将自动创建并编排所有服务群与数据存储。
+5. 确认预览/生产数据层方案与可能产生的费用后点击 **Apply**。Blueprint 会创建服务，但最终可用性
+   仍须按第 9 节逐项验证。
 
 ---
 
 ## 4. 数据库初始化 (MySQL 8.0)
 
-在初次部署时，需要导入系统数据库表结构与默认种子数据：
+在初次部署时，需要按文件名顺序执行 `sql/init/01_init.sql` 至
+`sql/init/05_intervention_feedback.sql`，不能只导入 `01_init.sql`。
 
 ### 方式 A：通过 Render MySQL 容器内置 Web Shell 初始化（推荐）
 1. 在 Render Dashboard 中打开 `edu-portrait-mysql` 服务。
@@ -96,17 +107,17 @@ graph TD
    ```bash
    mysql -u edu -pedu123456 edu_portrait
    ```
-4. 将项目中的 `sql/init/01_init.sql` 内容粘贴执行，或在本地连接云数据库执行。
+4. 将项目中的 `sql/init/01`~`05` 依次执行，或在本地连接云数据库执行。
 
 ### 方式 B：使用外部云 MySQL 托管（如 Aiven, TiDB Cloud, AWS RDS, Railway）
 如果您使用外部云数据库：
-1. 在外部数据库上新建数据库 `edu_portrait`，导入 `sql/init/01_init.sql`。
+1. 在外部数据库上新建数据库 `edu_portrait`，按顺序导入 `sql/init/01`~`05`。
 2. 在 Render Dashboard 中的 `edu-portrait-common-env` 环境变量组中，将 `MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_USER`、`MYSQL_PASSWORD` 改为您的云数据库连接信息。
 
 **默认预置账号（密码均为用户名）：**
 | 用户名 | 角色 | 默认密码 | 说明 |
 | :--- | :--- | :--- | :--- |
-| `admin` | 管理员 | `admin` | 系统全权限管理 |
+| `admin` | 管理员 | `admin` | 系统全权限管理；上线前必须轮换 |
 | `teacher` | 教师 | `teacher` | 教师画像与课程查看 |
 | `student` | 学生 | `student` | 学生画像与测评查看 |
 
@@ -121,12 +132,12 @@ graph TD
 | `SPRING_PROFILES_ACTIVE` | Spring Boot 运行环境 | `prod` |
 | `JWT_SECRET` | 用户会话签名密钥 | Render 自动生成 256 位随机字符串 |
 | `EDUCARE_MCP_TOKEN` | MCP 节点内部鉴权 Token | Render 自动生成 256 位随机字符串 |
-| `MYSQL_HOST` | MySQL 数据库主机 | `edu-portrait-mysql` (或云主机域名) |
+| `MYSQL_HOST` | MySQL 数据库主机 | Private Service 内部主机或外部云主机；不能用普通 Web Service 公网域名 |
 | `MYSQL_PORT` | MySQL 端口 | `3306` |
 | `MYSQL_DATABASE` | 数据库名 | `edu_portrait` |
 | `MYSQL_USER` | 数据库用户名 | `edu` |
 | `MYSQL_PASSWORD` | 数据库密码 | `edu123456` |
-| `REDIS_HOST` | Redis 主机 | 自动绑定 `edu-portrait-redis` |
+| `REDIS_HOST` | Redis 主机 | Render Key Value 内部主机或外部托管 Redis |
 | `REDIS_PORT` | Redis 端口 | `6379` |
 | `LLM_BASE_URL` | 大模型 API 端点 | `https://api.openai.com/v1` 或 DeepSeek 端点 |
 | `LLM_API_KEY` | 大模型 API 密钥 | `sk-xxxxxx` |
@@ -191,6 +202,22 @@ graph TD
   1. `edu-portrait-mysql` 是否已就绪并完成建表。
   2. `edu-portrait-redis` 是否正常连接。
   3. `JWT_SECRET` 是否已注入且不为空。
+  4. 无 Nacos 时，Agent/MCP 的 `STUDENT_SERVICE_URL`、`MENTAL_SERVICE_URL`、
+     `DATA_SERVICE_URL`、`AI_INFERENCE_URL` 是否为完整 HTTPS 地址。
+  5. 免费实例冷启动可能超过 50 秒；Agent MCP `request-timeout` 预览环境为 120 秒。超过窗口仍失败时
+     先检查 MCP 服务是否真正 `Started`，不要直接关闭 MCP 初始化。
+
+### 4. 当前 Blueprint 的已验证故障证据（2026-09-01）
+
+- gateway `/actuator/health`：200，`UP`。
+- `edu-portrait-mcp-student`：Feign 无固定 URL，启动卡住并触发 Render port scan timeout。
+- `edu-portrait-agent`：`McpSyncClient.initialize` 连接未就绪 MCP 后退出。
+- auth 合成不存在账号探测：`CannotGetJdbcConnectionException`；日志底层为 MySQL
+  `SocketTimeoutException: Connect timed out`。
+
+代码已为无注册中心 Feign URL、MCP 120 秒冷启动窗口、MySQL 全量 `01`~`05` 初始化脚本及前端默认
+账号提示准备修复；只有修复后的 Blueprint 实际同步、持久数据层可达并完成登录/Agent 真跑后，才可
+把本节标记为通过。
 
 ---
 

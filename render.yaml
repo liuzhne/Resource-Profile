@@ -239,6 +239,16 @@ services:
         value: https://edu-portrait-mcp-student.onrender.com
       - key: MCP_KNOWLEDGE_RAG_URL
         value: https://edu-portrait-ai-inference.onrender.com
+      - key: STUDENT_SERVICE_URL
+        value: https://edu-portrait-student.onrender.com
+      - key: MENTAL_SERVICE_URL
+        value: https://edu-portrait-mental.onrender.com
+      - key: DATA_SERVICE_URL
+        value: https://edu-portrait-data.onrender.com
+      - key: AI_INFERENCE_URL
+        value: https://edu-portrait-ai-inference.onrender.com
+      - key: MCP_CLIENT_REQUEST_TIMEOUT
+        value: 120s
       - key: EDUCARE_AGENT_LOOP_ENABLED
         value: "true"
       - key: LLM_API_KEY
@@ -259,6 +269,11 @@ services:
         value: "8094"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0"
+      - key: STUDENT_SERVICE_URL
+        value: https://edu-portrait-student.onrender.com
+      - key: MENTAL_SERVICE_URL
+        value: https://edu-portrait-mental.onrender.com
+    healthCheckPath: /actuator/health
     autoDeploy: true
 
   - type: web
@@ -273,6 +288,7 @@ services:
         value: "8090"
       - key: LLM_API_KEY
         sync: false
+    healthCheckPath: /api/v1/health
     autoDeploy: true
 
   # ============================================================================

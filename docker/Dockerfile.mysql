@@ -2,7 +2,9 @@ FROM mysql:8.0
 
 ENV TZ=Asia/Shanghai
 
-COPY ../sql/init/01_init.sql /docker-entrypoint-initdb.d/01_init.sql
+# build context 是仓库根目录（render.yaml: dockerContext: ./）。复制全部按序初始化脚本，
+# 避免只建基础表而缺少 questionnaire/agent/student extras/feedback 表。
+COPY sql/init/ /docker-entrypoint-initdb.d/
 
 EXPOSE 3306
 

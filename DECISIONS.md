@@ -1,0 +1,166 @@
+# Resource-Profile 架构与工程决策
+
+> 最近更新：2026-09-01
+> 记录范围：当前仍有效的项目级决策。历史阶段细节见 [`docs/educare/EXECUTION_PLAN.md`](./docs/educare/EXECUTION_PLAN.md) §6。
+
+每条记录包含背景、选择、放弃方案和后果。被替换的决策不得直接删除，应改为“已取代”并链接新决策。
+
+## ADR-001：业务微服务使用 Spring Boot + Nacos
+
+- 状态：已采纳
+- 背景：用户、教师、学生、心理、统计和 AI 编排有不同数据访问与发布节奏。
+- 选择：Java 17、Spring Boot 3.2.5、Spring Cloud 2023.0.1、Nacos 服务发现/可选配置；gateway 按 `/auth`、`/user`、`/teacher`、`/student`、`/mental`、`/data`、`/agent` 路由。
+- 原因：保持领域边界，复用 Spring/MyBatis 生态，并允许 Agent 通过 Feign 组合已有服务。
+- 放弃方案：单体应用会把心理、用户和 AI 发布周期绑在一起；服务间共享 mapper 会绕过授权和领域所有权。
+- 后果：本地完整联调必须启动多个进程并保证 Nacos 可达；跨服务契约需要控制器/Feign/MCP 契约测试。
+
+## ADR-002：Java 负责业务编排，Python 负责模型与向量能力
+
+- 状态：已采纳
+- 背景：业务状态机、权限和 MySQL 事务更适合现有 Java 栈；LLM、embedding、Milvus 与 FastMCP 的 Python 生态更成熟。
+- 选择：`agent-service` 拥有任务状态与业务编排；`ai-inference-service` 提供风险/方案/审核、RAG、知识 upsert；Python 还以独立进程提供 knowledge-rag MCP。
+- 放弃方案：把全部 AI 逻辑移入 Java 会复制 Python 向量生态；把业务状态机移入 Python 会削弱现有鉴权、MyBatis 和服务治理的一致性。
+- 后果：必须维护 Java↔Python HTTP 契约；Python 故障需要明确 fallback，不能让合规审核默认放行。
+
+## ADR-003：敏感数据默认使用本地 OpenAI 兼容模型
+
+- 状态：已采纳
+- 背景：学生画像包含未成年人身份、学业和心理数据，同时项目需要可控成本与离线演示。
+- 选择：生成 LLM、embedding、reranker 运行在宿主 :8091/:8092/:8093；Java Spring AI 与 Python LangChain/httpx 都使用 OpenAI 兼容接口。
+- 放弃方案：云端 ModelRouter 已在瘦身中删除；直接绑定某个闭源 SDK 会增加数据外发与供应商锁定。
+- 后果：部署方负责模型权重、GPU 和启动脚本；真实模型稳定性必须在 R-5 验证，桩模型只能证明机械链路。
+
+## ADR-004：AgentLoop ReAct 是默认路径，legacy 四阶段作为回退
+
+- 状态：已采纳
+- 背景：固定 risk→rag→plan 流水线可控但工具选择僵硬；完全隐式原生 tool-calling 又不利于观察 thought/action/observation 和精确测试。
+- 选择：`EDUCARE_AGENT_LOOP_ENABLED=true` 默认走最多 8 轮 ReAct JSON；模型可调用 7 个 MCP 工具并输出双 JSON `final_answer`。中高风险仍复用独立合规审核。`false` 回落 legacy。
+- 放弃方案：删除 legacy 会失去回退与对比基线；默认 native tool-calling 会降低细粒度可观测性。native 保留为可选协议，但必须具有同等 ToolGuard、validator 和 hooks 语义。
+- 后果：prompt、工具名和 final schema 都是稳定契约；解析失败、工具失败或校验失败不能伪装成 COMPLETED。
+
+## ADR-005：只保留两个 MCP server，并使用 Streamable HTTP
+
+- 状态：已采纳
+- 背景：Agent 需要读取业务数据和检索知识，但过多 MCP 服务会提高运维成本。
+- 选择：保留 Java `student-data` :8094（4 个只读工具）和 Python `knowledge-rag` :8095（3 个检索工具）；采用 Spring AI 1.1.6/FastMCP 的 Streamable HTTP `/mcp`。
+- 放弃方案：旧 SSE transport 已被新协议替换；memory-server 因未接入主链且投入产出低被删除；把 MCP 全收回内联会失去清晰工具边界和独立契约展示。
+- 后果：agent-service 启动时会初始化两端工具清单，MCP 不可达可导致启动失败；生产必须配置共享 MCP token 和网络隔离。
+
+## ADR-006：RAG 使用 Milvus dense 检索，可选 reranker
+
+- 状态：已采纳
+- 背景：当前知识库规模有限，已有 Milvus 2.4 与 BGE embedding 服务。
+- 选择：1024 维 dense recall，候选扩大后可用 BGE reranker 精排；集合为 cases/psychology/policies/success。
+- 放弃方案：Hybrid Retrieval/BM25 已删除，因为默认长期未启且在当前规模下过度工程；Elasticsearch 增加重型基础设施；迁移 pgvector 会破坏已有 Milvus 灌库链。
+- 后果：专有名词检索能力取决于 embedding/reranker 质量；必须以 R-5.3 的真实语料 baseline 判断是否需要重新引入 lexical 检索。
+
+## ADR-007：MySQL 是业务事实源，Redis 与 Milvus 可重建
+
+- 状态：已采纳
+- 背景：任务、反馈和用户数据需要事务与备份；缓存、锁、会话和向量索引具有不同恢复方式。
+- 选择：MySQL 保存业务记录；Redis 保存会话、幂等、锁和缓存；Milvus 保存从知识源派生的向量。
+- 放弃方案：把任务状态只放 Redis 无法可靠审计；把源文档事实只放 Milvus 难以恢复和版本化。
+- 后果：生产必须备份/演练恢复 MySQL；Redis 丢失要求用户重登；Milvus 可通过 upsert 重新构建。
+
+## ADR-008：鉴权采用多层 fail-closed 防线
+
+- 状态：已采纳
+- 背景：系统处理学生心理和身份敏感信息，单靠前端菜单或网关网络边界不足以防 IDOR 与直连绕过。
+- 选择：gateway JWT+Redis 会话；下游 `AccessGuard` 对象/角色授权；`FieldPermissionAdvice` 字段过滤；agent-service 自鉴权；MCP 共享 token；LLM 前脱敏与 Prompt 清洗。
+- 放弃方案：只依赖前端权限属于 UX 控制；只验证 JWT 而不校验 Redis 无法立即吊销；明文信任网关身份头更易伪造。
+- 后果：Redis 鉴权故障返回 503 而不是放行；新增接口必须同时补准入、对象授权和字段权限测试。
+
+## ADR-009：使用 llama.cpp `cache_prompt` 与字节稳定 prompt
+
+- 状态：已采纳
+- 背景：本地大模型重复 system prompt 成本高，Spring AI 通用 cache metadata 与 llama.cpp 扩展并不等价。
+- 选择：Java HTTP interceptor 和 Python raw chat 请求显式注入 `cache_prompt:true`；system prompt 放资源文件并保持字节稳定。
+- 放弃方案：依赖不存在/不匹配的 Spring AI `cache_control` 无法保证 llama.cpp slot cache 命中；运行时拼接不稳定前缀会降低命中率。
+- 后果：修改固定 prompt 必须重新测缓存；真实模型目标命中率 ≥80%，属于 R-5.4。
+
+## ADR-010：Langfuse 自托管 v2，可选且 fail-soft
+
+- 状态：已采纳
+- 背景：需要观察 `agent.loop` 和每次 `llm.chat`，但开发/测试不能硬依赖 trace 平台。
+- 选择：compose profile 提供 Langfuse v2 + PostgreSQL；Python 使用 v2 SDK，Java 直接调用 ingestion HTTP；key 为空或上报失败时主流程继续。
+- 放弃方案：v3 需要 ClickHouse、Redis、worker，对当前规模过重；非官方 Java SDK增加维护风险；Langfuse v2 不采用 OTel 路线。
+- 后果：trace 不是业务事务的一部分；“已接代码”不等于“活 trace 已验收”，R-5.1 完成前必须标待验证。
+
+## ADR-011：CI 采用全测试 + 安全关键类定向覆盖率门
+
+- 状态：已采纳
+- 背景：历史模块总体覆盖率不均，立即设置全局 80% 会产生大量与风险不成比例的阻塞。
+- 选择：Java 全模块 `clean test`，并对 Auth/JWT/Prompt/用户教师授权/MCP token 等已补测类设置行覆盖率 ≥80%；Python 无外部服务 ASGI/unittest；前端 lint/build/size/audit；eval 数据集无条件校验，真 LLM 阈值按环境开启。
+- 放弃方案：只跑受影响模块易漏跨模块安全回归；当前直接设置全局高覆盖率会把补历史测试与功能变更绑死。
+- 后果：新增安全关键类应进入 JaCoCo includes；长期仍应逐步提高全局覆盖，而不是把定向门当终点。
+
+## ADR-012：生产只公开 nginx，密钥由 preflight 硬门
+
+- 状态：已采纳
+- 背景：gateway、Agent、MCP、数据库和观测面板不应直接暴露公网，开发默认密码不能进入生产。
+- 选择：nginx 80/443 做 TLS、SPA 和 `/api` 反代；其余 published ports 绑定 `127.0.0.1`；`docker/.env` 不入库；preflight 拒绝占位/弱 JWT/弱 Redis/MCP 凭据。
+- 放弃方案：直接公开 gateway 或 MCP 会扩大绕过面；仅在文档“建议改密”无法形成可执行门禁。
+- 后果：证书、密钥和默认账号轮换是发布前置条件；不得用 `docker compose down -v` 做常规回滚。
+
+## ADR-013：上线声明以 R-5/R-6 证据为准
+
+- 状态：已采纳
+- 背景：代码测试已覆盖大量机械链路，但真实 Qwen/BGE/Langfuse 与完整生产 compose 尚未全部形成当前证据；基础 compose 还未声明六个普通业务服务；`rag_upsert` 的测试 app 手工注册了 router，而生产 `create_app()` 当前没有注册它。
+- 选择：在 R-5/R-6 全部勾选前，只能称“代码侧完成/待环境验收”，不得称“完整生产已上线”。
+- 放弃方案：用桩 LLM、单测或部分 compose 健康代替真实模型/全栈签字会掩盖部署缺口。
+- 后果：发布负责人必须按 [`RUNBOOK.md`](./RUNBOOK.md) 收集 CI、模型、RAG、trace、安全、备份恢复和监控证据；HTTP upsert 在主应用实际暴露并验收前不得计入完成面。
+
+## ADR-014：修复方案必须同步三份项目文档
+
+- 状态：已采纳
+- 背景：历史文档同时存在保留能力与已删除能力的描述，修复若只改代码会继续制造操作和架构认知偏差。
+- 选择：只要提出或落地缺陷修复，同一变更必须维护 `ARCHITECTURE.md`、`DECISIONS.md`、`RUNBOOK.md`；即使无架构影响也要留下同标识记录。
+- 放弃方案：只在 commit/PR 描述记录无法为后续本地任务提供稳定上下文；只更新“受影响的一份”容易漏掉验证或取舍。
+- 后果：三份文档是修复完成定义的一部分。纯格式/拼写机械修改不触发该规则。
+
+## ADR-015：Render 预览部署使用显式服务 URL，持久数据层不伪装成免费 Web Service
+
+- 状态：部分已采纳；数据层方案待部署方确认
+- 日期/修复标识：2026-09-01 / RENDER-DEPLOY-20260901
+- 背景：Render Blueprint 已关闭 Nacos，但 agent-service 与 mcp-student-data 的 Feign client 仍只配置
+  服务名，MCP 服务启动卡在 load-balancer 创建阶段；Agent 又以 20 秒默认窗口初始化两个会冷启动的
+  免费 MCP 服务。线上合成登录探测同时证明 `edu-portrait-mysql.onrender.com:3306` 返回 JDBC connect
+  timeout，因为 Web Service 的公网入口不是任意 TCP 代理。
+- 选择：无注册中心部署为 Feign client 注入显式 HTTPS URL；Agent 保留 MCP 启动 fail-fast，但 Render
+  预览环境把请求窗口扩到 120 秒。MySQL 只能选择付费 Private Service + `/var/lib/mysql` 持久盘，
+  或部署方提供外部托管 MySQL；Redis 改用 Render Key Value 或外部托管 Redis。未获得计费授权前不
+  自动创建付费数据库，也不把当前红灯掩盖成“已上线”。
+- 原因：显式 URL 与当前关闭 Nacos 的事实一致，120 秒覆盖 Render 官方说明的 50 秒以上冷启动；
+  持久数据层必须使用能接收对应协议且能保存数据的产品形态。
+- 放弃方案：关闭 MCP client/延迟到业务请求只会让 Agent 表面启动而运行时缺工具；继续使用
+  `*.onrender.com:3306/6379` 会稳定超时；把 MySQL 塞进免费 Web Service 即使偶尔启动也会在重启或
+  部署时丢数据；未经确认直接升级计费计划不符合变更授权边界。
+- 后果：免费预览的首次请求仍可能较慢；生产发布需要数据库/Redis 连接信息、模型供应商三元组
+  `LLM_BASE_URL/LLM_MODEL/LLM_API_KEY` 与 RAG 基础设施。MySQL 镜像若被采用，会按顺序执行
+  `sql/init/01`~`05` 全部脚本。
+- 证据：Render 失败部署 `dep-daaie3ffdruc73ajt8pg`、`dep-daaiic5g1s2s73d9t920`；2026-09-01
+  gateway `/actuator/health` 返回 `UP`，合成不存在账号请求返回 `CannotGetJdbcConnectionException`，
+  auth 日志底层为 `SocketTimeoutException: Connect timed out`。本地 JDK 17 定向 Reactor 125 例与
+  前端构建通过；修复后的云端复验待完成。
+
+## 新决策模板
+
+```markdown
+## ADR-NNN：标题
+
+- 状态：提议 / 已采纳 / 已取代 / 已废弃
+- 日期/修复标识：YYYY-MM-DD / FIX-NNN
+- 背景：发生了什么，约束是什么。
+- 选择：最终方案。
+- 原因：为何适合当前项目。
+- 放弃方案：至少列出评估过的替代方案和放弃原因。
+- 后果：收益、代价、兼容性、迁移/回滚约束。
+- 证据：代码、测试、运行记录链接；未执行则标“待验证”。
+```
+
+## 维护记录
+
+| 日期/标识 | 变更 | 决策影响 |
+|---|---|---|
+| 2026-09-01 / DOC-BASELINE | 从当前实现与执行计划整理有效决策，并建立修复文档规则 | 新增 ADR-001~014；未改变运行时代码 |
+| 2026-09-01 / RENDER-DEPLOY-20260901 | 新增 ADR-015，明确 Render 预览调用链与数据层授权边界 | 禁止把免费 Web Service MySQL/Redis 误报为可用生产数据层 |

@@ -76,6 +76,9 @@ spring:
     # 暴露合并的 ToolCallbackProvider Bean。两端均为 fail-fast：server 起不来则 agent-service 起不来。
     mcp:
       client:
+        # Render free web services can take 50s+ to wake. Keep fail-fast semantics, but allow
+        # enough time for both public MCP dependencies to complete a cold start.
+        request-timeout: ${MCP_CLIENT_REQUEST_TIMEOUT:120s}
         streamable-http:
           connections:
             student-data:

@@ -13,7 +13,7 @@ import java.util.Map;
  * 注意：mental-service 的查询以 sys_user.userId 为参，而本服务 tool 入参是 student_info.id；
  * StudentDataTools 需要先 Feign 取 Student.userId 再调本接口。
  */
-@FeignClient(name = "mental-service")
+@FeignClient(name = "mental-service", url = "${MENTAL_SERVICE_URL:}")
 public interface MentalServiceClient {
 
     /** 学生的历次评估记录（按 userId 拉） */

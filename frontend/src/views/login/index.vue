@@ -51,7 +51,7 @@
       </el-form>
 
       <div class="login-footer">
-        <p>默认账号：admin / 123456</p>
+        <p>默认账号：admin / admin</p>
       </div>
     </div>
   </div>
@@ -69,7 +69,7 @@ const loginFormRef = ref()
 
 const loginForm = reactive({
   username: 'admin',
-  password: '123456',
+  password: 'admin',
   remember: false
 })
 
