@@ -467,6 +467,20 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
   提供该路由时才可回退探针路径。
 - 验证状态：根因已由 Render 实时日志确认；修复后 Blueprint 同步与公网 200 待验证。
 
+### LOGIN-VALIDATION-20260902：登录页错误拒绝默认管理员密码
+
+- 复现：访问线上 `/login`，保留预填账号 `admin/admin` 并点击“登录”；修复前表单显示
+  “密码长度不能少于6位”，请求不会发送，而同一凭据直接调用 gateway 登录接口成功。
+- 修复后验证：执行 `cd frontend && npm run lint:check && npm run build`；部署后在浏览器使用授权测试账号
+  登录，确认跳转到系统首页，再依次打开数据面板、教师列表、学生列表和心理概览。
+- 通过判据：表单不再显示最小长度错误；登录成功且核心页面无 JDBC/Redis 错误；登出后旧 token 返回 401。
+- 排错：若仍出现旧校验文案，确认 Render Static Site 已构建包含修复提交的新版本并清理浏览器缓存；若请求
+  已发出但返回失败，按 Aiven MySQL、Render Key Value、JWT/Redis 会话的顺序检查，不要恢复客户端长度限制。
+- 回滚：可回退该前端提交，但默认管理员将再次无法通过 UI 登录；回滚前应先将验收账号密码改为满足旧门槛
+  的值并更新验收说明。此修复不改数据库结构或服务端认证行为。
+- 验证状态：2026-09-02 已在线复现并确认后端接受同一凭据；前端 lint 0 error（1 条既有 Prettier
+  warning）且生产构建通过，修复后的云端页面待验证。
+
 ## 10. 修复方案的运行手册更新模板
 
 每个修复方案在本文件追加或修改可执行步骤，并在维护记录使用与 `ARCHITECTURE.md`、`DECISIONS.md` 相同标识：
@@ -490,3 +504,4 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
 | 2026-09-01 / RENDER-DEPLOY-20260901 | 增加 Render MCP/Feign 冷启动与 MySQL 协议排错、验证和回滚步骤 | 本地后端 125 例、前端构建通过；修复后云端复验待完成 |
 | 2026-09-01 / AIVEN-RENDER-20260901 | 增加 Aiven 初始化、Render 凭据注入、无 LLM 判据与回滚步骤 | 本地后端 177 例、前端构建、YAML 语法通过；云端待登录后验证 |
 | 2026-09-01 / AI-HEALTH-20260901 | 增加 ai-inference 探针 404 的复现、判据与回滚步骤 | 根因已在线确认；修复后云端复验待完成 |
+| 2026-09-02 / LOGIN-VALIDATION-20260902 | 增加登录表单最小密码长度漂移的复现、验证与回滚步骤 | 已在线复现；本地构建通过，修复后云端复验待完成 |
