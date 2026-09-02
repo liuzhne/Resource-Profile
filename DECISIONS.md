@@ -222,6 +222,23 @@
   [`llm_client.py`](./ai-inference-service/app/services/llm_client.py)；2026-09-02 Java/Python 各 2 项兼容
   测试、Python 语法检查与前端生产构建通过，云端验收待完成。
 
+## ADR-020：knowledge-rag MCP 使用独立的规范 endpoint
+
+- 状态：已采纳
+- 日期/修复标识：2026-09-02 / MCP-TRAILING-SLASH-20260902
+- 背景：Render 首次开启双 MCP client 后，student-data 完成 initialize，但 FastAPI 中挂载的
+  knowledge-rag 对 `POST /mcp` 和 `GET /mcp` 返回 307 到 `/mcp/`；Spring AI 的 Streamable HTTP
+  transport 未将该重定向当作 MCP 响应，agent-service 因 fail-fast 初始化失败退出。
+- 选择：保留每个 MCP server 独立 endpoint；knowledge-rag endpoint 支持环境变量覆盖，并在 Render
+  显式设为 `/mcp/`。student-data 继续使用其原生 `/mcp`。
+- 原因：直接请求服务端规范路径可保留初始化 fail-fast、共享 token 和工具发现语义，也兼容本地独立
+  knowledge-rag server 的历史路径。
+- 放弃方案：让客户端跟随 POST 重定向受 Java HTTP/MCP transport 行为限制；关闭 MCP 虽可启动但会
+  违背开启 AgentLoop 工具链的目标；统一修改两个服务路由会扩大兼容性影响。
+- 后果：线上双 MCP 初始化不再依赖重定向；新增的 endpoint 环境变量必须与实际 ASGI mount 路径一致。
+- 证据：Render 日志中 `POST /mcp`、`GET /mcp` 均为 307，agent 随后在
+  `McpSyncClient.initialize` 退出；修复后云端复验待完成。
+
 ## 新决策模板
 
 ```markdown
@@ -247,3 +264,4 @@
 | 2026-09-01 / AI-HEALTH-20260901 | 新增 ADR-017，校准 ai-inference 的 Render 健康检查路径 | 不增加兼容别名，以实际 FastAPI 路由作为唯一探针契约 |
 | 2026-09-02 / LOGIN-VALIDATION-20260902 | 新增 ADR-018，移除登录页与服务端不一致的密码长度门槛 | 客户端只做非空校验，认证策略由 `auth-service` 统一裁决 |
 | 2026-09-02 / GROQ-CLOUD-20260902 | 新增 ADR-019，选择 GroqCloud 并隔离 llama.cpp 专用字段 | Render 恢复外部 LLM；API Key 不进入仓库，RAG 降级边界保持显式 |
+| 2026-09-02 / MCP-TRAILING-SLASH-20260902 | 新增 ADR-020，按服务配置 MCP 规范 endpoint | 保留 fail-fast 与双 MCP 工具链，消除 FastAPI 307 握手失败 |

@@ -90,7 +90,10 @@ spring:
               endpoint: /mcp
             knowledge-rag:
               url: ${MCP_KNOWLEDGE_RAG_URL:http://localhost:8095}
-              endpoint: /mcp
+              # FastAPI/Starlette mounts the Streamable HTTP app at the canonical
+              # slash-terminated path. Keep this overridable because the standalone
+              # local MCP server may still expose the historical /mcp endpoint.
+              endpoint: ${MCP_KNOWLEDGE_RAG_ENDPOINT:/mcp}
 
 mybatis-plus:
   configuration:

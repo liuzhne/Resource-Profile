@@ -237,6 +237,8 @@ services:
         value: https://edu-portrait-mcp-student.onrender.com
       - key: MCP_KNOWLEDGE_RAG_URL
         value: https://edu-portrait-ai-inference.onrender.com
+      - key: MCP_KNOWLEDGE_RAG_ENDPOINT
+        value: /mcp/
       - key: STUDENT_SERVICE_URL
         value: https://edu-portrait-student.onrender.com
       - key: MENTAL_SERVICE_URL

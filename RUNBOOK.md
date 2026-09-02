@@ -500,6 +500,22 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
 - 验证状态：2026-09-02 已创建独立 Groq Key 并保存到 Render（未进入仓库）；Java/Python 各 2 项
   兼容测试、Python 语法检查、前端 lint 0 error（1 条既有 warning）与生产构建通过；在线验收待完成。
 
+### MCP-TRAILING-SLASH-20260902：knowledge-rag MCP 初始化被 307 中断
+
+- 复现：开启 Render 的 `SPRING_AI_MCP_CLIENT_ENABLED=true` 后观察 agent deploy；student-data 日志出现
+  initialize，而 ai-inference 日志显示 `POST /mcp` 与 `GET /mcp` 均返回 307，agent 随后在
+  `McpSyncClient.initialize` 以 status 1 退出。
+- 修复后验证：设置 `MCP_KNOWLEDGE_RAG_ENDPOINT=/mcp/` 后重新 Blueprint sync；确认 ai-inference 的
+  `/mcp/` 请求不再是 307、agent 日志出现完整 `Started AgentServiceApplication`，再请求
+  `/actuator/health` 并触发一条 AgentLoop 任务。
+- 通过判据：agent deploy 为 Live；两个 MCP client 均完成 initialize/list；不存在 307 或
+  `Failed to send message: DummyEvent`；健康检查为 UP。
+- 排错：先从服务端访问日志确认实际规范路径，再核对 URL 与 endpoint 拼接结果、共享 token 及冷启动
+  时长；不要用关闭 MCP 掩盖路径错误。
+- 回滚：移除 Render 的 `MCP_KNOWLEDGE_RAG_ENDPOINT` 即恢复默认 `/mcp`，但 FastAPI 部署将重新出现
+  307 与启动失败；本地独立 MCP server 不设置该变量，继续使用默认路径。
+- 验证状态：2026-09-02 已从 Render 双端日志确认根因；修复后云端复验待完成。
+
 ## 10. 修复方案的运行手册更新模板
 
 每个修复方案在本文件追加或修改可执行步骤，并在维护记录使用与 `ARCHITECTURE.md`、`DECISIONS.md` 相同标识：
@@ -525,3 +541,4 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
 | 2026-09-01 / AI-HEALTH-20260901 | 增加 ai-inference 探针 404 的复现、判据与回滚步骤 | 根因已在线确认；修复后云端复验待完成 |
 | 2026-09-02 / LOGIN-VALIDATION-20260902 | 增加登录表单最小密码长度漂移的复现、验证与回滚步骤 | 已在线复现；本地构建通过，修复后云端复验待完成 |
 | 2026-09-02 / GROQ-CLOUD-20260902 | 增加 GroqCloud 接入、双 base URL、缓存字段兼容与回滚步骤 | Key 已安全保存且本地验证通过；线上验收待完成 |
+| 2026-09-02 / MCP-TRAILING-SLASH-20260902 | 增加 FastAPI MCP 307 的复现、规范 endpoint、验证和回滚步骤 | 根因已由 Render 双端日志确认；修复后云端复验待完成 |

@@ -228,6 +228,9 @@ Legacy 是故障回退和真实模型对比基线，不是默认新功能入口�
   `agent-service` 使用 provider base URL，Python `ai-inference-service` 使用带 `/v1` 的 client base
   URL；两侧均关闭 llama.cpp 专用 `cache_prompt` 扩展。AgentLoop、双 MCP client 与前端 AI 路由恢复，
   knowledge-rag 在未配置 Milvus/embedding 时仍只提供既有空结果/fallback，不得表述为已完成 dense RAG。
+- `MCP-TRAILING-SLASH-20260902` 明确区分两个 MCP HTTP 入口：Java student-data 保持 `/mcp`，挂载在
+  FastAPI/Starlette 的 knowledge-rag 在 Render 使用规范路径 `/mcp/`。Agent 对后者使用独立 endpoint
+  配置，避免 POST initialize 被 307 重定向而令 Spring AI fail-fast 退出。
 
 ## 6. 变更原则
 
@@ -246,3 +249,4 @@ Legacy 是故障回退和真实模型对比基线，不是默认新功能入口�
 | 2026-09-01 / AI-HEALTH-20260901 | 将 Render 的 ai-inference 健康检查契约修正为 FastAPI 实际暴露的 `GET /health` | 无架构影响；仅校准部署平台与 `ai-inference-service` 的存活探针边界 |
 | 2026-09-02 / LOGIN-VALIDATION-20260902 | 登录页不再施加与服务端账号策略不一致的最小密码长度限制 | 无架构影响；仅修正 `frontend` 登录表单的客户端校验边界，认证仍由 `auth-service` 负责 |
 | 2026-09-02 / GROQ-CLOUD-20260902 | Render 在线 LLM 切换为 GroqCloud，并为标准 OpenAI 兼容供应商关闭 llama.cpp 专用请求字段 | LLM 推理由本地宿主机边界改为外部 HTTPS API；RAG 数据面维持降级边界 |
+| 2026-09-02 / MCP-TRAILING-SLASH-20260902 | 为 FastAPI knowledge-rag MCP 使用可配置且规范的 `/mcp/` endpoint | 不改变服务边界；修正跨服务 Streamable HTTP 路径契约 |
