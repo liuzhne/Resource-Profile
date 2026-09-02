@@ -24,10 +24,22 @@ import java.io.IOException;
 public class LlamaCppCachePromptInterceptor implements ClientHttpRequestInterceptor {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    private final boolean enabled;
+
+    public LlamaCppCachePromptInterceptor() {
+        this(true);
+    }
+
+    public LlamaCppCachePromptInterceptor(boolean enabled) {
+        this.enabled = enabled;
+    }
 
     @Override
     public ClientHttpResponse intercept(HttpRequest request, byte[] body, ClientHttpRequestExecution execution)
             throws IOException {
+        if (!enabled) {
+            return execution.execute(request, body);
+        }
         String path = request.getURI().getPath();
         if (path == null || !path.contains("/chat/completions") || body == null || body.length == 0) {
             return execution.execute(request, body);

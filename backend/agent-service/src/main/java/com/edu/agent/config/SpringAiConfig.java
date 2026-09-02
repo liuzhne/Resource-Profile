@@ -32,6 +32,9 @@ public class SpringAiConfig {
     @Value("${spring.ai.openai.chat.options.max-tokens:2048}")
     private Integer maxTokens;
 
+    @Value("${educare.llm.cache-prompt.enabled:${LLM_CACHE_PROMPT_ENABLED:true}}")
+    private boolean cachePromptEnabled;
+
     /**
      * G-1.4 / G-1.5 Java：自定义 RestClient.Builder，挂两个拦截器
      * <ul>
@@ -51,7 +54,7 @@ public class SpringAiConfig {
         // 本地 tier：挂 cache_prompt（llama.cpp slot cache）+ metrics 两个拦截器
         RestClient.Builder restBuilder = RestClient.builder()
                 .requestFactory(new BufferingClientHttpRequestFactory(new SimpleClientHttpRequestFactory()))
-                .requestInterceptor(new LlamaCppCachePromptInterceptor())
+                .requestInterceptor(new LlamaCppCachePromptInterceptor(cachePromptEnabled))
                 .requestInterceptor(llmMetricsInterceptor);
         return OpenAiApi.builder()
                 .baseUrl(baseUrl)

@@ -481,6 +481,25 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
 - 验证状态：2026-09-02 已在线复现并确认后端接受同一凭据；前端 lint 0 error（1 条既有 Prettier
   warning）且生产构建通过，修复后的云端页面待验证。
 
+### GROQ-CLOUD-20260902：Render 接入 GroqCloud 免费 LLM
+
+- 前提：在 GroqCloud 为 Render 创建独立 API Key；只保存到 `edu-portrait-common-env` 的
+  `LLM_API_KEY`，不写入仓库、构建日志或前端变量。
+- 配置：agent-service 使用 `SPRING_AI_OPENAI_BASE_URL=https://api.groq.com/openai`，Python 使用
+  `LLM_BASE_URL=https://api.groq.com/openai/v1`；两侧模型一致且 `LLM_CACHE_PROMPT_ENABLED=false`。
+  开启 `EDUCARE_AGENT_LOOP_ENABLED`、`SPRING_AI_MCP_CLIENT_ENABLED` 与 `VITE_AI_ENABLED` 后重建。
+- 修复后验证：先以 Groq `/chat/completions` 做不输出密钥的最小请求，再跑 Java/Python 定向测试与前端
+  build；线上确认 agent-service 启动、两个 MCP initialize 成功，触发一条 Agent 任务并检查合法
+  `final_answer` 落库，最后检查前端 AI 路由。
+- 通过判据：Groq 返回 200；请求体不包含 `cache_prompt`；Agent 任务不因 400/401/429 失败；前端 AI
+  页面可见。knowledge-rag 无 Milvus/BGE 时允许明确 fallback，但不得伪报检索命中。
+- 排错：400 先检查 `cache_prompt` 开关和模型 ID，401 检查 Render 环境组 Key，404 检查 Java/Python
+  base URL 差异，429 按 Groq `retry-after` 等待；MCP 启动失败检查免费实例冷启动和共享 token。
+- 回滚：将三个功能开关恢复 false 并重新部署；删除/轮换 Groq Key。保留默认 true 的本地
+  `cache_prompt`，因此本地 llama.cpp 回退不需要代码回滚。
+- 验证状态：2026-09-02 已创建独立 Groq Key 并保存到 Render（未进入仓库）；Java/Python 各 2 项
+  兼容测试、Python 语法检查、前端 lint 0 error（1 条既有 warning）与生产构建通过；在线验收待完成。
+
 ## 10. 修复方案的运行手册更新模板
 
 每个修复方案在本文件追加或修改可执行步骤，并在维护记录使用与 `ARCHITECTURE.md`、`DECISIONS.md` 相同标识：
@@ -505,3 +524,4 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
 | 2026-09-01 / AIVEN-RENDER-20260901 | 增加 Aiven 初始化、Render 凭据注入、无 LLM 判据与回滚步骤 | 本地后端 177 例、前端构建、YAML 语法通过；云端待登录后验证 |
 | 2026-09-01 / AI-HEALTH-20260901 | 增加 ai-inference 探针 404 的复现、判据与回滚步骤 | 根因已在线确认；修复后云端复验待完成 |
 | 2026-09-02 / LOGIN-VALIDATION-20260902 | 增加登录表单最小密码长度漂移的复现、验证与回滚步骤 | 已在线复现；本地构建通过，修复后云端复验待完成 |
+| 2026-09-02 / GROQ-CLOUD-20260902 | 增加 GroqCloud 接入、双 base URL、缓存字段兼容与回滚步骤 | Key 已安全保存且本地验证通过；线上验收待完成 |

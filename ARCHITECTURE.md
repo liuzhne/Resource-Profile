@@ -224,6 +224,10 @@ Legacy 是故障回退和真实模型对比基线，不是默认新功能入口�
   `EDUCARE_AGENT_LOOP_ENABLED=false`，前端以 `VITE_AI_ENABLED=false` 不注册 AI 预警与 LLM 追踪
   路由。核心 Auth/User/Teacher/Student/Mental/Data 链路可独立验收；AI 能力恢复必须同时配置模型、
   RAG/MCP 依赖并重新构建前端，不能只打开菜单开关。
+- `GROQ-CLOUD-20260902` 将 Render 的在线 LLM 边界切到 GroqCloud OpenAI 兼容 API：Java
+  `agent-service` 使用 provider base URL，Python `ai-inference-service` 使用带 `/v1` 的 client base
+  URL；两侧均关闭 llama.cpp 专用 `cache_prompt` 扩展。AgentLoop、双 MCP client 与前端 AI 路由恢复，
+  knowledge-rag 在未配置 Milvus/embedding 时仍只提供既有空结果/fallback，不得表述为已完成 dense RAG。
 
 ## 6. 变更原则
 
@@ -241,3 +245,4 @@ Legacy 是故障回退和真实模型对比基线，不是默认新功能入口�
 | 2026-09-01 / AIVEN-RENDER-20260901 | 外置 Aiven MySQL、改用 Render Key Value，并定义无 LLM 降级边界 | 数据层跨云 TLS；核心业务与 AI 启动依赖解耦 |
 | 2026-09-01 / AI-HEALTH-20260901 | 将 Render 的 ai-inference 健康检查契约修正为 FastAPI 实际暴露的 `GET /health` | 无架构影响；仅校准部署平台与 `ai-inference-service` 的存活探针边界 |
 | 2026-09-02 / LOGIN-VALIDATION-20260902 | 登录页不再施加与服务端账号策略不一致的最小密码长度限制 | 无架构影响；仅修正 `frontend` 登录表单的客户端校验边界，认证仍由 `auth-service` 负责 |
+| 2026-09-02 / GROQ-CLOUD-20260902 | Render 在线 LLM 切换为 GroqCloud，并为标准 OpenAI 兼容供应商关闭 llama.cpp 专用请求字段 | LLM 推理由本地宿主机边界改为外部 HTTPS API；RAG 数据面维持降级边界 |

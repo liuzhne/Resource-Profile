@@ -202,6 +202,26 @@
   “密码长度不能少于6位”，后端网关验收脚本使用同一默认账号登录成功；2026-09-02 前端 lint 0 error
   （1 条既有 Prettier warning）且生产构建通过。修复后的线上复验待完成。
 
+## ADR-019：Render 免费预览使用 GroqCloud，并显式隔离 llama.cpp 扩展字段
+
+- 状态：已采纳
+- 日期/修复标识：2026-09-02 / GROQ-CLOUD-20260902
+- 背景：部署方选择 GroqCloud Free 作为在线 LLM。现有 Java interceptor 与 Python raw client 无条件
+  注入 llama.cpp 专用 `cache_prompt`，标准 OpenAI 兼容供应商可能拒绝未知字段；Java 与 Python client
+  对 base URL 是否包含 `/v1` 的约定也不同。
+- 选择：增加 `LLM_CACHE_PROMPT_ENABLED`（默认 true，保留本地 llama.cpp 行为），Render Groq 模式
+  设为 false；Java 显式使用 `https://api.groq.com/openai`，Python 使用
+  `https://api.groq.com/openai/v1`，两侧使用同一 Groq 模型。API Key 只保存在 Render 环境组。
+- 原因：用显式能力开关兼容本地与云端供应商，避免按域名硬编码判断；服务专属 base URL 避免修改两个
+  client 的既有路径拼装契约。
+- 放弃方案：让 Groq 忽略未知字段缺少契约保证；删除 `cache_prompt` 会损失本地 llama.cpp 已验收能力；
+  把 API Key 写入 Blueprint 会泄露持久凭据。
+- 后果：Render 恢复 AgentLoop、MCP client 与前端 AI 路由；免费供应商受配额和可用性约束。未部署
+  Milvus/BGE 时 knowledge-rag 仍降级为空结果，不能把 LLM 接通等同于完整 RAG 上线。
+- 证据：[`render.yaml`](./render.yaml)、[`SpringAiConfig.java`](./backend/agent-service/src/main/java/com/edu/agent/config/SpringAiConfig.java)、
+  [`llm_client.py`](./ai-inference-service/app/services/llm_client.py)；2026-09-02 Java/Python 各 2 项兼容
+  测试、Python 语法检查与前端生产构建通过，云端验收待完成。
+
 ## 新决策模板
 
 ```markdown
@@ -226,3 +246,4 @@
 | 2026-09-01 / AIVEN-RENDER-20260901 | 新增 ADR-016，拍板 Aiven MySQL、Render Key Value 与无 LLM 降级模式 | 取代 ADR-015 中待确认的数据层分支 |
 | 2026-09-01 / AI-HEALTH-20260901 | 新增 ADR-017，校准 ai-inference 的 Render 健康检查路径 | 不增加兼容别名，以实际 FastAPI 路由作为唯一探针契约 |
 | 2026-09-02 / LOGIN-VALIDATION-20260902 | 新增 ADR-018，移除登录页与服务端不一致的密码长度门槛 | 客户端只做非空校验，认证策略由 `auth-service` 统一裁决 |
+| 2026-09-02 / GROQ-CLOUD-20260902 | 新增 ADR-019，选择 GroqCloud 并隔离 llama.cpp 专用字段 | Render 恢复外部 LLM；API Key 不进入仓库，RAG 降级边界保持显式 |

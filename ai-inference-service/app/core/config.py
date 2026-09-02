@@ -20,6 +20,8 @@ class Settings:
     LLM_TEMPERATURE: float = float(os.getenv("LLM_TEMPERATURE", "0.3"))
     LLM_MAX_TOKENS: int = int(os.getenv("LLM_MAX_TOKENS", "2048"))
     LLM_TIMEOUT: int = int(os.getenv("LLM_TIMEOUT", "60"))
+    LLM_CACHE_PROMPT_ENABLED: bool = os.getenv(
+        "LLM_CACHE_PROMPT_ENABLED", "true").lower() in ("1", "true", "yes")
 
     # Milvus
     MILVUS_HOST: str = os.getenv("MILVUS_HOST", "milvus-standalone")

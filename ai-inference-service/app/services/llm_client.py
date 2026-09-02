@@ -19,6 +19,7 @@ from langchain_openai import ChatOpenAI
 
 from app.core.config import settings
 from app.services.llm_metrics import record_llm_response
+from app.services.llm_payload import build_chat_payload
 
 # Langfuse 装饰器在 SDK 缺失时降级为 no-op，保证主流程可独立运行
 try:  # pragma: no cover
@@ -64,13 +65,13 @@ async def chat_completion_raw(
     Returns the full llama.cpp JSON response (callers extract `.choices[0].message.content`).
     `route` is a short label used by llm_metrics (e.g. "risk", "plan", "audit").
     """
-    payload: Dict[str, Any] = {
-        "model": settings.LLM_MODEL,
-        "messages": messages,
-        "temperature": temperature if temperature is not None else settings.LLM_TEMPERATURE,
-        "max_tokens": max_tokens if max_tokens is not None else settings.LLM_MAX_TOKENS,
-        "cache_prompt": True,
-    }
+    payload = build_chat_payload(
+        model=settings.LLM_MODEL,
+        messages=messages,
+        temperature=temperature if temperature is not None else settings.LLM_TEMPERATURE,
+        max_tokens=max_tokens if max_tokens is not None else settings.LLM_MAX_TOKENS,
+        cache_prompt_enabled=settings.LLM_CACHE_PROMPT_ENABLED,
+    )
     headers = {"Authorization": f"Bearer {settings.LLM_API_KEY}"}
     base = settings.LLM_BASE_URL.rstrip("/")
     url = f"{base}/chat/completions"
@@ -80,7 +81,7 @@ async def chat_completion_raw(
         name=f"llm.{route}",
         model=settings.LLM_MODEL,
         input=messages,
-        metadata={"route": route, "cache_prompt": True},
+        metadata={"route": route, "cache_prompt": settings.LLM_CACHE_PROMPT_ENABLED},
     )
 
     async with httpx.AsyncClient(timeout=settings.LLM_TIMEOUT) as client:

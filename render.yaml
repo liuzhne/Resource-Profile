@@ -53,7 +53,7 @@ services:
     envVars:
       # 未配置 LLM 供应商前隐藏 AI 预警与 LLM 追踪入口。
       - key: VITE_AI_ENABLED
-        value: "false"
+        value: "true"
     buildFilter:
       paths:
         - frontend/**
@@ -248,8 +248,14 @@ services:
       - key: MCP_CLIENT_REQUEST_TIMEOUT
         value: 120s
       - key: EDUCARE_AGENT_LOOP_ENABLED
-        value: "false"
+        value: "true"
       - key: SPRING_AI_MCP_CLIENT_ENABLED
+        value: "true"
+      - key: SPRING_AI_OPENAI_BASE_URL
+        value: https://api.groq.com/openai
+      - key: SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL
+        value: qwen/qwen3.6-27b
+      - key: LLM_CACHE_PROMPT_ENABLED
         value: "false"
       - key: SPRING_DATA_REDIS_URL
         fromService:
@@ -289,6 +295,14 @@ services:
       - fromGroup: edu-portrait-common-env
       - key: PORT
         value: "8090"
+      - key: LLM_BASE_URL
+        value: https://api.groq.com/openai/v1
+      - key: LLM_MODEL
+        value: qwen/qwen3.6-27b
+      - key: LLM_CACHE_PROMPT_ENABLED
+        value: "false"
+      - key: RERANKER_ENABLED
+        value: "false"
     healthCheckPath: /health
     autoDeploy: true
 
