@@ -516,6 +516,23 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
   307 与启动失败；本地独立 MCP server 不设置该变量，继续使用默认路径。
 - 验证状态：2026-09-02 已从 Render 双端日志确认根因；修复后云端复验待完成。
 
+### MCP-LIFESPAN-20260903：FastMCP SessionManager 未初始化
+
+- 复现：knowledge-rag endpoint 改为 `/mcp/` 后重启 Agent；ai-inference 日志显示请求已进入
+  `fastmcp/server/http.py`，随后抛出 `StreamableHTTPSessionManager task group was not initialized`，
+  Agent 仍在 `McpSyncClient.initialize` 退出。
+- 修复后验证：运行 `python -m unittest tests.test_lifespan`，再部署 ai-inference；确认启动日志包含父应用
+  与 FastMCP lifespan，重新单独部署 Agent 并观察 initialize/list tools。
+- 通过判据：`POST /mcp/` 不返回 500；日志不再出现 `task group was not initialized`；Agent deploy 为
+  Live 且 `/actuator/health` 为 UP。
+- 排错：确认 `FastAPI(lifespan=...)` 收到组合后的 context factory，且 `mcp_app.lifespan` 在 mount 前取得；
+  不要在普通 HTTP 请求中手动启动 SessionManager。
+- 回滚：回退 lifespan 组合提交会恢复 500，不涉及数据迁移；紧急情况下可关闭 MCP/AgentLoop 保住核心
+  CRUD，但这不算 AI 上线完成。
+- 验证状态：2026-09-03 已由 Render 线上堆栈确认根因；生命周期与供应商兼容定向测试共 3 项通过，
+  语法检查通过。完整 discovery 在本机 Python 3.9 因项目使用的 3.10 联合类型语法无法收集
+  `test_http_integration`，生产镜像 Python 3.10 不受此限制；云端修复验证待完成。
+
 ## 10. 修复方案的运行手册更新模板
 
 每个修复方案在本文件追加或修改可执行步骤，并在维护记录使用与 `ARCHITECTURE.md`、`DECISIONS.md` 相同标识：
@@ -542,3 +559,4 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
 | 2026-09-02 / LOGIN-VALIDATION-20260902 | 增加登录表单最小密码长度漂移的复现、验证与回滚步骤 | 已在线复现；本地构建通过，修复后云端复验待完成 |
 | 2026-09-02 / GROQ-CLOUD-20260902 | 增加 GroqCloud 接入、双 base URL、缓存字段兼容与回滚步骤 | Key 已安全保存且本地验证通过；线上验收待完成 |
 | 2026-09-02 / MCP-TRAILING-SLASH-20260902 | 增加 FastAPI MCP 307 的复现、规范 endpoint、验证和回滚步骤 | 根因已由 Render 双端日志确认；修复后云端复验待完成 |
+| 2026-09-03 / MCP-LIFESPAN-20260903 | 增加 FastMCP lifespan 缺失的复现、验证和回滚步骤 | 根因已由 Render 线上堆栈确认；3 项定向测试及语法检查通过，完整 discovery 受本机 Python 3.9 限制；云端待验证 |

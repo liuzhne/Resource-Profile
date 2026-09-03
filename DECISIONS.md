@@ -239,6 +239,22 @@
 - 证据：Render 日志中 `POST /mcp`、`GET /mcp` 均为 307，agent 随后在
   `McpSyncClient.initialize` 退出；修复后云端复验待完成。
 
+## ADR-021：父 FastAPI 显式托管 FastMCP lifespan
+
+- 状态：已采纳
+- 日期/修复标识：2026-09-03 / MCP-LIFESPAN-20260903
+- 背景：规范 endpoint 生效后，Render 日志显示请求进入 FastMCP，但
+  `StreamableHTTPSessionManager task group was not initialized`；父 FastAPI 创建时没有注册自身已有的
+  lifespan，也没有注册 `mcp_app.lifespan`。
+- 选择：在创建父应用前构造 MCP ASGI 子应用，通过通用组合器依次进入 ai-inference 与 FastMCP
+  lifespan，再把组合结果传给 `FastAPI(lifespan=...)`。
+- 原因：这是 FastMCP ASGI 挂载的生命周期契约；组合器保留现有启动/关闭逻辑，并保证逆序释放资源。
+- 放弃方案：在请求时惰性调用 SessionManager 私有 API 会绕开框架契约；把 MCP 改回独立 Render 服务
+  会增加免费实例和冷启动面；关闭 MCP 会破坏 AgentLoop 工具链目标。
+- 后果：父进程启动期间会同步初始化 MCP task group；若 MCP 构造失败，HTTP 推理服务仍按既有降级逻辑
+  启动，但不会挂载损坏的 endpoint。
+- 证据：Render 线上堆栈明确指向缺失 `mcp_app.lifespan`；新增生命周期顺序单元测试，云端复验待完成。
+
 ## 新决策模板
 
 ```markdown
@@ -265,3 +281,4 @@
 | 2026-09-02 / LOGIN-VALIDATION-20260902 | 新增 ADR-018，移除登录页与服务端不一致的密码长度门槛 | 客户端只做非空校验，认证策略由 `auth-service` 统一裁决 |
 | 2026-09-02 / GROQ-CLOUD-20260902 | 新增 ADR-019，选择 GroqCloud 并隔离 llama.cpp 专用字段 | Render 恢复外部 LLM；API Key 不进入仓库，RAG 降级边界保持显式 |
 | 2026-09-02 / MCP-TRAILING-SLASH-20260902 | 新增 ADR-020，按服务配置 MCP 规范 endpoint | 保留 fail-fast 与双 MCP 工具链，消除 FastAPI 307 握手失败 |
+| 2026-09-03 / MCP-LIFESPAN-20260903 | 新增 ADR-021，父 FastAPI 显式托管 FastMCP lifespan | 保留单进程挂载方案并初始化 Streamable HTTP SessionManager |
