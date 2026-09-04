@@ -67,6 +67,16 @@ spring:
     database: 0
 
   ai:
+    # Groq 免费层按 TPM 限流时会返回 429 和建议等待时间。只把 429 视为可恢复错误；
+    # 401/403 等配置或权限错误继续 fail-fast，避免无意义重试。
+    retry:
+      max-attempts: 3
+      on-http-codes:
+        - 429
+      backoff:
+        initial-interval: 15s
+        max-interval: 30s
+        multiplier: 2
     openai:
       api-key: ${SPRING_AI_OPENAI_API_KEY:${LLM_API_KEY:dummy}}
       base-url: ${SPRING_AI_OPENAI_BASE_URL:${LLM_BASE_URL:http://localhost:8091}}

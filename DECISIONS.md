@@ -292,7 +292,27 @@
 - 后果：修复需要已登录的 Aiven 会话；若原服务已不存在，必须先确认数据保留与免费计划后再决定是否
   新建实例。任何数据库凭据仍只保存到 Render secret，不进入仓库或日志。
 - 证据：线上 `/actuator/health` 返回 DOWN/503，而 `/actuator/health/liveness` 和
-  `/actuator/health/readiness` 均返回 UP/200；同一时段日志明确记录 Aiven host 的 DNS 解析失败。
+  `/actuator/health/readiness` 均返回 UP/200；同一时段日志明确记录 Aiven host 的 DNS 解析失败。恢复原
+  Free-1-1gb 服务后 DNS 重新发布，Agent 聚合 health 已恢复 UP/200，无需改动连接凭据。
+
+## ADR-024：Groq 免费层 429 采用定向有界退避
+
+- 状态：已采纳
+- 日期/修复标识：2026-09-04 / GROQ-429-RETRY-20260904
+- 背景：真实 AgentLoop 第一轮已成功调用 MCP 工具，第二轮携带 observation 请求 Groq 时触发组织级
+  8,000 TPM 限制；Groq 返回 429 并明确建议约 14 秒后重试。Spring AI 默认把 4xx 作为不可恢复错误，
+  任务因此直接进入 FAILED。
+- 选择：使用 Spring AI 1.1.6 原生 `spring.ai.retry` 配置，仅将 429 列入可重试 HTTP 码；起始退避
+  15 秒、最大 30 秒、最多 3 次。401/403 等错误仍保持不可重试。
+- 原因：等待服务端已给出的配额窗口可保留完整 prompt、工具 observation 与 final_answer 输出预算；
+  使用框架重试层避免在 AgentLoop 中复制 HTTP 供应商逻辑。
+- 放弃方案：把输出预算压到不足以稳定生成双 JSON 会降低质量；升级付费计划不符合当前免费部署目标；
+  将全部 4xx 设为可重试会掩盖密钥或模型权限错误。
+- 后果：命中 TPM 限制时单任务可能额外增加 15–45 秒延迟；超过 3 次仍明确失败。Render/Gateway 超时
+  必须容纳该上限，且日志应保留 429 与重试次数用于验收。
+- 证据：线上任务 2 在 MCP 工具调用后返回 Groq 429，响应给出 TPM limit=8000、建议等待约 14 秒；
+  本地 Spring AI 1.1.6 配置元数据确认支持 `on-http-codes`、`max-attempts` 与 backoff 参数。修复后线上
+  复验待完成。
 
 ## 新决策模板
 
@@ -323,3 +343,4 @@
 | 2026-09-03 / MCP-LIFESPAN-20260903 | 新增 ADR-021，父 FastAPI 显式托管 FastMCP lifespan | 保留单进程挂载方案并初始化 Streamable HTTP SessionManager |
 | 2026-09-03 / GROQ-RUNTIME-CONFIG-20260903 | 新增 ADR-022，修正服务级凭据覆盖并采用组织允许模型 | 不扩大 Groq 组织权限；保持 Java/Python 模型一致并固化 Blueprint |
 | 2026-09-04 / AIVEN-DNS-20260904 | 新增 ADR-023，以 Aiven 当前连接信息修复失效 DNS | 不猜测端点、不绕过健康检查，数据库凭据继续仅存 Render secret |
+| 2026-09-04 / GROQ-429-RETRY-20260904 | 新增 ADR-024，对 Groq TPM 429 使用有界退避 | 保留完整 AgentLoop 质量；401/403 继续 fail-fast |

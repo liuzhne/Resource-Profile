@@ -569,7 +569,23 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
 - 回滚：若新连接值导致回归，恢复 Render 中先前的 secret 版本并重新部署；不得通过关闭数据库健康检查
   或伪造内存数据宣称上线成功。
 - 验证状态：2026-09-04 已在线确认 DNS 根因及 AI/MCP 健康边界；Aiven 当前 Connection Information
-  尚待在已登录会话中核验，数据库修复与最终业务验收待完成。
+  已核验且与 Render 一致；原 Free-1-1gb 服务从 Powered off 恢复 Running 后 DNS 与 Agent 聚合 health
+  均恢复。管理员登录、任务创建和任务详情回读已通过；最终 Agent 产物验收受独立的 Groq 429 待修复。
+
+### GROQ-429-RETRY-20260904：AgentLoop 第二轮触发免费层 TPM 限流
+
+- 复现：在双 MCP 已初始化、数据库 health 为 UP 后触发真实任务；确认第一轮工具调用成功，第二轮日志
+  出现 Groq 429 `rate_limit_exceeded`，响应包含 TPM limit、used、requested 与建议等待秒数，任务随后
+  `TOOL_ERROR`/FAILED。
+- 修复步骤：配置 `spring.ai.retry.on-http-codes=[429]`、`max-attempts=3`，backoff 初始 15 秒、上限
+  30 秒、倍率 2；重新部署 agent-service。不得把 401/403 加入可重试范围。
+- 通过判据：日志在 429 后按退避重试；同一任务最终为 COMPLETED 或业务允许的 REJECTED；
+  `riskAnalysisResult` 与 `interventionPlan` 均非空且可从任务详情再次读取。
+- 排错：若 Groq 建议等待超过当前 backoff，按实际免费配额窗口调整初始值但保持有界；若持续 429，检查
+  同组织并发调用和 prompt/token 预算，不无限增加重试次数。401 查 Key，403 查 Allowed Models。
+- 回滚：移除 `spring.ai.retry` 段即可恢复默认 4xx fail-fast；该配置无数据库迁移。
+- 验证状态：2026-09-04 已在线复现任务 2 的 MCP 成功后 Groq TPM 429；配置 YAML 解析通过，
+  `AgentLoopTest` 与 `AgentLoopValidationTest` 共 7 项通过；部署复验待完成。
 
 ## 10. 修复方案的运行手册更新模板
 
@@ -599,4 +615,5 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
 | 2026-09-02 / MCP-TRAILING-SLASH-20260902 | 增加 FastAPI MCP 307 的复现、规范 endpoint、验证和回滚步骤 | 根因已由 Render 双端日志确认；修复后云端复验待完成 |
 | 2026-09-03 / MCP-LIFESPAN-20260903 | 增加 FastMCP lifespan 缺失的复现、验证和回滚步骤 | 根因已由 Render 线上堆栈确认；3 项定向测试及语法检查通过，完整 discovery 受本机 Python 3.9 限制；云端待验证 |
 | 2026-09-03 / GROQ-RUNTIME-CONFIG-20260903 | 增加服务级覆盖、Groq Allowed Models、验证与回滚步骤 | 新 Key 与允许模型均经 Groq 官方接口验证；线上端到端部署验收进行中 |
-| 2026-09-04 / AIVEN-DNS-20260904 | 增加 Aiven DNS 故障复现、凭据核验、验证与回滚步骤 | 已确认线上根因；等待核验 Aiven 当前连接信息 |
+| 2026-09-04 / AIVEN-DNS-20260904 | 增加 Aiven DNS 故障复现、凭据核验、验证与回滚步骤 | 原免费服务已恢复 Running；DNS、聚合 health、登录与数据库回读通过 |
+| 2026-09-04 / GROQ-429-RETRY-20260904 | 增加 Groq TPM 429 定向退避、验收和回滚步骤 | 根因已由真实任务日志确认；线上复验待完成 |
