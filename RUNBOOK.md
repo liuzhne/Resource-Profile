@@ -578,14 +578,16 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
   出现 Groq 429 `rate_limit_exceeded`，响应包含 TPM limit、used、requested 与建议等待秒数，任务随后
   `TOOL_ERROR`/FAILED。
 - 修复步骤：配置 `spring.ai.retry.on-http-codes=[429]`、`max-attempts=3`，backoff 初始 15 秒、上限
-  30 秒、倍率 2；重新部署 agent-service。不得把 401/403 加入可重试范围。
+  30 秒、倍率 2；确认自定义 `OpenAiApi` 注入 `ResponseErrorHandler`、`OpenAiChatModel` 注入
+  `RetryTemplate` 后重新部署。不得把 401/403 加入可重试范围。
 - 通过判据：日志在 429 后按退避重试；同一任务最终为 COMPLETED 或业务允许的 REJECTED；
   `riskAnalysisResult` 与 `interventionPlan` 均非空且可从任务详情再次读取。
 - 排错：若 Groq 建议等待超过当前 backoff，按实际免费配额窗口调整初始值但保持有界；若持续 429，检查
   同组织并发调用和 prompt/token 预算，不无限增加重试次数。401 查 Key，403 查 Allowed Models。
 - 回滚：移除 `spring.ai.retry` 段即可恢复默认 4xx fail-fast；该配置无数据库迁移。
-- 验证状态：2026-09-04 已在线复现任务 2 的 MCP 成功后 Groq TPM 429；配置 YAML 解析通过，
-  `AgentLoopTest` 与 `AgentLoopValidationTest` 共 7 项通过；部署复验待完成。
+- 验证状态：2026-09-04 已在线复现任务 2/4 的 MCP 成功后 Groq TPM 429；任务 4 证明仅加 YAML 时自定义
+  Bean 仍绕过重试。现已补齐 error handler/retry template 注入与配置级回归测试；YAML 解析通过，
+  `SpringAiConfigTest` 与原 AgentLoop 定向测试共 8 项通过；新实现的部署复验待完成。
 
 ## 10. 修复方案的运行手册更新模板
 

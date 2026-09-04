@@ -10,7 +10,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.client.BufferingClientHttpRequestFactory;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.retry.support.RetryTemplate;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.ResponseErrorHandler;
 import org.springframework.web.reactive.function.client.WebClient;
 
 @Configuration
@@ -50,7 +52,9 @@ public class SpringAiConfig {
      */
     @Bean
     @Primary
-    public OpenAiApi openAiApi(LlmMetricsInterceptor llmMetricsInterceptor) {
+    public OpenAiApi openAiApi(
+            LlmMetricsInterceptor llmMetricsInterceptor,
+            ResponseErrorHandler responseErrorHandler) {
         // 本地 tier：挂 cache_prompt（llama.cpp slot cache）+ metrics 两个拦截器
         RestClient.Builder restBuilder = RestClient.builder()
                 .requestFactory(new BufferingClientHttpRequestFactory(new SimpleClientHttpRequestFactory()))
@@ -61,12 +65,13 @@ public class SpringAiConfig {
                 .apiKey(apiKey)
                 .restClientBuilder(restBuilder)
                 .webClientBuilder(WebClient.builder())
+                .responseErrorHandler(responseErrorHandler)
                 .build();
     }
 
     @Bean
     @Primary
-    public OpenAiChatModel openAiChatModel(OpenAiApi openAiApi) {
+    public OpenAiChatModel openAiChatModel(OpenAiApi openAiApi, RetryTemplate retryTemplate) {
         OpenAiChatOptions options = OpenAiChatOptions.builder()
                 .model(model)
                 .temperature(temperature)
@@ -75,6 +80,7 @@ public class SpringAiConfig {
         return OpenAiChatModel.builder()
                 .openAiApi(openAiApi)
                 .defaultOptions(options)
+                .retryTemplate(retryTemplate)
                 .build();
     }
 

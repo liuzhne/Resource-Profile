@@ -243,8 +243,9 @@ Legacy 是故障回退和真实模型对比基线，不是默认新功能入口�
   不猜测或在仓库固化替代地址；必须从 Aiven Connection Information 取得当前端点并更新 Render secret。
   该处理不改变既定的跨云 MySQL 架构或信任边界。
 - `GROQ-429-RETRY-20260904` 在 agent-service 的 Spring AI HTTP 边界只把 429 识别为可恢复错误，采用
-  15 秒起始、30 秒上限、最多 3 次的指数退避。AgentLoop、MCP、数据库和安全边界均不改变；401/403
-  仍立即失败，避免掩盖无效凭据或模型权限错误。
+  15 秒起始、30 秒上限、最多 3 次的指数退避。自定义 `OpenAiApi`/`OpenAiChatModel` Bean 必须显式接入
+  自动配置的 `ResponseErrorHandler`/`RetryTemplate`，否则会绕过该策略。AgentLoop、MCP、数据库和安全
+  边界均不改变；401/403 仍立即失败，避免掩盖无效凭据或模型权限错误。
 
 ## 6. 变更原则
 
