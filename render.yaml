@@ -256,7 +256,7 @@ services:
       - key: SPRING_AI_OPENAI_BASE_URL
         value: https://api.groq.com/openai
       - key: SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL
-        value: qwen/qwen3.6-27b
+        value: openai/gpt-oss-120b
       - key: LLM_CACHE_PROMPT_ENABLED
         value: "false"
       - key: SPRING_DATA_REDIS_URL
@@ -300,7 +300,7 @@ services:
       - key: LLM_BASE_URL
         value: https://api.groq.com/openai/v1
       - key: LLM_MODEL
-        value: qwen/qwen3.6-27b
+        value: openai/gpt-oss-120b
       - key: LLM_CACHE_PROMPT_ENABLED
         value: "false"
       - key: RERANKER_ENABLED

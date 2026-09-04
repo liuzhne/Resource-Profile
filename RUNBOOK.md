@@ -483,8 +483,8 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
 
 ### GROQ-CLOUD-20260902：Render 接入 GroqCloud 免费 LLM
 
-- 前提：在 GroqCloud 为 Render 创建独立 API Key；只保存到 `edu-portrait-common-env` 的
-  `LLM_API_KEY`，不写入仓库、构建日志或前端变量。
+- 前提：在 GroqCloud 为 Render 创建独立 API Key；保存到 `edu-portrait-common-env` 的
+  `LLM_API_KEY`，并删除或同步 agent/ai-inference 的服务级同名覆盖；不写入仓库、构建日志或前端变量。
 - 配置：agent-service 使用 `SPRING_AI_OPENAI_BASE_URL=https://api.groq.com/openai`，Python 使用
   `LLM_BASE_URL=https://api.groq.com/openai/v1`；两侧模型一致且 `LLM_CACHE_PROMPT_ENABLED=false`。
   开启 `EDUCARE_AGENT_LOOP_ENABLED`、`SPRING_AI_MCP_CLIENT_ENABLED` 与 `VITE_AI_ENABLED` 后重建。
@@ -493,8 +493,9 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
   `final_answer` 落库，最后检查前端 AI 路由。
 - 通过判据：Groq 返回 200；请求体不包含 `cache_prompt`；Agent 任务不因 400/401/429 失败；前端 AI
   页面可见。knowledge-rag 无 Milvus/BGE 时允许明确 fallback，但不得伪报检索命中。
-- 排错：400 先检查 `cache_prompt` 开关和模型 ID，401 检查 Render 环境组 Key，404 检查 Java/Python
-  base URL 差异，429 按 Groq `retry-after` 等待；MCP 启动失败检查免费实例冷启动和共享 token。
+- 排错：400 先检查 `cache_prompt` 开关和模型 ID，401 先检查 Render 服务级覆盖再检查环境组 Key，403
+  检查 Groq Organization Allowed Models，404 检查 Java/Python base URL 差异，429 按 Groq
+  `retry-after` 等待；MCP 启动失败检查免费实例冷启动和共享 token。
 - 回滚：将三个功能开关恢复 false 并重新部署；删除/轮换 Groq Key。保留默认 true 的本地
   `cache_prompt`，因此本地 llama.cpp 回退不需要代码回滚。
 - 验证状态：2026-09-02 已创建独立 Groq Key 并保存到 Render（未进入仓库）；Java/Python 各 2 项
@@ -531,7 +532,44 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
   CRUD，但这不算 AI 上线完成。
 - 验证状态：2026-09-03 已由 Render 线上堆栈确认根因；生命周期与供应商兼容定向测试共 3 项通过，
   语法检查通过。完整 discovery 在本机 Python 3.9 因项目使用的 3.10 联合类型语法无法收集
-  `test_http_integration`，生产镜像 Python 3.10 不受此限制；云端修复验证待完成。
+  `test_http_integration`，生产镜像 Python 3.10 不受此限制。云端 Agent 日志已确认两个 MCP client 完成
+  initialize/list tools，部署状态为 Live；聚合健康检查的剩余失败来自独立的 Aiven DNS 阻塞。
+
+### GROQ-RUNTIME-CONFIG-20260903：服务级占位密钥与模型权限覆盖
+
+- 复现：使用共享环境组的新 Key 请求线上 `/api/v1/llm/chat` 仍返回 401；在
+  `ai-inference-service > Environment` 检查服务级 `LLM_API_KEY`，确认其覆盖共享环境组。修正后请求变为
+  403 `model_permission_blocked_org`；Groq `Organization > Limits > Allowed Models` 仅列出
+  `openai/gpt-oss-120b`。
+- 修复后验证：分别更新 ai-inference 的 `LLM_API_KEY`/`LLM_MODEL` 与 agent 的
+  `LLM_API_KEY`/`SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL`，每次保存后等待单服务 Live；用 Groq 官方
+  `/openai/v1/models` 和 `/openai/v1/chat/completions` 验证 Key/模型，再请求线上 Python chat、Agent 健康
+  检查和一条真实 Agent 任务。任何输出都不得打印 Key。
+- 通过判据：Groq 与线上 Python chat 均返回 200；Render 两个服务的成功部署 commit 一致；Agent 两个
+  MCP client 初始化完成、健康检查为 UP，真实任务有合法 `final_answer`。
+- 排错：401 依次核对服务级同名变量、共享环境组和前后空白；403 读取 Groq Allowed Models，不要只依据
+  models 列表；修改隐藏值时先显示再编辑，保存后重新显示核对，避免 Dashboard 受控输入框回退旧值。
+- 回滚：把模型恢复到此前值仅在 Groq 组织已允许该模型时可用；紧急降级应关闭 AgentLoop/MCP/前端 AI
+  开关。轮换 Key 时同时更新共享环境组和两个服务级覆盖，随后删除旧 Key。
+- 验证状态：2026-09-03 新 Key 与 Render 服务级值已核对一致；Groq 官方 models 与
+  `openai/gpt-oss-120b` completion 均返回 200。线上 Python chat 返回 `GROQ_OK`；Agent 部署 Live，日志
+  确认真实 LLM、AgentLoop 与双 MCP 已初始化。真实任务的数据库读写/落库验收因 Aiven DNS 阻塞待执行。
+
+### AIVEN-DNS-20260904：Render 无法解析 MySQL 主机名
+
+- 复现：请求 Agent `/actuator/health` 得到 DOWN/503，同时 liveness/readiness 分组均为 UP/200；在同一
+  部署日志中定位 MySQL health probe，确认根因为当前 Aiven host 的 `UnknownHostException`。
+- 修复步骤：登录 Aiven，打开原 MySQL 服务的 Connection Information；确认服务为 Running，并逐项读取
+  host、port、user、database 与 TLS/CA 要求。只在 Render secret 中更新不一致项，随后重新部署所有
+  MySQL 消费服务。禁止把连接串或密码写入命令输出、仓库、截图或前端变量。
+- 通过判据：从 Render 环境可解析并连接 Aiven host；聚合 health 返回 UP/200；管理员登录、一个核心
+  CRUD 请求及一条 Agent 真实任务均成功，任务状态与 `final_answer` 可从数据库再次读取。
+- 排错：若 Aiven 原服务不存在或已停用，先确认账单、免费计划和数据保留状态，不直接重建；若 DNS 已
+  恢复但握手失败，再核对端口、用户名、密码、database 和 `ssl-mode=REQUIRED`。
+- 回滚：若新连接值导致回归，恢复 Render 中先前的 secret 版本并重新部署；不得通过关闭数据库健康检查
+  或伪造内存数据宣称上线成功。
+- 验证状态：2026-09-04 已在线确认 DNS 根因及 AI/MCP 健康边界；Aiven 当前 Connection Information
+  尚待在已登录会话中核验，数据库修复与最终业务验收待完成。
 
 ## 10. 修复方案的运行手册更新模板
 
@@ -560,3 +598,5 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
 | 2026-09-02 / GROQ-CLOUD-20260902 | 增加 GroqCloud 接入、双 base URL、缓存字段兼容与回滚步骤 | Key 已安全保存且本地验证通过；线上验收待完成 |
 | 2026-09-02 / MCP-TRAILING-SLASH-20260902 | 增加 FastAPI MCP 307 的复现、规范 endpoint、验证和回滚步骤 | 根因已由 Render 双端日志确认；修复后云端复验待完成 |
 | 2026-09-03 / MCP-LIFESPAN-20260903 | 增加 FastMCP lifespan 缺失的复现、验证和回滚步骤 | 根因已由 Render 线上堆栈确认；3 项定向测试及语法检查通过，完整 discovery 受本机 Python 3.9 限制；云端待验证 |
+| 2026-09-03 / GROQ-RUNTIME-CONFIG-20260903 | 增加服务级覆盖、Groq Allowed Models、验证与回滚步骤 | 新 Key 与允许模型均经 Groq 官方接口验证；线上端到端部署验收进行中 |
+| 2026-09-04 / AIVEN-DNS-20260904 | 增加 Aiven DNS 故障复现、凭据核验、验证与回滚步骤 | 已确认线上根因；等待核验 Aiven 当前连接信息 |

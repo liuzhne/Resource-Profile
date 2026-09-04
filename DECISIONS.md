@@ -211,7 +211,8 @@
   对 base URL 是否包含 `/v1` 的约定也不同。
 - 选择：增加 `LLM_CACHE_PROMPT_ENABLED`（默认 true，保留本地 llama.cpp 行为），Render Groq 模式
   设为 false；Java 显式使用 `https://api.groq.com/openai`，Python 使用
-  `https://api.groq.com/openai/v1`，两侧使用同一 Groq 模型。API Key 只保存在 Render 环境组。
+  `https://api.groq.com/openai/v1`，两侧使用同一 Groq 模型。API Key 只保存在 Render secret 配置；共享
+  环境组作为集中来源，若存在服务级同名变量则必须删除或保持一致。
 - 原因：用显式能力开关兼容本地与云端供应商，避免按域名硬编码判断；服务专属 base URL 避免修改两个
   client 的既有路径拼装契约。
 - 放弃方案：让 Groq 忽略未知字段缺少契约保证；删除 `cache_prompt` 会损失本地 llama.cpp 已验收能力；
@@ -253,7 +254,45 @@
   会增加免费实例和冷启动面；关闭 MCP 会破坏 AgentLoop 工具链目标。
 - 后果：父进程启动期间会同步初始化 MCP task group；若 MCP 构造失败，HTTP 推理服务仍按既有降级逻辑
   启动，但不会挂载损坏的 endpoint。
-- 证据：Render 线上堆栈明确指向缺失 `mcp_app.lifespan`；新增生命周期顺序单元测试，云端复验待完成。
+- 证据：Render 线上堆栈明确指向缺失 `mcp_app.lifespan`；新增生命周期顺序单元测试；修复部署后 Agent
+  日志已显示 student-data 与 knowledge-rag 均完成 initialize/list tools，服务成功 Live。
+
+## ADR-022：Render 采用 Groq 组织允许的模型并显式处理服务级覆盖
+
+- 状态：已采纳
+- 日期/修复标识：2026-09-03 / GROQ-RUNTIME-CONFIG-20260903
+- 背景：新 Groq Key 经官方 `/openai/v1/models` 验证有效，但 Render 在线调用先返回 401，随后在修正
+  Key 后返回 `model_permission_blocked_org`。检查发现 Render 服务级 `LLM_API_KEY` 占位值覆盖了共享环境组，
+  且组织 Allowed Models 当前只允许 `openai/gpt-oss-120b`。
+- 选择：在 agent-service 与 ai-inference-service 的服务级环境变量中保存同一 Groq Key；Blueprint 两侧
+  模型统一改为 `openai/gpt-oss-120b`。共享环境组继续保存 Key 作为集中来源，但发布验收必须检查服务级
+  同名变量是否覆盖。
+- 原因：使用账户已经允许且官方请求返回 200 的模型可直接恢复功能；同步 Blueprint 可避免后续同步把
+  Dashboard 热修复恢复为被禁用模型。
+- 放弃方案：扩大 Groq 组织的 Allowed Models 会改变账户级权限且不是必要条件；仅修改共享环境组无法
+  覆盖既有服务级同名变量；继续使用 qwen 会稳定返回 403。
+- 后果：LLM 可用性受 `openai/gpt-oss-120b` 免费配额与 Groq 组织权限约束；若将来调整 Allowed Models，
+  Java/Python 两侧必须同步改模型。密钥不得写入仓库、日志或前端变量。
+- 证据：Groq `/openai/v1/models` 与 `openai/gpt-oss-120b` 最小 completion 均返回 200；Render 线上
+  Python chat 返回 `GROQ_OK`，Agent 日志确认真实 LLM、AgentLoop 与双 MCP 初始化完成。完整业务任务受
+  Aiven DNS 故障阻塞，不能据此宣称数据库链路已验收。
+
+## ADR-023：先核验 Aiven 当前端点，不猜测替换失效主机名
+
+- 状态：已采纳
+- 日期/修复标识：2026-09-04 / AIVEN-DNS-20260904
+- 背景：Agent 已成功启动且 liveness/readiness 均为 UP，但聚合健康检查返回 503；Render 日志中的
+  MySQL health probe 以 `UnknownHostException` 失败，当前配置的 Aiven 主机名无法解析。
+- 选择：登录既有 Aiven 项目，从 MySQL 服务的 Connection Information 读取当前 host、port、user 与
+  TLS 要求；与 Render secret 逐项比对，仅更新不一致值，然后重新部署数据库消费者。
+- 原因：Aiven 端点可能因服务删除、重建或停用而变化；以控制台当前连接信息为唯一事实来源，避免把
+  猜测地址写入 Render 或仓库。
+- 放弃方案：根据旧命名规则猜测 DNS 会扩大故障；临时关闭数据库健康组件会掩盖所有 CRUD/任务落库
+  实际不可用；未经授权重建数据库可能丢失数据或改变费用。
+- 后果：修复需要已登录的 Aiven 会话；若原服务已不存在，必须先确认数据保留与免费计划后再决定是否
+  新建实例。任何数据库凭据仍只保存到 Render secret，不进入仓库或日志。
+- 证据：线上 `/actuator/health` 返回 DOWN/503，而 `/actuator/health/liveness` 和
+  `/actuator/health/readiness` 均返回 UP/200；同一时段日志明确记录 Aiven host 的 DNS 解析失败。
 
 ## 新决策模板
 
@@ -282,3 +321,5 @@
 | 2026-09-02 / GROQ-CLOUD-20260902 | 新增 ADR-019，选择 GroqCloud 并隔离 llama.cpp 专用字段 | Render 恢复外部 LLM；API Key 不进入仓库，RAG 降级边界保持显式 |
 | 2026-09-02 / MCP-TRAILING-SLASH-20260902 | 新增 ADR-020，按服务配置 MCP 规范 endpoint | 保留 fail-fast 与双 MCP 工具链，消除 FastAPI 307 握手失败 |
 | 2026-09-03 / MCP-LIFESPAN-20260903 | 新增 ADR-021，父 FastAPI 显式托管 FastMCP lifespan | 保留单进程挂载方案并初始化 Streamable HTTP SessionManager |
+| 2026-09-03 / GROQ-RUNTIME-CONFIG-20260903 | 新增 ADR-022，修正服务级凭据覆盖并采用组织允许模型 | 不扩大 Groq 组织权限；保持 Java/Python 模型一致并固化 Blueprint |
+| 2026-09-04 / AIVEN-DNS-20260904 | 新增 ADR-023，以 Aiven 当前连接信息修复失效 DNS | 不猜测端点、不绕过健康检查，数据库凭据继续仅存 Render secret |

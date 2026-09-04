@@ -234,6 +234,14 @@ Legacy 是故障回退和真实模型对比基线，不是默认新功能入口�
 - `MCP-LIFESPAN-20260903` 将 FastMCP 子应用的 lifespan 与 ai-inference 自身 lifespan 组合后注册到
   父 FastAPI；由父进程统一启动/关闭 Streamable HTTP SessionManager，避免请求已到 `/mcp/` 后因未初始化
   task group 返回 500。服务拓扑与安全边界不变。
+- `GROQ-RUNTIME-CONFIG-20260903` 将 Render 的 Java/Python 生成模型固定为 Groq 组织当前允许的
+  `openai/gpt-oss-120b`，并明确服务级环境变量优先于 `edu-portrait-common-env`。`agent-service` 与
+  `ai-inference-service` 必须同时更新模型和服务级 `LLM_API_KEY` 覆盖值；该修复不改变服务拓扑、数据流
+  或安全边界，密钥仍只存在 Render/Groq 的秘密存储中。
+- `AIVEN-DNS-20260904` 记录当前 Render 数据边界的外部阻塞：已配置的 Aiven MySQL 主机名无法在
+  Render 解析，导致数据库健康组件 DOWN，而 Agent liveness/readiness 与 LLM/MCP 启动链仍为 UP。
+  不猜测或在仓库固化替代地址；必须从 Aiven Connection Information 取得当前端点并更新 Render secret。
+  该处理不改变既定的跨云 MySQL 架构或信任边界。
 
 ## 6. 变更原则
 
@@ -254,3 +262,5 @@ Legacy 是故障回退和真实模型对比基线，不是默认新功能入口�
 | 2026-09-02 / GROQ-CLOUD-20260902 | Render 在线 LLM 切换为 GroqCloud，并为标准 OpenAI 兼容供应商关闭 llama.cpp 专用请求字段 | LLM 推理由本地宿主机边界改为外部 HTTPS API；RAG 数据面维持降级边界 |
 | 2026-09-02 / MCP-TRAILING-SLASH-20260902 | 为 FastAPI knowledge-rag MCP 使用可配置且规范的 `/mcp/` endpoint | 不改变服务边界；修正跨服务 Streamable HTTP 路径契约 |
 | 2026-09-03 / MCP-LIFESPAN-20260903 | 组合 FastAPI 与 FastMCP 子应用生命周期 | 不改变服务拓扑；补齐 knowledge-rag MCP SessionManager 的进程生命周期边界 |
+| 2026-09-03 / GROQ-RUNTIME-CONFIG-20260903 | 修正 Render 服务级占位密钥覆盖，并切换到组织允许的 Groq 模型 | 无架构影响；仅校准外部 LLM 运行配置及环境变量优先级 |
+| 2026-09-04 / AIVEN-DNS-20260904 | 记录 Render 当前 Aiven MySQL 主机名不可解析及端点校验要求 | 无架构影响；数据库仍位于 Aiven，仅外部连接配置待修复 |
